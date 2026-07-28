@@ -122,4 +122,28 @@
   .gantt-layout--task-tree-collapsed .gantt-task-tree__content {
     display: none;
   }
+
+  .task-page {
+    padding: var(--space-3);
+  }
+
+  .task-page__header {
+    align-items: flex-start;
+  }
+
+  .task-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .task-page__workspace .entity-inspector {
+    width: 100%;
+    max-height: none;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  .task-table {
+    max-height: 60vh;
+  }
 }

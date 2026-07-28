@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { TaskPage } from '../features/tasks/TaskPage'
 
 const DashboardPage = lazy(() =>
   import('../features/dashboard/DashboardPage').then((module) => ({
@@ -8,7 +9,6 @@ const DashboardPage = lazy(() =>
 )
 
 const routes = [
-  { path: '/tasks', heading: '计划 / 任务' },
   { path: '/gantt', heading: '甘特图' },
   { path: '/requirements', heading: '需求' },
   { path: '/defects', heading: '缺陷' },
@@ -33,6 +33,7 @@ export function AppRoutes() {
           </Suspense>
         }
       />
+      <Route path="/tasks" element={<TaskPage />} />
       {routes.map(({ heading, path }) => (
         <Route
           element={
