@@ -13,6 +13,15 @@ React、TypeScript 与 Vite 构建的本地项目管理 Web 应用。
 - `npm run check`：运行代码检查、单元测试和生产构建
 - `npm run test:e2e`：运行 Playwright 端到端测试
 
+首次运行端到端测试前安装仓库锁定版本的 Chromium：
+
+```powershell
+npx playwright install chromium
+```
+
+Playwright 配置显式使用 `channel: 'chromium'`，以启动上述由 Playwright
+管理的完整 Chromium，而不是误用系统中可能陈旧的浏览器。
+
 ## 大数据本地验证
 
 仅在开发服务器中启用 10,000 条确定性任务数据：

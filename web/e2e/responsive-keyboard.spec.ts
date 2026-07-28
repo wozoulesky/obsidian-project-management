@@ -126,6 +126,20 @@ test('767px Gantt collapses the task tree without hiding the timescale', async (
   await expect(scale.locator('button')).toHaveCount(3)
   const selectedScale = scale.locator('button[aria-pressed="true"]')
   await expect(selectedScale).toHaveCount(1)
+  const scrollRegion = page.locator('.gantt-scroll-region')
+  const timelineHeader = page.locator('.gantt-timeline__header')
+
+  await scrollRegion.evaluate((element) => {
+    element.scrollTop = 360
+    element.dispatchEvent(new Event('scroll'))
+  })
+  await expect
+    .poll(async () => {
+      const regionBox = await scrollRegion.boundingBox()
+      const headerBox = await timelineHeader.boundingBox()
+      return Math.abs((headerBox?.y ?? 0) - (regionBox?.y ?? 0))
+    })
+    .toBeLessThanOrEqual(2)
 
   await toggle.click()
   await expect(page.locator('.gantt-layout')).toHaveClass(

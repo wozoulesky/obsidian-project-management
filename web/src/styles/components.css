@@ -813,11 +813,10 @@
 .gantt-timeline {
   position: relative;
   min-width: 34rem;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .gantt-timeline__header {
-  position: relative;
   overflow: hidden;
 }
 
@@ -1013,6 +1012,11 @@
 .gantt-dependencies path.is-risk {
   stroke: var(--critical);
   stroke-width: 1.75;
+}
+
+.gantt-dependencies path.is-truncated {
+  stroke-dasharray: 3 2;
+  stroke-linecap: round;
 }
 
 .gantt-dependency-summary {

@@ -123,6 +123,90 @@ describe('GanttPage layout', () => {
     )
   })
 
+  it('draws risky truncated dependencies at either rendered edge and omits off-window lines', async () => {
+    const largeTasks = Array.from({ length: 240 }, (_, index) =>
+      task({
+        id: `long-${index}`,
+        code: `LONG-${index}`,
+        title: `长依赖任务 ${index}`,
+        milestoneId: 'long',
+        status: index === 0 ? 'overdue' : 'not_started',
+        dependencyIds: index === 200 ? ['long-0'] : [],
+      }),
+    )
+    mockTasks(largeTasks)
+    const { container } = renderApp(<GanttPage />)
+
+    await screen.findByRole('button', { name: '查看 长依赖任务 0' })
+    const scrollRegion = container.querySelector(
+      '.gantt-scroll-region',
+    ) as HTMLElement
+    Object.defineProperty(scrollRegion, 'clientHeight', {
+      configurable: true,
+      value: 440,
+    })
+    const dependency = () =>
+      container.querySelector('[data-dependency="long-0-long-200"]')
+
+    expect(dependency()).toHaveAttribute('data-truncated', 'bottom')
+    expect(dependency()).toHaveAttribute('d', expect.stringMatching(/V 10$/))
+    expect(dependency()).toHaveClass('is-truncated')
+    expect(dependency()).toHaveClass('is-risk')
+    expect(
+      screen.getByText(
+        '长依赖任务 0 → 长依赖任务 200（前置任务已逾期）',
+      ),
+    ).toBeInTheDocument()
+
+    fireEvent.scroll(scrollRegion, { target: { scrollTop: 4_400 } })
+    await screen.findByRole('button', { name: '查看 长依赖任务 100' })
+    expect(dependency()).not.toBeInTheDocument()
+
+    fireEvent.scroll(scrollRegion, { target: { scrollTop: 8_800 } })
+    await screen.findByRole('button', { name: '查看 长依赖任务 200' })
+    expect(dependency()).toHaveAttribute('data-truncated', 'top')
+    expect(dependency()).toHaveAttribute(
+      'd',
+      expect.stringMatching(/ 200 V 201\.5$/),
+    )
+    expect(dependency()).toHaveClass('is-truncated')
+    expect(dependency()).toHaveClass('is-risk')
+  })
+
+  it('moves focus to the labeled scroll region before a focused row unmounts', async () => {
+    const largeTasks = Array.from({ length: 240 }, (_, index) =>
+      task({
+        id: `focus-${index}`,
+        code: `FOCUS-${index}`,
+        title: `焦点任务 ${index}`,
+        milestoneId: 'focus',
+      }),
+    )
+    mockTasks(largeTasks)
+    const { container } = renderApp(<GanttPage />)
+
+    const firstTask = await screen.findByRole('button', {
+      name: '查看 焦点任务 0',
+    })
+    const scrollRegion = container.querySelector(
+      '.gantt-scroll-region',
+    ) as HTMLElement
+    Object.defineProperty(scrollRegion, 'clientHeight', {
+      configurable: true,
+      value: 440,
+    })
+    firstTask.focus()
+    expect(firstTask).toHaveFocus()
+
+    fireEvent.scroll(scrollRegion, { target: { scrollTop: 4_400 } })
+
+    await screen.findByRole('button', { name: '查看 焦点任务 100' })
+    expect(scrollRegion).toHaveAttribute('tabindex', '0')
+    expect(scrollRegion).toHaveAccessibleName('甘特图排期滚动区域')
+    expect(scrollRegion).toHaveFocus()
+    expect(document.body).not.toHaveFocus()
+  })
+
   it('uses one visible row model for the synchronized task tree and timeline', async () => {
     mockTasks()
     const user = userEvent.setup()

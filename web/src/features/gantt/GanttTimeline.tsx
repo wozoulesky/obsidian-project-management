@@ -53,6 +53,8 @@ interface GanttTimelineProps {
   scale: GanttScale
   selectedTaskId: string | null
   totalRows: number
+  viewportEnd: number
+  viewportStart: number
   virtualized: boolean
   onSelectTask: (taskId: string, triggerId: string) => void
 }
@@ -141,6 +143,8 @@ export function GanttTimeline({
   scale,
   selectedTaskId,
   totalRows,
+  viewportEnd,
+  viewportStart,
   virtualized,
 }: GanttTimelineProps) {
   const dragRef = useRef<DragState | null>(null)
@@ -180,10 +184,23 @@ export function GanttTimeline({
     }),
   )
   const renderedRowIds = new Set(rows.map((row) => row.id))
-  const renderedDependencies = dependencies.filter(
-    ({ predecessor, successor }) =>
-      renderedRowIds.has(predecessor.id) && renderedRowIds.has(successor.id),
-  )
+  const renderedDependencies = dependencies.flatMap((dependency) => {
+    const fromRendered = renderedRowIds.has(dependency.predecessor.id)
+    const toRendered = renderedRowIds.has(dependency.successor.id)
+    if (!fromRendered && !toRendered) return []
+    const offWindowIndex = !fromRendered
+      ? dependency.fromIndex
+      : !toRendered
+        ? dependency.toIndex
+        : null
+    const truncated =
+      offWindowIndex === null
+        ? null
+        : offWindowIndex < rowStart
+          ? 'top'
+          : 'bottom'
+    return [{ ...dependency, fromRendered, truncated }]
+  })
 
   const beginDrag = (
     event: PointerEvent<HTMLButtonElement>,
@@ -443,7 +460,14 @@ export function GanttTimeline({
             viewBox={`0 0 100 ${totalRows}`}
           >
             {renderedDependencies.map(
-              ({ predecessor, successor, fromIndex, toIndex }) => {
+              ({
+                predecessor,
+                successor,
+                fromIndex,
+                fromRendered,
+                toIndex,
+                truncated,
+              }) => {
                 const startX = dateToPercent(
                   predecessor.dueDate,
                   range.start,
@@ -456,13 +480,28 @@ export function GanttTimeline({
                 )
                 const midpoint = Math.max(startX + 1, (startX + endX) / 2)
                 const risk = predecessor.status === 'overdue'
+                const edgeY =
+                  truncated === 'top' ? viewportStart : viewportEnd
+                const path = !truncated
+                  ? `M ${startX} ${fromIndex + 0.5} H ${midpoint} V ${
+                      toIndex + 0.5
+                    } H ${endX}`
+                  : fromRendered
+                    ? `M ${startX} ${
+                        fromIndex + 0.5
+                      } H ${midpoint} V ${edgeY}`
+                    : `M ${endX} ${edgeY} V ${toIndex + 0.5}`
                 return (
                   <path
-                    className={risk ? 'is-risk' : undefined}
-                    d={`M ${startX} ${fromIndex + 0.5} H ${midpoint} V ${
-                      toIndex + 0.5
-                    } H ${endX}`}
+                    className={[
+                      risk ? 'is-risk' : '',
+                      truncated ? 'is-truncated' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ') || undefined}
+                    d={path}
                     data-dependency={`${predecessor.id}-${successor.id}`}
+                    data-truncated={truncated ?? undefined}
                     key={`${predecessor.id}-${successor.id}`}
                     vectorEffect="non-scaling-stroke"
                   />

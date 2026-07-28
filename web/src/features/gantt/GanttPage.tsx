@@ -37,6 +37,9 @@ const ROW_HEIGHT_PX = 44
 const ROW_OVERSCAN = 10
 const VIRTUALIZE_AFTER = 100
 const FALLBACK_VIEWPORT_HEIGHT = 440
+const FALLBACK_VISIBLE_ROWS = Math.ceil(
+  FALLBACK_VIEWPORT_HEIGHT / ROW_HEIGHT_PX,
+)
 const EMPTY_TASKS: Task[] = []
 const scaleLabels = {
   day: '日',
@@ -206,10 +209,10 @@ export function GanttPage() {
   >(null)
   const [proposal, setProposal] = useState<PendingProposal | null>(null)
   const [rowWindow, setRowWindow] = useState({
-    end:
-      Math.ceil(FALLBACK_VIEWPORT_HEIGHT / ROW_HEIGHT_PX) +
-      ROW_OVERSCAN * 2,
+    end: FALLBACK_VISIBLE_ROWS + ROW_OVERSCAN,
     start: 0,
+    viewportEnd: FALLBACK_VISIBLE_ROWS,
+    viewportStart: 0,
   })
   const confirmLockRef = useRef(false)
 
@@ -227,6 +230,10 @@ export function GanttPage() {
     ? Math.min(visibleRows.length, Math.max(rowWindow.end, windowStart + 1))
     : visibleRows.length
   const renderedRows = visibleRows.slice(windowStart, windowEnd)
+  const visibleRowIndexById = useMemo(
+    () => new Map(visibleRows.map((row, index) => [row.id, index])),
+    [visibleRows],
+  )
   const selectedTask =
     tasks.find((task) => task.id === selectedTaskId) ?? null
   const proposalTask =
@@ -246,19 +253,41 @@ export function GanttPage() {
     const viewportHeight =
       event.currentTarget.clientHeight || FALLBACK_VIEWPORT_HEIGHT
     const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT_PX)
+    const viewportStart = Math.floor(
+      event.currentTarget.scrollTop / ROW_HEIGHT_PX,
+    )
+    const viewportEnd = Math.min(
+      visibleRows.length,
+      viewportStart + visibleCount,
+    )
     const start = Math.max(
       0,
-      Math.floor(event.currentTarget.scrollTop / ROW_HEIGHT_PX) -
-        ROW_OVERSCAN,
+      viewportStart - ROW_OVERSCAN,
     )
     const end = Math.min(
       visibleRows.length,
-      start + visibleCount + ROW_OVERSCAN * 2,
+      viewportEnd + ROW_OVERSCAN,
     )
+    const focusedRow =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest<HTMLElement>('[data-row-id]')
+        : null
+    const focusedRowIndex = focusedRow?.dataset.rowId
+      ? visibleRowIndexById.get(focusedRow.dataset.rowId)
+      : undefined
+    if (
+      focusedRowIndex !== undefined &&
+      (focusedRowIndex < start || focusedRowIndex >= end)
+    ) {
+      event.currentTarget.focus()
+    }
     setRowWindow((current) =>
-      current.start === start && current.end === end
+      current.start === start &&
+      current.end === end &&
+      current.viewportStart === viewportStart &&
+      current.viewportEnd === viewportEnd
         ? current
-        : { end, start },
+        : { end, start, viewportEnd, viewportStart },
     )
   }
 
@@ -370,8 +399,10 @@ export function GanttPage() {
       ) : (
         <div className="gantt-page__workspace data-grid-with-inspector">
           <div
+            aria-label="甘特图排期滚动区域"
             className="gantt-scroll-region"
             onScroll={updateRowWindow}
+            tabIndex={0}
           >
             <div
               className={`gantt-layout${
@@ -499,6 +530,10 @@ export function GanttPage() {
                 scale={scale}
                 selectedTaskId={selectedTaskId}
                 totalRows={visibleRows.length}
+                viewportEnd={
+                  shouldVirtualize ? rowWindow.viewportEnd : visibleRows.length
+                }
+                viewportStart={shouldVirtualize ? rowWindow.viewportStart : 0}
                 virtualized={shouldVirtualize}
               />
             </div>
