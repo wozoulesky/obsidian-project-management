@@ -217,7 +217,7 @@
 
 .app-header__save-message {
   gap: var(--space-1);
-  color: color-mix(in srgb, var(--success) 72%, var(--rail));
+  color: color-mix(in srgb, var(--success) 58%, var(--rail));
   font-weight: 650;
 }
 
@@ -372,8 +372,8 @@
   gap: var(--space-1);
 }
 
-.risk-banner span {
-  color: var(--text-secondary);
+.risk-banner > div > span {
+  color: color-mix(in srgb, var(--text-secondary) 92%, var(--rail));
   font-size: 0.75rem;
 }
 
@@ -677,7 +677,8 @@
 
 .gantt-scroll-region {
   min-width: 0;
-  overflow-x: auto;
+  max-height: min(70vh, 44rem);
+  overflow: auto;
 }
 
 .gantt-task-tree {
@@ -691,9 +692,16 @@
 
 .gantt-task-tree__header,
 .gantt-timeline__header {
+  position: sticky;
+  z-index: 5;
+  top: 0;
   height: 3rem;
   background: color-mix(in srgb, var(--canvas) 72%, var(--surface));
   border-bottom: 1px solid var(--border);
+}
+
+.gantt-task-tree__rows {
+  position: relative;
 }
 
 .gantt-task-tree__header {
@@ -1567,7 +1575,7 @@
 
 .requirement-card__view {
   padding: 0;
-  color: var(--primary);
+  color: color-mix(in srgb, var(--primary) 70%, var(--rail));
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -1854,7 +1862,7 @@
 }
 
 .defect-severity--serious {
-  color: color-mix(in srgb, var(--warning) 74%, var(--rail));
+  color: color-mix(in srgb, var(--warning) 55%, var(--rail));
   background: color-mix(in srgb, var(--warning) 8%, var(--surface));
   border-color: color-mix(in srgb, var(--warning) 32%, var(--border));
 }

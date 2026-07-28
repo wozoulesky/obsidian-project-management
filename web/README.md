@@ -13,6 +13,16 @@ React、TypeScript 与 Vite 构建的本地项目管理 Web 应用。
 - `npm run check`：运行代码检查、单元测试和生产构建
 - `npm run test:e2e`：运行 Playwright 端到端测试
 
+## 大数据本地验证
+
+仅在开发服务器中启用 10,000 条确定性任务数据：
+
+```powershell
+$env:VITE_FIXTURE_MODE='large'; npm run dev
+```
+
+未设置该变量时仍使用紧凑的默认数据；生产构建不会启用大数据 fixture。
+
 ## React Router 安全范围
 
 本项目是仅使用 `BrowserRouter` 的客户端 SPA，不使用 React Router 的

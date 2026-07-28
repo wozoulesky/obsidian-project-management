@@ -67,6 +67,62 @@ function mockTasks(tasks: Task[] = ganttTasks) {
 }
 
 describe('GanttPage layout', () => {
+  it('keeps 100-plus synchronized rows bounded and moves the window on scroll', async () => {
+    const largeTasks = Array.from({ length: 240 }, (_, index) =>
+      task({
+        id: `large-${index}`,
+        code: `LARGE-${index}`,
+        title: `大型排期任务 ${index}`,
+        milestoneId: 'large',
+      }),
+    )
+    mockTasks(largeTasks)
+    const { container } = renderApp(<GanttPage />)
+
+    await screen.findByRole('button', { name: '查看 大型排期任务 0' })
+    const scrollRegion = container.querySelector(
+      '.gantt-scroll-region',
+    ) as HTMLElement
+    Object.defineProperty(scrollRegion, 'clientHeight', {
+      configurable: true,
+      value: 440,
+    })
+
+    const renderedTreeRows = () =>
+      container.querySelectorAll('.gantt-task-tree__rows [data-row-id]')
+    const renderedTimelineRows = () =>
+      container.querySelectorAll('.gantt-timeline__rows [data-row-id]')
+    expect(renderedTreeRows().length).toBeLessThan(50)
+    expect(
+      Array.from(renderedTreeRows(), (row) => row.getAttribute('data-row-id')),
+    ).toEqual(
+      Array.from(
+        renderedTimelineRows(),
+        (row) => row.getAttribute('data-row-id'),
+      ),
+    )
+
+    fireEvent.scroll(scrollRegion, { target: { scrollTop: 4_400 } })
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: '查看 大型排期任务 100' }),
+      ).toBeVisible()
+    })
+    expect(
+      screen.queryByRole('button', { name: '查看 大型排期任务 0' }),
+    ).not.toBeInTheDocument()
+    expect(renderedTreeRows().length).toBeLessThan(50)
+    expect(
+      Array.from(renderedTreeRows(), (row) => row.getAttribute('data-row-id')),
+    ).toEqual(
+      Array.from(
+        renderedTimelineRows(),
+        (row) => row.getAttribute('data-row-id'),
+      ),
+    )
+  })
+
   it('uses one visible row model for the synchronized task tree and timeline', async () => {
     mockTasks()
     const user = userEvent.setup()

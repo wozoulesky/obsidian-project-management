@@ -199,6 +199,45 @@ function createTasks(actors: Record<string, Actor>): Task[] {
   return [...namedTasks, ...generatedTasks]
 }
 
+export function createLargeTaskFixture(
+  count = 10_000,
+  actors = createActors(),
+): Task[] {
+  const assignees = Object.values(actors)
+  return Array.from({ length: count }, (_, index): Task => {
+    const sequence = index + 1
+    const paddedSequence = String(sequence).padStart(5, '0')
+    const startDay = (index % 24) + 1
+    const statusIndex = index % 4
+    const status: Task['status'] =
+      statusIndex === 0
+        ? 'done'
+        : statusIndex === 1
+          ? 'in_progress'
+          : statusIndex === 2
+            ? 'not_started'
+            : 'overdue'
+    return {
+      id: `large-task-${paddedSequence}`,
+      code: `LARGE-${paddedSequence}`,
+      title: `大型确定性任务 ${paddedSequence}`,
+      description: '用于本地大数据性能验证的确定性任务。',
+      assignee: assignees[index % assignees.length]!,
+      startDate: `2026-08-${String(startDay).padStart(2, '0')}`,
+      dueDate: `2026-08-${String(startDay + 3).padStart(2, '0')}`,
+      priority: index % 5 === 0 ? 'P0' : index % 2 === 0 ? 'P1' : 'P2',
+      status,
+      progress:
+        status === 'done' ? 100 : status === 'in_progress' ? 50 : 0,
+      milestoneId: `large-${String(Math.floor(index / 100) + 1).padStart(
+        3,
+        '0',
+      )}`,
+      dependencyIds: [],
+    }
+  })
+}
+
 function createRequirements(): Requirement[] {
   const namedRequirements: Requirement[] = [
     {
@@ -298,7 +337,10 @@ function createDefects(actors: Record<string, Actor>): Defect[] {
 
 export function createFixtureSeed(): FixtureSeed {
   const actors = createActors()
-  const tasks = createTasks(actors)
+  const tasks =
+    import.meta.env.DEV && import.meta.env.VITE_FIXTURE_MODE === 'large'
+      ? createLargeTaskFixture(10_000, actors)
+      : createTasks(actors)
   const requirements = createRequirements()
   const defects = createDefects(actors)
   const risks: RiskItem[] = [

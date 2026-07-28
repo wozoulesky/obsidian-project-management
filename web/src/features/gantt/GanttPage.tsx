@@ -1,4 +1,10 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type UIEvent,
+} from 'react'
 
 import { EntityInspector } from '../../components/data/EntityInspector'
 import {
@@ -27,6 +33,10 @@ import {
 
 const AS_OF = '2026-07-28'
 const ROW_HEIGHT = '2.75rem'
+const ROW_HEIGHT_PX = 44
+const ROW_OVERSCAN = 10
+const VIRTUALIZE_AFTER = 100
+const FALLBACK_VIEWPORT_HEIGHT = 440
 const EMPTY_TASKS: Task[] = []
 const scaleLabels = {
   day: '日',
@@ -195,6 +205,12 @@ export function GanttPage() {
     string | null
   >(null)
   const [proposal, setProposal] = useState<PendingProposal | null>(null)
+  const [rowWindow, setRowWindow] = useState({
+    end:
+      Math.ceil(FALLBACK_VIEWPORT_HEIGHT / ROW_HEIGHT_PX) +
+      ROW_OVERSCAN * 2,
+    start: 0,
+  })
   const confirmLockRef = useRef(false)
 
   const tasks = tasksQuery.data ?? EMPTY_TASKS
@@ -203,6 +219,14 @@ export function GanttPage() {
     [collapsedMilestones, tasks],
   )
   const range = useMemo(() => ganttRange(tasks, scale), [scale, tasks])
+  const shouldVirtualize = visibleRows.length > VIRTUALIZE_AFTER
+  const windowStart = shouldVirtualize
+    ? Math.min(rowWindow.start, Math.max(0, visibleRows.length - 1))
+    : 0
+  const windowEnd = shouldVirtualize
+    ? Math.min(visibleRows.length, Math.max(rowWindow.end, windowStart + 1))
+    : visibleRows.length
+  const renderedRows = visibleRows.slice(windowStart, windowEnd)
   const selectedTask =
     tasks.find((task) => task.id === selectedTaskId) ?? null
   const proposalTask =
@@ -215,6 +239,27 @@ export function GanttPage() {
       else next.add(milestoneId)
       return next
     })
+  }
+
+  const updateRowWindow = (event: UIEvent<HTMLDivElement>) => {
+    if (!shouldVirtualize) return
+    const viewportHeight =
+      event.currentTarget.clientHeight || FALLBACK_VIEWPORT_HEIGHT
+    const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT_PX)
+    const start = Math.max(
+      0,
+      Math.floor(event.currentTarget.scrollTop / ROW_HEIGHT_PX) -
+        ROW_OVERSCAN,
+    )
+    const end = Math.min(
+      visibleRows.length,
+      start + visibleCount + ROW_OVERSCAN * 2,
+    )
+    setRowWindow((current) =>
+      current.start === start && current.end === end
+        ? current
+        : { end, start },
+    )
   }
 
   const createProposal = (
@@ -324,7 +369,10 @@ export function GanttPage() {
         <EmptyState title="当前项目暂无排期任务" />
       ) : (
         <div className="gantt-page__workspace data-grid-with-inspector">
-          <div className="gantt-scroll-region">
+          <div
+            className="gantt-scroll-region"
+            onScroll={updateRowWindow}
+          >
             <div
               className={`gantt-layout${
                 taskTreeCollapsed ? ' gantt-layout--task-tree-collapsed' : ''
@@ -338,13 +386,32 @@ export function GanttPage() {
                   </span>
                   <span className="gantt-task-tree__content">负责人 / 进度</span>
                 </div>
-                <div className="gantt-task-tree__rows">
-                  {visibleRows.map((row) =>
+                <div
+                  className="gantt-task-tree__rows"
+                  style={
+                    shouldVirtualize
+                      ? { height: visibleRows.length * ROW_HEIGHT_PX }
+                      : undefined
+                  }
+                >
+                  {renderedRows.map((row, renderedIndex) =>
                     row.kind === 'group' ? (
                       <div
                         className="gantt-task-tree__row gantt-task-tree__row--group"
                         data-row-id={row.id}
                         key={row.id}
+                        style={
+                          shouldVirtualize
+                            ? {
+                                insetInline: 0,
+                                position: 'absolute',
+                                transform: `translateY(${
+                                  (windowStart + renderedIndex) *
+                                  ROW_HEIGHT_PX
+                                }px)`,
+                              }
+                            : undefined
+                        }
                       >
                         <button
                           aria-expanded={
@@ -372,6 +439,18 @@ export function GanttPage() {
                         }`}
                         data-row-id={row.id}
                         key={row.id}
+                        style={
+                          shouldVirtualize
+                            ? {
+                                insetInline: 0,
+                                position: 'absolute',
+                                transform: `translateY(${
+                                  (windowStart + renderedIndex) *
+                                  ROW_HEIGHT_PX
+                                }px)`,
+                              }
+                            : undefined
+                        }
                       >
                         <button
                           aria-expanded={selectedTaskId === row.task.id}
@@ -413,9 +492,14 @@ export function GanttPage() {
                   setSelectedTaskId(taskId)
                 }}
                 range={range}
-                rows={visibleRows}
+                allRows={visibleRows}
+                rowHeight={ROW_HEIGHT_PX}
+                rowStart={windowStart}
+                rows={renderedRows}
                 scale={scale}
                 selectedTaskId={selectedTaskId}
+                totalRows={visibleRows.length}
+                virtualized={shouldVirtualize}
               />
             </div>
           </div>

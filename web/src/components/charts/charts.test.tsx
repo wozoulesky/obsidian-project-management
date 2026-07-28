@@ -40,6 +40,34 @@ afterEach(() => {
 })
 
 describe('EChart', () => {
+  it('disables ECharts animation when reduced motion is preferred', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        addEventListener: vi.fn(),
+        matches: true,
+        media: '(prefers-reduced-motion: reduce)',
+        removeEventListener: vi.fn(),
+      })),
+    )
+
+    render(
+      <EChart
+        ariaLabel="低动态趋势"
+        option={{ animationDuration: 240, title: { text: 'reduced' } }}
+      />,
+    )
+
+    expect(chart.setOption).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        animation: false,
+        animationDuration: 0,
+        animationDurationUpdate: 0,
+      }),
+      { notMerge: true },
+    )
+  })
+
   it('initializes, updates, resizes and disposes one chart instance safely', () => {
     const { rerender, unmount } = render(
       <EChart ariaLabel="项目趋势" option={{ title: { text: 'first' } }} />,

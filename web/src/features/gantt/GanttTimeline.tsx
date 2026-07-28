@@ -38,6 +38,7 @@ export interface GanttRange {
 }
 
 interface GanttTimelineProps {
+  allRows: GanttVisibleRow[]
   asOf: string
   onCancelProposal: () => void
   onPropose: (
@@ -46,9 +47,13 @@ interface GanttTimelineProps {
     dates: GanttTaskDates,
   ) => void
   range: GanttRange
+  rowHeight: number
+  rowStart: number
   rows: GanttVisibleRow[]
   scale: GanttScale
   selectedTaskId: string | null
+  totalRows: number
+  virtualized: boolean
   onSelectTask: (taskId: string, triggerId: string) => void
 }
 
@@ -124,24 +129,32 @@ function keyboardDelta(
 }
 
 export function GanttTimeline({
+  allRows,
   asOf,
   onCancelProposal,
   onPropose,
   onSelectTask,
   range,
+  rowHeight,
+  rowStart,
   rows,
   scale,
   selectedTaskId,
+  totalRows,
+  virtualized,
 }: GanttTimelineProps) {
   const dragRef = useRef<DragState | null>(null)
   const ticks = useMemo(() => buildTicks(range, scale), [range, scale])
   const rangeDays = dateDifference(range.start, range.end)
-  const taskRows = rows.filter(
+  const taskRows = allRows.filter(
     (row): row is Extract<GanttVisibleRow, { kind: 'task' }> =>
       row.kind === 'task',
   )
+  const rowIndexById = new Map(
+    allRows.map((row, index) => [row.id, index]),
+  )
   const taskIndex = new Map(
-    taskRows.map((row) => [row.task.id, rows.indexOf(row)]),
+    taskRows.map((row) => [row.task.id, rowIndexById.get(row.id)!]),
   )
   const taskById = new Map(taskRows.map((row) => [row.task.id, row.task]))
   const visibleTaskIds = new Set(
@@ -165,6 +178,11 @@ export function GanttTimeline({
         ? [{ predecessor, successor: task, fromIndex, toIndex }]
         : []
     }),
+  )
+  const renderedRowIds = new Set(rows.map((row) => row.id))
+  const renderedDependencies = dependencies.filter(
+    ({ predecessor, successor }) =>
+      renderedRowIds.has(predecessor.id) && renderedRowIds.has(successor.id),
   )
 
   const beginDrag = (
@@ -279,7 +297,10 @@ export function GanttTimeline({
           </span>
         ))}
       </div>
-      <div className="gantt-timeline__body">
+      <div
+        className="gantt-timeline__body"
+        style={virtualized ? { height: totalRows * rowHeight } : undefined}
+      >
         <div className="gantt-timeline__grid" aria-hidden="true">
           {ticks.map((tick) => (
             <span
@@ -301,18 +322,32 @@ export function GanttTimeline({
             }}
           />
         ) : null}
-        <div className="gantt-timeline__rows">
-          {rows.map((row) => {
+        <div
+          className="gantt-timeline__rows"
+          style={virtualized ? { height: totalRows * rowHeight } : undefined}
+        >
+          {rows.map((row, renderedIndex) => {
+            const virtualRowStyle = virtualized
+              ? {
+                  insetInline: 0,
+                  position: 'absolute' as const,
+                  transform: `translateY(${
+                    (rowStart + renderedIndex) * rowHeight
+                  }px)`,
+                }
+              : undefined
             if (row.kind === 'group') {
               return (
                 <div
                   className="gantt-timeline__row gantt-timeline__row--group"
                   data-row-id={row.id}
                   key={row.id}
+                  style={virtualRowStyle}
                 >
                   <span
                     aria-label={`里程碑 ${row.milestoneId}：${row.milestoneDate}`}
                     className="gantt-milestone"
+                    role="img"
                     style={{
                       left: `${dateToPercent(
                         row.milestoneDate,
@@ -335,6 +370,7 @@ export function GanttTimeline({
                 className="gantt-timeline__row"
                 data-row-id={row.id}
                 key={row.id}
+                style={virtualRowStyle}
               >
                 {layout.width > 0 ? (
                   <div
@@ -399,14 +435,14 @@ export function GanttTimeline({
             )
           })}
         </div>
-        {dependencies.length > 0 ? (
+        {renderedDependencies.length > 0 ? (
           <svg
             aria-hidden="true"
             className="gantt-dependencies"
             preserveAspectRatio="none"
-            viewBox={`0 0 100 ${rows.length}`}
+            viewBox={`0 0 100 ${totalRows}`}
           >
-            {dependencies.map(
+            {renderedDependencies.map(
               ({ predecessor, successor, fromIndex, toIndex }) => {
                 const startX = dateToPercent(
                   predecessor.dueDate,
