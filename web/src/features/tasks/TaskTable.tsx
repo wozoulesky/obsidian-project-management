@@ -211,7 +211,7 @@ export function TaskTable({
             </tr>
           ))}
         </thead>
-        {tasks.length > 100 ? (
+        {tasks.length >= 100 ? (
           <VirtualTaskBody
             rows={rows}
             scrollRef={scrollRef}

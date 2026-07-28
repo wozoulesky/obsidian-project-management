@@ -488,4 +488,37 @@ describe('TaskPage workflow', () => {
     expect(renderedRows[0]).toHaveClass('task-table__grid-row')
     expect(within(renderedRows[0]!).getAllByRole('cell')).toHaveLength(6)
   })
+
+  it('virtualizes at exactly 100 tasks but not at 99', () => {
+    const tasks = Array.from({ length: 100 }, (_, index) =>
+      task({
+        id: `threshold-${index}`,
+        code: `THRESHOLD-${index}`,
+        title: `阈值任务 ${index}`,
+      }),
+    )
+    const belowThreshold = renderApp(
+      <TaskTable
+        onSelect={vi.fn()}
+        selectedTaskId={null}
+        tasks={tasks.slice(0, 99)}
+      />,
+    )
+
+    expect(
+      belowThreshold.container.querySelector('.task-table__virtual-body'),
+    ).not.toBeInTheDocument()
+    belowThreshold.unmount()
+
+    const atThreshold = renderApp(
+      <TaskTable
+        onSelect={vi.fn()}
+        selectedTaskId={null}
+        tasks={tasks}
+      />,
+    )
+    expect(
+      atThreshold.container.querySelector('.task-table__virtual-body'),
+    ).toBeInTheDocument()
+  })
 })
