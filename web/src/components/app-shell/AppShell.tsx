@@ -51,7 +51,7 @@ export function AppShell({ children }: AppShellProps) {
               title={label}
               to={path}
             >
-              <Icon aria-hidden="true" size={20} strokeWidth={1.8} />
+              <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
               <VisuallyHidden>{label}</VisuallyHidden>
             </NavLink>
           ))}
@@ -78,7 +78,9 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </header>
 
-      <main className="app-main">{children}</main>
+      <main className="app-main" id="main-content">
+        {children}
+      </main>
     </div>
   )
 }

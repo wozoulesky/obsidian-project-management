@@ -1,25 +1,24 @@
 :root {
-  --color-canvas: #f6f7f9;
-  --color-surface: #fff;
-  --color-rail: #171b20;
-  --color-text: #171b20;
-  --color-secondary: #6b7280;
-  --color-border: #e1e5ea;
-  --color-primary: #2f91f7;
-  --color-primary-soft: #e7f3ff;
-  --color-success: #43be76;
-  --color-warning: #f28b30;
-  --color-critical: #d9533f;
-
+  color-scheme: light;
+  --canvas: #f6f7f9;
+  --surface: #ffffff;
+  --rail: #171b20;
+  --text-primary: #171b20;
+  --text-secondary: #6b7280;
+  --border: #e1e5ea;
+  --primary: #2f91f7;
+  --primary-soft: #e7f3ff;
+  --success: #43be76;
+  --warning: #f28b30;
+  --critical: #d9533f;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-6: 1.5rem;
-
   --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
+  --radius-md: 0.625rem;
   --rail-width: 3.75rem;
   --header-height: 3.5rem;
-  --focus-ring: 0 0 0 3px rgb(47 145 247 / 28%);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 35%, transparent);
 }

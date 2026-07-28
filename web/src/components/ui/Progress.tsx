@@ -1,28 +1,23 @@
-import type { HTMLAttributes } from 'react'
-
-export type ProgressProps = Omit<HTMLAttributes<HTMLDivElement>, 'children'> & {
+export type ProgressProps = {
   value: number
+  label: string
 }
 
-export function Progress({ className = '', value, ...props }: ProgressProps) {
+export function Progress({ label, value }: ProgressProps) {
   const normalizedValue = Number.isFinite(value)
     ? Math.min(100, Math.max(0, value))
     : 0
-  const classes = ['progress', className].filter(Boolean).join(' ')
 
   return (
     <div
+      aria-label={label}
       aria-valuemax={100}
       aria-valuemin={0}
-      aria-valuenow={normalizedValue}
-      className={classes}
+      aria-valuenow={value}
+      className="progress"
       role="progressbar"
-      {...props}
     >
-      <span
-        className="progress__value"
-        style={{ width: `${normalizedValue}%` }}
-      />
+      <span style={{ width: `${normalizedValue}%` }} />
     </div>
   )
 }

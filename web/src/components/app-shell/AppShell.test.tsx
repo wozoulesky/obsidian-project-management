@@ -58,4 +58,10 @@ describe('AppShell', () => {
     expect(screen.getByText('数据已保存到本地')).toBeInTheDocument()
     expect(screen.getByText('最后更新 10:42')).toBeInTheDocument()
   })
+
+  it('provides a stable main content target', () => {
+    renderApp(<AppShell />)
+
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
+  })
 })
