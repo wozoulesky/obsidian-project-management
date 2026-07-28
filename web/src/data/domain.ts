@@ -90,6 +90,7 @@ export interface ActivityEvent {
   action: string
   operation: ActivityOperation
   createdAt: string
+  note?: string
 }
 
 export interface RiskItem {

@@ -4,6 +4,56 @@ import { actors, defects, requirements, tasks } from './fixtures'
 import { createMockProjectRepository } from './mock-project-repository'
 
 describe('mock project repository', () => {
+  it('keeps dashboard metrics derived from coherent fixture collections', async () => {
+    const repository = createMockProjectRepository()
+
+    const [dashboard, allTasks, allRequirements, allDefects] =
+      await Promise.all([
+        repository.getDashboard('atlas'),
+        repository.listTasks('atlas'),
+        repository.listRequirements('atlas'),
+        repository.listDefects('atlas'),
+      ])
+
+    expect(allTasks).toHaveLength(50)
+    expect(allTasks.filter((task) => task.status === 'done')).toHaveLength(34)
+    expect(allRequirements).toHaveLength(20)
+    expect(
+      allRequirements.filter(
+        (item) => item.status === 'delivered' || item.status === 'accepted',
+      ),
+    ).toHaveLength(14)
+    expect(allDefects).toHaveLength(7)
+    expect(
+      allDefects.filter(
+        (defect) =>
+          !['closed', 'rejected', 'not_a_defect'].includes(defect.status),
+      ),
+    ).toHaveLength(7)
+    expect(
+      allDefects.filter(
+        (defect) =>
+          defect.severity === 'fatal' || defect.severity === 'serious',
+      ),
+    ).toHaveLength(2)
+    expect(dashboard.metrics).toEqual({
+      totalTasks: allTasks.length,
+      completedTasks: allTasks.filter((task) => task.status === 'done').length,
+      deliveredRequirements: allRequirements.filter(
+        (item) => item.status === 'delivered' || item.status === 'accepted',
+      ).length,
+      totalRequirements: allRequirements.length,
+      activeDefects: allDefects.length,
+      seriousDefects: allDefects.filter(
+        (defect) =>
+          defect.severity === 'fatal' || defect.severity === 'serious',
+      ).length,
+      velocityPerWeek: 16.4,
+      activeActors: 6,
+      activeAgents: 3,
+    })
+  })
+
   it('returns the approved dashboard metrics and ordered risk/activity data', async () => {
     const repository = createMockProjectRepository()
 
@@ -110,6 +160,7 @@ describe('mock project repository', () => {
     const dashboard = await repository.getDashboard('atlas')
     expect(tasks.find((task) => task.id === 'task-051')?.progress).toBe(80)
     expect(dashboard.activities[0]?.action).toContain('80%')
+    expect(dashboard.activities[0]?.note).toBe('权限路径已验证')
   })
 
   it('persists updated task dates', async () => {
@@ -138,6 +189,62 @@ describe('mock project repository', () => {
     expect(
       tasks.filter((task) => task.id === 'task-fix-defect-104'),
     ).toHaveLength(1)
+    expect(
+      (await repository.listDefects('atlas')).find(
+        (defect) => defect.id === 'defect-104',
+      )?.linkedTaskId,
+    ).toBe('task-fix-defect-104')
+  })
+
+  it('rejects invalid task inputs without changing state or activity', async () => {
+    const repository = createMockProjectRepository()
+    const originalTask = (await repository.listTasks('atlas')).find(
+      (task) => task.id === 'task-051',
+    )
+    const originalActivityCount = (await repository.getDashboard('atlas'))
+      .activities.length
+
+    for (const progress of [-1, 101, 1.5, Number.NaN]) {
+      await expect(
+        repository.updateTaskProgress('task-051', {
+          progress,
+          status: 'in_progress',
+          note: 'must not persist',
+        }),
+      ).rejects.toThrow('Progress must be an integer between 0 and 100')
+    }
+    for (const dates of [
+      { startDate: '2026/07/24', dueDate: '2026-07-29' },
+      { startDate: '2026-07-30', dueDate: '2026-07-29' },
+      { startDate: '2026-02-30', dueDate: '2026-03-01' },
+    ]) {
+      await expect(
+        repository.updateTaskDates('task-051', dates),
+      ).rejects.toThrow('Task dates are invalid')
+    }
+
+    const currentTask = (await repository.listTasks('atlas')).find(
+      (task) => task.id === 'task-051',
+    )
+    expect(currentTask).toEqual(originalTask)
+    expect((await repository.getDashboard('atlas')).activities).toHaveLength(
+      originalActivityCount,
+    )
+  })
+
+  it('uses unique deterministic activity IDs for repeated mutations', async () => {
+    const repository = createMockProjectRepository()
+    const input = {
+      progress: 80,
+      status: 'in_progress' as const,
+      note: '',
+    }
+
+    await repository.updateTaskProgress('task-051', input)
+    await repository.updateTaskProgress('task-051', input)
+
+    const [first, second] = (await repository.getDashboard('atlas')).activities
+    expect(first?.id).not.toBe(second?.id)
   })
 
   it('rejects missing task, requirement, and defect operations precisely', async () => {
@@ -181,5 +288,48 @@ describe('mock project repository', () => {
     const secondRequirements = await repository.listRequirements('atlas')
     expect(secondTasks[0]?.title).not.toBe('caller mutation')
     expect(secondRequirements[0]?.linkedTaskIds).not.toContain('caller-task')
+  })
+
+  it('clones dashboard, defects, and gantt results at every boundary', async () => {
+    const repository = createMockProjectRepository()
+    const dashboard = await repository.getDashboard('atlas')
+    const defectList = await repository.listDefects('atlas')
+    const gantt = await repository.listGanttTasks('atlas')
+
+    dashboard.activities[0]!.action = 'caller mutation'
+    dashboard.risks[0]!.assignee.name = 'caller mutation'
+    defectList[0]!.reproductionSteps.push('caller mutation')
+    gantt[0]!.dependencyIds.push('caller mutation')
+
+    const freshDashboard = await repository.getDashboard('atlas')
+    const freshDefects = await repository.listDefects('atlas')
+    const freshGantt = await repository.listGanttTasks('atlas')
+    expect(freshDashboard.activities[0]?.action).not.toBe('caller mutation')
+    expect(freshDashboard.risks[0]?.assignee.name).not.toBe('caller mutation')
+    expect(freshDefects[0]?.reproductionSteps).not.toContain('caller mutation')
+    expect(freshGantt[0]?.dependencyIds).not.toContain('caller mutation')
+  })
+
+  it('isolates repository instances from mutations and exported fixtures', async () => {
+    const firstRepository = createMockProjectRepository()
+    await firstRepository.updateTaskProgress('task-051', {
+      progress: 99,
+      status: 'in_progress',
+      note: '',
+    })
+
+    const fixtureTask = tasks[0]
+    if (!fixtureTask) {
+      throw new Error('Expected a fixture task')
+    }
+    const originalTitle = fixtureTask.title
+    expect(() => {
+      fixtureTask.title = 'export contamination'
+    }).toThrow()
+    const secondRepository = createMockProjectRepository()
+
+    const secondTasks = await secondRepository.listTasks('atlas')
+    expect(secondTasks.find((task) => task.id === 'task-051')?.progress).toBe(62)
+    expect(secondTasks[0]?.title).toBe(originalTitle)
   })
 })

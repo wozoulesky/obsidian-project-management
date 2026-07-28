@@ -6,22 +6,39 @@ import type {
   TaskDateInput,
   TaskProgressInput,
 } from './domain'
-import {
-  activities,
-  defects,
-  requirements,
-  risks,
-  tasks,
-  trendByDays,
-} from './fixtures'
+import { createFixtureSeed } from './fixtures'
 import type { ProjectRepository } from './project-repository'
 
 const clone = <T>(value: T): T => structuredClone(value)
+const inactiveDefectStatuses = new Set([
+  'closed',
+  'rejected',
+  'not_a_defect',
+])
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false
+  }
+  const timestamp = Date.parse(`${value}T00:00:00Z`)
+  return (
+    Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === value
+  )
+}
 
 export function createMockProjectRepository(): ProjectRepository {
-  const taskState = clone(tasks)
-  const requirementState = clone(requirements)
-  const activityState = clone(activities)
+  const seed = createFixtureSeed()
+  const taskState = seed.tasks
+  const requirementState = seed.requirements
+  const defectState = seed.defects
+  const activityState = seed.activities
+  let activitySequence = activityState.length
+
+  const nextActivityId = () => {
+    activitySequence += 1
+    return `activity-${activitySequence}`
+  }
 
   const getTask = (taskId: string): Task => {
     const task = taskState.find((candidate) => candidate.id === taskId)
@@ -34,20 +51,33 @@ export function createMockProjectRepository(): ProjectRepository {
   return {
     async getDashboard(projectId, days = 30): Promise<DashboardSnapshot> {
       void projectId
+      const activeDefects = defectState.filter(
+        (defect) => !inactiveDefectStatuses.has(defect.status),
+      )
+      const actorList = Object.values(seed.actors)
       return clone({
         metrics: {
-          totalTasks: 50,
-          completedTasks: 34,
-          deliveredRequirements: 14,
-          totalRequirements: 20,
-          activeDefects: 7,
-          seriousDefects: 2,
+          totalTasks: taskState.length,
+          completedTasks: taskState.filter((task) => task.status === 'done')
+            .length,
+          deliveredRequirements: requirementState.filter(
+            (requirement) =>
+              requirement.status === 'delivered' ||
+              requirement.status === 'accepted',
+          ).length,
+          totalRequirements: requirementState.length,
+          activeDefects: activeDefects.length,
+          seriousDefects: activeDefects.filter(
+            (defect) =>
+              defect.severity === 'fatal' || defect.severity === 'serious',
+          ).length,
           velocityPerWeek: 16.4,
-          activeActors: 6,
-          activeAgents: 3,
+          activeActors: actorList.length,
+          activeAgents: actorList.filter((actor) => actor.kind === 'agent')
+            .length,
         },
-        trend: trendByDays[days],
-        risks,
+        trend: seed.trendByDays[days],
+        risks: seed.risks,
         activities: activityState,
       })
     },
@@ -59,15 +89,25 @@ export function createMockProjectRepository(): ProjectRepository {
 
     async updateTaskProgress(taskId, input: TaskProgressInput) {
       const task = getTask(taskId)
+      if (
+        !Number.isFinite(input.progress) ||
+        !Number.isInteger(input.progress) ||
+        input.progress < 0 ||
+        input.progress > 100
+      ) {
+        throw new Error('Progress must be an integer between 0 and 100')
+      }
+
       task.progress = input.progress
       task.status = input.status
-
+      const note = input.note.trim()
       const activity: ActivityEvent = {
-        id: `activity-${task.id}-progress-${input.progress}`,
+        id: nextActivityId(),
         actor: task.assignee,
         action: `将「${task.title}」更新至 ${input.progress}%`,
         operation: 'task.update',
         createdAt: '2026-07-28T12:00:00+08:00',
+        ...(note ? { note: input.note } : {}),
       }
       activityState.unshift(activity)
 
@@ -76,11 +116,18 @@ export function createMockProjectRepository(): ProjectRepository {
 
     async updateTaskDates(taskId, input: TaskDateInput) {
       const task = getTask(taskId)
+      if (
+        !isIsoDate(input.startDate) ||
+        !isIsoDate(input.dueDate) ||
+        input.startDate > input.dueDate
+      ) {
+        throw new Error('Task dates are invalid')
+      }
+
       task.startDate = input.startDate
       task.dueDate = input.dueDate
-
       const activity: ActivityEvent = {
-        id: `activity-${task.id}-schedule-${input.startDate}-${input.dueDate}`,
+        id: nextActivityId(),
         actor: task.assignee,
         action: `调整「${task.title}」排期至 ${input.startDate}–${input.dueDate}`,
         operation: 'task.schedule',
@@ -112,11 +159,11 @@ export function createMockProjectRepository(): ProjectRepository {
 
     async listDefects(projectId) {
       void projectId
-      return clone(defects)
+      return clone(defectState)
     },
 
     async createTaskFromDefect(defectId) {
-      const defect = defects.find((candidate) => candidate.id === defectId)
+      const defect = defectState.find((candidate) => candidate.id === defectId)
       if (!defect) {
         throw new Error(`Defect not found: ${defectId}`)
       }
@@ -124,6 +171,7 @@ export function createMockProjectRepository(): ProjectRepository {
       const taskId = `task-fix-${defectId}`
       const existingTask = taskState.find((task) => task.id === taskId)
       if (existingTask) {
+        defect.linkedTaskId = taskId
         return clone(existingTask)
       }
 
@@ -142,6 +190,7 @@ export function createMockProjectRepository(): ProjectRepository {
         dependencyIds: [],
       }
       taskState.push(task)
+      defect.linkedTaskId = taskId
       return clone(task)
     },
 

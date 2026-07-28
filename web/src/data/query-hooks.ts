@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
 
 import type {
   RequirementStatus,
@@ -18,6 +23,37 @@ export const projectQueryKeys = {
   requirements: ['requirements', projectId] as const,
   defects: ['defects', projectId] as const,
   gantt: ['gantt', projectId] as const,
+}
+
+export const mutationInvalidationKeys = {
+  taskProgress: [
+    projectQueryKeys.tasks,
+    projectQueryKeys.gantt,
+    projectQueryKeys.dashboardPrefix,
+  ],
+  taskDates: [
+    projectQueryKeys.tasks,
+    projectQueryKeys.gantt,
+    projectQueryKeys.dashboardPrefix,
+  ],
+  requirementStatus: [
+    projectQueryKeys.requirements,
+    projectQueryKeys.dashboardPrefix,
+  ],
+  defectConversion: [
+    projectQueryKeys.tasks,
+    projectQueryKeys.gantt,
+    projectQueryKeys.defects,
+  ],
+} as const
+
+function invalidateKeys(
+  queryClient: QueryClient,
+  queryKeys: readonly (readonly unknown[])[],
+) {
+  return Promise.all(
+    queryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  )
 }
 
 export function useDashboard(days: 7 | 30 | 90 = 30) {
@@ -45,12 +81,10 @@ export function useUpdateTaskProgress() {
       input: TaskProgressInput
     }) => projectRepository.updateTaskProgress(taskId, input),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: projectQueryKeys.tasks }),
-        queryClient.invalidateQueries({
-          queryKey: projectQueryKeys.dashboardPrefix,
-        }),
-      ])
+      await invalidateKeys(
+        queryClient,
+        mutationInvalidationKeys.taskProgress,
+      )
     },
   })
 }
@@ -66,10 +100,7 @@ export function useUpdateTaskDates() {
       input: TaskDateInput
     }) => projectRepository.updateTaskDates(taskId, input),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: projectQueryKeys.tasks }),
-        queryClient.invalidateQueries({ queryKey: projectQueryKeys.gantt }),
-      ])
+      await invalidateKeys(queryClient, mutationInvalidationKeys.taskDates)
     },
   })
 }
@@ -92,9 +123,10 @@ export function useUpdateRequirementStatus() {
       status: RequirementStatus
     }) => projectRepository.updateRequirementStatus(requirementId, status),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: projectQueryKeys.requirements,
-      })
+      await invalidateKeys(
+        queryClient,
+        mutationInvalidationKeys.requirementStatus,
+      )
     },
   })
 }
@@ -112,10 +144,10 @@ export function useCreateTaskFromDefect() {
     mutationFn: (defectId: string) =>
       projectRepository.createTaskFromDefect(defectId),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: projectQueryKeys.tasks }),
-        queryClient.invalidateQueries({ queryKey: projectQueryKeys.defects }),
-      ])
+      await invalidateKeys(
+        queryClient,
+        mutationInvalidationKeys.defectConversion,
+      )
     },
   })
 }
