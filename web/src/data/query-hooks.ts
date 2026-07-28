@@ -15,6 +15,10 @@ import { createMockProjectRepository } from './mock-project-repository'
 export const projectRepository = createMockProjectRepository()
 export const projectId = 'atlas'
 
+export function resetProjectRepositoryForTests() {
+  Object.assign(projectRepository, createMockProjectRepository())
+}
+
 export const projectQueryKeys = {
   dashboardPrefix: ['dashboard', projectId] as const,
   dashboard: (days: 7 | 30 | 90) =>

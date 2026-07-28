@@ -94,12 +94,14 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-function formatUpdatedAt(value: string) {
+// eslint-disable-next-line react-refresh/only-export-components
+export function formatUpdatedAt(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
     return value
   }
   return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Hong_Kong',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -121,8 +123,8 @@ function DefectInspector({
   fallbackFocusId: string
   linkedTask?: Task
   linkedRequirementCode?: string
-  linkedRequirementState: 'error' | 'pending' | 'success'
-  linkedTaskState: 'error' | 'pending' | 'success'
+  linkedRequirementState: 'cached' | 'error' | 'pending' | 'success'
+  linkedTaskState: 'cached' | 'error' | 'pending' | 'success'
   onClose: () => void
 }) {
   return (
@@ -173,6 +175,9 @@ function DefectInspector({
               {linkedTask
                 ? `${linkedTask.code} ${linkedTask.title}`
                 : '暂无关联任务'}
+              {linkedTaskState === 'cached' ? (
+                <small> 上次数据</small>
+              ) : null}
             </p>
           )}
           {linkedRequirementState === 'pending' ? (
@@ -183,6 +188,9 @@ function DefectInspector({
             <p>
               需求：
               {linkedRequirementCode ?? '暂无关联需求'}
+              {linkedRequirementState === 'cached' ? (
+                <small> 上次数据</small>
+              ) : null}
             </p>
           )}
         </section>
@@ -276,17 +284,25 @@ export function DefectPage() {
   const linkedTaskState =
     tasksQuery.isPending && !tasksQuery.data
       ? 'pending'
-      : tasksQuery.isError && !tasksQuery.data
+      : tasksQuery.error && !tasksQuery.data
         ? 'error'
-        : 'success'
+        : tasksQuery.error
+          ? 'cached'
+          : 'success'
   const linkedRequirementState =
     requirementsQuery.isPending && !requirementsQuery.data
       ? 'pending'
-      : requirementsQuery.isError && !requirementsQuery.data
+      : requirementsQuery.error && !requirementsQuery.data
         ? 'error'
-        : 'success'
+        : requirementsQuery.error
+          ? 'cached'
+          : 'success'
   const isLinkedWorkPending =
     linkedTaskState === 'pending' || linkedRequirementState === 'pending'
+  const cachedFailureSources = [
+    ...(linkedTaskState === 'cached' ? ['关联任务'] : []),
+    ...(linkedRequirementState === 'cached' ? ['关联需求'] : []),
+  ]
   const summary = {
     severe: visibleDefects.filter(
       (defect) =>
@@ -336,7 +352,41 @@ export function DefectPage() {
           正在加载关联工作
         </p>
       ) : null}
-      {tasksQuery.isError ? (
+      {cachedFailureSources.length > 0 ? (
+        <div
+          aria-label="关联数据刷新失败"
+          className="defect-page__related-state"
+          role="status"
+        >
+          <span>
+            关联数据刷新失败，正在显示上次数据：
+            {cachedFailureSources.join('、')}
+          </span>
+          <span className="defect-page__related-actions">
+            {linkedTaskState === 'cached' ? (
+              <button
+                className="button button--ghost"
+                disabled={tasksQuery.isFetching}
+                onClick={() => tasksQuery.refetch()}
+                type="button"
+              >
+                重试关联任务
+              </button>
+            ) : null}
+            {linkedRequirementState === 'cached' ? (
+              <button
+                className="button button--ghost"
+                disabled={requirementsQuery.isFetching}
+                onClick={() => requirementsQuery.refetch()}
+                type="button"
+              >
+                重试关联需求
+              </button>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
+      {tasksQuery.isError && !tasksQuery.data ? (
         <div className="defect-page__related-state" role="alert">
           <span>{errorMessage(tasksQuery.error, '关联任务读取失败')}</span>
           <button
@@ -349,7 +399,7 @@ export function DefectPage() {
           </button>
         </div>
       ) : null}
-      {requirementsQuery.isError ? (
+      {requirementsQuery.isError && !requirementsQuery.data ? (
         <div className="defect-page__related-state" role="alert">
           <span>
             {errorMessage(

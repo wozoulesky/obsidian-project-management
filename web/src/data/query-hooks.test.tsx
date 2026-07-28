@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   projectQueryKeys,
+  projectRepository,
   useCreateTaskFromDefect,
   useUpdateRequirementStatus,
   useUpdateTaskDates,
@@ -95,5 +96,23 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.defects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+  })
+})
+
+describe('shared test repository isolation', () => {
+  it('A mutates the shared repository', async () => {
+    await projectRepository.updateTaskProgress('task-051', {
+      progress: 99,
+      status: 'in_progress',
+      note: 'test isolation',
+    })
+
+    const tasks = await projectRepository.listTasks('atlas')
+    expect(tasks.find((task) => task.id === 'task-051')?.progress).toBe(99)
+  })
+
+  it('B reads the original fixture after global test cleanup', async () => {
+    const tasks = await projectRepository.listTasks('atlas')
+    expect(tasks.find((task) => task.id === 'task-051')?.progress).toBe(62)
   })
 })

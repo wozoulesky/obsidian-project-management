@@ -1,12 +1,27 @@
-import { cleanup, screen, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  cleanup,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../app/router'
 import { renderApp } from '../../app/test-utils'
-import type { Defect } from '../../data/domain'
-import { projectRepository } from '../../data/query-hooks'
-import { sortDefects } from './DefectPage'
+import type { Defect, Requirement, Task } from '../../data/domain'
+import {
+  projectQueryKeys,
+  projectRepository,
+} from '../../data/query-hooks'
+import {
+  DefectPage,
+  formatUpdatedAt,
+  sortDefects,
+} from './DefectPage'
 
 function defect(overrides: Partial<Defect>): Defect {
   return {
@@ -22,6 +37,34 @@ function defect(overrides: Partial<Defect>): Defect {
   }
 }
 
+function renderDefectPage(cached?: {
+  tasks: Task[]
+  requirements: Requirement[]
+}) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  if (cached) {
+    queryClient.setQueryData(projectQueryKeys.tasks, cached.tasks)
+    queryClient.setQueryData(
+      projectQueryKeys.requirements,
+      cached.requirements,
+    )
+  }
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>{children}</BrowserRouter>
+    </QueryClientProvider>
+  )
+  return {
+    queryClient,
+    ...render(<DefectPage />, { wrapper }),
+  }
+}
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -29,6 +72,12 @@ afterEach(() => {
 })
 
 describe('sortDefects', () => {
+  it('formats timestamps in Hong Kong time independently of the host timezone', () => {
+    expect(formatUpdatedAt('2026-07-28T02:42:00.000Z')).toBe(
+      '07/28 10:42',
+    )
+  })
+
   it('orders severity, status, then latest update without mutating input', () => {
     const source = [
       defect({ id: 'normal', severity: 'normal' }),
@@ -392,6 +441,58 @@ describe('DefectPage workflow', () => {
     expect(
       await within(dialog).findByText('需求：暂无关联需求'),
     ).toBeVisible()
+    expect(
+      screen.getByRole('table', { name: '缺陷风险队列' }),
+    ).toBeVisible()
+  })
+
+  it('merges cached secondary refresh failures into one nonblocking warning', async () => {
+    const cachedTasks = await projectRepository.listTasks('atlas')
+    const cachedRequirements = await projectRepository.listRequirements(
+      'atlas',
+    )
+    const listTasks = vi.spyOn(projectRepository, 'listTasks')
+      .mockRejectedValueOnce(new Error('关联任务刷新失败'))
+      .mockResolvedValueOnce(cachedTasks)
+    const listRequirements = vi.spyOn(projectRepository, 'listRequirements')
+      .mockRejectedValueOnce(new Error('关联需求刷新失败'))
+      .mockResolvedValueOnce(cachedRequirements)
+    const user = userEvent.setup()
+    renderDefectPage({
+      tasks: cachedTasks,
+      requirements: cachedRequirements,
+    })
+
+    expect(
+      await screen.findByRole('table', { name: '缺陷风险队列' }),
+    ).toBeVisible()
+    const warning = await screen.findByRole('status', {
+      name: '关联数据刷新失败',
+    })
+    await user.click(
+      screen.getByRole('button', { name: '查看 离线恢复失败' }),
+    )
+    const dialog = screen.getByRole('dialog', { name: '离线恢复失败' })
+    expect(within(dialog).getByText(/TASK-047/)).toBeVisible()
+    expect(within(dialog).getByText(/REQ-013/)).toBeVisible()
+
+    expect(warning).toHaveTextContent(
+      '关联数据刷新失败，正在显示上次数据',
+    )
+    expect(warning).toHaveTextContent('关联任务、关联需求')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(within(dialog).getByText(/TASK-047/)).toBeVisible()
+    expect(within(dialog).getByText(/REQ-013/)).toBeVisible()
+    expect(within(dialog).getAllByText('上次数据').length).toBeGreaterThan(0)
+
+    await user.click(
+      within(warning).getByRole('button', { name: '重试关联任务' }),
+    )
+    await user.click(
+      within(warning).getByRole('button', { name: '重试关联需求' }),
+    )
+    expect(listTasks).toHaveBeenCalledTimes(2)
+    expect(listRequirements).toHaveBeenCalledTimes(2)
     expect(
       screen.getByRole('table', { name: '缺陷风险队列' }),
     ).toBeVisible()

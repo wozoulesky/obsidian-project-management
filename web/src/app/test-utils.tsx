@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, type RenderOptions } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
-import { vi } from 'vitest'
+import { afterEach, vi } from 'vitest'
+
+import { resetProjectRepositoryForTests } from '../data/query-hooks'
 
 vi.mock('echarts/core', () => ({
   init: vi.fn(() => ({
@@ -25,6 +27,11 @@ class ResizeObserverStub {
 
 globalThis.ResizeObserver =
   ResizeObserverStub as unknown as typeof ResizeObserver
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  resetProjectRepositoryForTests()
+})
 
 type RenderAppOptions = Omit<RenderOptions, 'wrapper'> & {
   route?: string

@@ -79,11 +79,9 @@ function requirement(overrides: Partial<Requirement>): Requirement {
   }
 }
 
-afterEach(async () => {
+afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-  await projectRepository.updateRequirementStatus('req-013', 'developing')
-  await projectRepository.updateRequirementStatus('req-017', 'reviewed')
 })
 
 describe('RequirementPage lifecycle board', () => {

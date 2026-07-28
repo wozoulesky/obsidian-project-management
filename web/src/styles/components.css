@@ -1944,6 +1944,12 @@
   font-size: 0.8125rem;
 }
 
+.defect-page__related-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .defect-inspector__conversion a {
   color: var(--primary);
   font-size: 0.8125rem;
