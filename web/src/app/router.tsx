@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 
+import { LoadingState } from '../components/data/DataState'
+
 const DashboardPage = lazy(() =>
   import('../features/dashboard/DashboardPage').then((module) => ({
     default: module.DashboardPage,
@@ -35,6 +37,20 @@ const routes = [
   { path: '/settings', heading: '设置' },
 ] as const
 
+function PageLoadingFallback({
+  className,
+  label,
+}: {
+  className: string
+  label: string
+}) {
+  return (
+    <section className={className}>
+      <LoadingState label={label} />
+    </section>
+  )
+}
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -44,9 +60,10 @@ export function AppRoutes() {
         element={
           <Suspense
             fallback={
-              <section className="dashboard-page" aria-busy="true">
-                <p role="status">正在加载仪表盘…</p>
-              </section>
+              <PageLoadingFallback
+                className="dashboard-page"
+                label="正在加载仪表盘…"
+              />
             }
           >
             <DashboardPage />
@@ -58,9 +75,10 @@ export function AppRoutes() {
         element={
           <Suspense
             fallback={
-              <section className="task-page" aria-busy="true">
-                <p role="status">正在加载任务…</p>
-              </section>
+              <PageLoadingFallback
+                className="task-page"
+                label="正在加载任务…"
+              />
             }
           >
             <TaskPage />
@@ -72,9 +90,10 @@ export function AppRoutes() {
         element={
           <Suspense
             fallback={
-              <section className="requirement-page" aria-busy="true">
-                <p role="status">正在加载需求…</p>
-              </section>
+              <PageLoadingFallback
+                className="requirement-page"
+                label="正在加载需求…"
+              />
             }
           >
             <RequirementPage />
@@ -86,9 +105,10 @@ export function AppRoutes() {
         element={
           <Suspense
             fallback={
-              <section className="defect-page" aria-busy="true">
-                <p role="status">正在加载缺陷…</p>
-              </section>
+              <PageLoadingFallback
+                className="defect-page"
+                label="正在加载缺陷…"
+              />
             }
           >
             <DefectPage />
@@ -100,9 +120,10 @@ export function AppRoutes() {
         element={
           <Suspense
             fallback={
-              <section className="gantt-page" aria-busy="true">
-                <p role="status">正在加载甘特图…</p>
-              </section>
+              <PageLoadingFallback
+                className="gantt-page"
+                label="正在加载甘特图…"
+              />
             }
           >
             <GanttPage />

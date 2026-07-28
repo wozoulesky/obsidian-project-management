@@ -31,6 +31,9 @@ export default defineConfig({
   webServer: {
     command:
       'npm run build && npm run preview -- --host 127.0.0.1 --port 4173',
+    env: {
+      VITE_E2E_FIXTURES: 'true',
+    },
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: false,
     timeout: 120_000,

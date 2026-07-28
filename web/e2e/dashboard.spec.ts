@@ -1,32 +1,14 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
-async function openReadyDashboard(page: Page) {
-  await page.goto('/dashboard')
-  await expect(
-    page.getByRole('heading', { level: 1, name: '仪表盘' }),
-  ).toBeVisible()
-  await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0)
-  await expect(page.locator('.echart canvas')).toHaveCount(2)
-  await expect(page.locator('.echart canvas').first()).toBeVisible()
-  await expect
-    .poll(async () =>
-      page.locator('.echart canvas').evaluateAll((canvases) =>
-        canvases.every(
-          (canvas) =>
-            canvas instanceof HTMLCanvasElement &&
-            canvas.width > 0 &&
-            canvas.height > 0,
-        ),
-      ),
-    )
-    .toBe(true)
-}
+import {
+  freezeVisualTime,
+  openReadyDashboard,
+  screenshotOptions,
+} from './visual-helpers'
 
 test.use({ reducedMotion: 'reduce' })
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    Date.now = () => Date.parse('2026-07-28T12:15:00+08:00')
-  })
+  await freezeVisualTime(page)
 })
 
 test('dashboard exposes project health and the selected 90-day delivery total', async ({
@@ -42,12 +24,10 @@ test('dashboard exposes project health and the selected 90-day delivery total', 
 
   await page.getByRole('button', { name: '90 天' }).click()
   await expect(page.getByText('118 项已完成', { exact: true })).toBeVisible()
-  await expect(page).toHaveScreenshot('dashboard-90-day.png', {
-    animations: 'disabled',
-    caret: 'hide',
-    fullPage: true,
-    maxDiffPixelRatio: 0.005,
-  })
+  await expect(page).toHaveScreenshot(
+    'dashboard-90-day.png',
+    screenshotOptions,
+  )
 })
 
 test('task update persists through SPA navigation into dashboard activity', async ({

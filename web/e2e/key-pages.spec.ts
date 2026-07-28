@@ -1,4 +1,11 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+
+import {
+  freezeVisualTime,
+  openReadyDashboard,
+  openReadyPage,
+  screenshotOptions,
+} from './visual-helpers'
 
 const keyPages = [
   { name: 'tasks', path: '/tasks' },
@@ -7,24 +14,10 @@ const keyPages = [
   { name: 'defects', path: '/defects' },
 ] as const
 
-const screenshotOptions = {
-  animations: 'disabled',
-  caret: 'hide',
-  fullPage: true,
-  maxDiffPixelRatio: 0.005,
-} as const
-
+test.use({ reducedMotion: 'reduce' })
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    Date.now = () => Date.parse('2026-07-28T12:15:00+08:00')
-  })
+  await freezeVisualTime(page)
 })
-
-async function openReadyPage(page: Page, path: string) {
-  await page.goto(path)
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0)
-}
 
 test('defect conversion opens the generated repair task inspector', async ({
   page,
@@ -70,17 +63,15 @@ test('desktop comparison captures representative 1280px and 768px layouts', asyn
     'Explicit comparison viewports run once in the desktop project.',
   )
 
-  await page.setViewportSize({ width: 1280, height: 900 })
-  await openReadyPage(page, '/dashboard')
-  await expect(page.locator('.echart canvas')).toHaveCount(2)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await openReadyDashboard(page)
   await expect(page).toHaveScreenshot(
     'comparison-dashboard-1280.png',
     screenshotOptions,
   )
 
-  await page.setViewportSize({ width: 768, height: 900 })
-  await openReadyPage(page, '/dashboard')
-  await expect(page.locator('.echart canvas')).toHaveCount(2)
+  await page.setViewportSize({ width: 768, height: 1024 })
+  await openReadyDashboard(page)
   await expect(page).toHaveScreenshot(
     'comparison-dashboard-768.png',
     screenshotOptions,
