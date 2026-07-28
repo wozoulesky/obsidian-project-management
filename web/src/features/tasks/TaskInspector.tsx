@@ -116,7 +116,7 @@ function TaskInspectorFields({ task }: { task: Task }) {
           </select>
         </label>
         <label>
-          备注
+          进度备注
           <textarea
             onChange={(event) => setNote(event.target.value)}
             rows={3}

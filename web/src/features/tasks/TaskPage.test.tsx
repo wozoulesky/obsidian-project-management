@@ -368,7 +368,7 @@ describe('TaskPage workflow', () => {
     const progress = within(dialog).getByRole('spinbutton', {
       name: '任务进度',
     })
-    const note = within(dialog).getByRole('textbox', { name: '备注' })
+    const note = within(dialog).getByRole('textbox', { name: '进度备注' })
     await user.clear(progress)
     await user.type(progress, '80')
     await user.type(note, '等待服务恢复')
@@ -406,7 +406,7 @@ describe('TaskPage workflow', () => {
     await user.clear(firstProgress)
     await user.type(firstProgress, '90')
     await user.type(
-      within(firstDialog).getByRole('textbox', { name: '备注' }),
+      within(firstDialog).getByRole('textbox', { name: '进度备注' }),
       '第一项备注',
     )
 
@@ -420,7 +420,7 @@ describe('TaskPage workflow', () => {
       within(secondDialog).getByRole('combobox', { name: '状态' }),
     ).toHaveValue('not_started')
     expect(
-      within(secondDialog).getByRole('textbox', { name: '备注' }),
+      within(secondDialog).getByRole('textbox', { name: '进度备注' }),
     ).toHaveValue('')
   })
 

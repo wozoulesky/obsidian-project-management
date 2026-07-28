@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
 
 const DashboardPage = lazy(() =>
   import('../features/dashboard/DashboardPage').then((module) => ({
@@ -120,6 +120,16 @@ export function AppRoutes() {
           path={path}
         />
       ))}
+      <Route
+        path="*"
+        element={
+          <section className="page-placeholder">
+            <h1>页面未找到</h1>
+            <p>这个项目页面不存在或已经移动。</p>
+            <Link to="/dashboard">返回仪表盘</Link>
+          </section>
+        }
+      />
     </Routes>
   )
 }

@@ -19,6 +19,7 @@ export function RiskBanner({ risks }: { risks: RiskItem[] }) {
     <section className="risk-banner" aria-label="项目风险">
       <AlertTriangle aria-hidden="true" size={18} />
       <div>
+        <span>最高风险</span>
         <strong>需要关注：{highestRisk.title}</strong>
         <span>
           {highestRisk.assignee.name} · 截止 {highestRisk.dueDate}

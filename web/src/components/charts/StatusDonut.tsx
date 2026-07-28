@@ -102,9 +102,6 @@ export function StatusDonut({
     <div className="status-donut">
       <div className="status-donut__visual">
         <EChart ariaLabel={`任务状态分布，完成率 ${normalizedRate}%`} option={option} />
-        <span className="status-donut__center metric-value" aria-hidden="true">
-          {normalizedRate}%
-        </span>
       </div>
       <dl className="status-donut__legend">
         {statusPresentation.map(({ key, label }, index) => (

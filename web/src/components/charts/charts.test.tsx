@@ -167,7 +167,7 @@ describe('TrendChart', () => {
 
 describe('StatusDonut', () => {
   it('shows the completion center and every task status count as text', () => {
-    render(
+    const { container } = render(
       <StatusDonut
         counts={{
           not_started: 8,
@@ -179,7 +179,14 @@ describe('StatusDonut', () => {
       />,
     )
 
-    expect(screen.getByText('68%')).toBeInTheDocument()
+    const option = chart.setOption.mock.calls.at(-1)?.[0] as {
+      title?: { subtext?: string; text?: string }
+    }
+    expect(option.title).toMatchObject({
+      text: '68%',
+      subtext: '任务完成',
+    })
+    expect(container.querySelector('.status-donut__center')).toBeNull()
     expect(screen.getByText('未开始')).toBeInTheDocument()
     expect(screen.getByText('8')).toBeInTheDocument()
     expect(screen.getByText('进行中')).toBeInTheDocument()

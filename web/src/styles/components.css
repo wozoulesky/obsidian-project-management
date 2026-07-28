@@ -448,15 +448,6 @@
   min-height: 13rem;
 }
 
-.status-donut__center {
-  position: absolute;
-  inset: 41% 0 auto;
-  font-size: 1.375rem;
-  font-weight: 750;
-  text-align: center;
-  pointer-events: none;
-}
-
 .status-donut__legend {
   display: grid;
   gap: var(--space-2);
