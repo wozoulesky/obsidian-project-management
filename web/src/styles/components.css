@@ -959,7 +959,24 @@
 .gantt-task-bar__label {
   position: relative;
   z-index: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
   white-space: nowrap;
+}
+
+.gantt-task-bar__label > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-task-bar__progress-text {
+  flex: 0 0 auto;
+  padding-left: var(--space-1);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px var(--surface);
 }
 
 .gantt-task-bar__resize {

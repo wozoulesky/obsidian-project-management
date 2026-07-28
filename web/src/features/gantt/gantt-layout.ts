@@ -2,6 +2,7 @@ import type { Task } from '../../data/domain'
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const DAY_MS = 86_400_000
+const MIN_VISIBLE_BAR_PERCENT = 1.2
 
 export type GanttScale = 'day' | 'week' | 'month'
 export type DateProposalKind = 'move' | 'resize'
@@ -70,11 +71,20 @@ export function taskBarLayout(
   ) {
     return { left: 0, width: 0 }
   }
-  const left = dateToPercent(task.startDate, rangeStart, rangeEnd)
-  const right = dateToPercent(task.dueDate, rangeStart, rangeEnd)
+  if (taskEnd < start || taskStart > end) {
+    return { left: 0, width: 0 }
+  }
+  const rangeDuration = end - start
+  const clippedStart = Math.max(taskStart, start)
+  const clippedEnd = Math.min(taskEnd, end)
+  const rawLeft = ((clippedStart - start) / rangeDuration) * 100
+  const rawRight = ((clippedEnd - start) / rangeDuration) * 100
+  const rawWidth = Math.max(0, rawRight - rawLeft)
+  const width = Math.max(rawWidth, MIN_VISIBLE_BAR_PERCENT)
+  const left = Math.min(rawLeft, 100 - width)
   return {
     left: roundPercent(left),
-    width: roundPercent(Math.max(0, right - left)),
+    width: roundPercent(Math.min(width, 100 - left)),
   }
 }
 

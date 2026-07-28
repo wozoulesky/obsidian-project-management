@@ -54,6 +54,7 @@ interface GanttTimelineProps {
 
 interface DragState {
   kind: DateProposalKind
+  latestDelta: number
   pointerId: number
   startX: number
   task: Task
@@ -143,12 +144,24 @@ export function GanttTimeline({
     taskRows.map((row) => [row.task.id, rows.indexOf(row)]),
   )
   const taskById = new Map(taskRows.map((row) => [row.task.id, row.task]))
+  const visibleTaskIds = new Set(
+    taskRows
+      .filter(
+        ({ task }) =>
+          taskBarLayout(task, range.start, range.end).width > 0,
+      )
+      .map(({ task }) => task.id),
+  )
   const dependencies = taskRows.flatMap(({ task }) =>
     task.dependencyIds.flatMap((dependencyId) => {
       const predecessor = taskById.get(dependencyId)
       const fromIndex = taskIndex.get(dependencyId)
       const toIndex = taskIndex.get(task.id)
-      return predecessor && fromIndex !== undefined && toIndex !== undefined
+      return predecessor &&
+        visibleTaskIds.has(predecessor.id) &&
+        visibleTaskIds.has(task.id) &&
+        fromIndex !== undefined &&
+        toIndex !== undefined
         ? [{ predecessor, successor: task, fromIndex, toIndex }]
         : []
     }),
@@ -166,6 +179,7 @@ export function GanttTimeline({
     const width = timeline?.getBoundingClientRect().width || 720
     dragRef.current = {
       kind,
+      latestDelta: 0,
       pointerId: event.pointerId,
       startX: event.clientX,
       task,
@@ -182,20 +196,22 @@ export function GanttTimeline({
       drag.timelineWidth,
       rangeDays,
     )
-    if (delta === 0) return
+    drag.latestDelta = delta
+  }
+
+  const endDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+    dragRef.current = null
+    if (drag.latestDelta === 0) return
     const dates = buildDateProposal(
       drag.kind,
       drag.task.startDate,
       drag.task.dueDate,
-      delta,
+      drag.latestDelta,
     )
     if (dates) onPropose(drag.task, drag.kind, dates)
-  }
-
-  const endDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    if (dragRef.current?.pointerId !== event.pointerId) return
-    event.currentTarget.releasePointerCapture?.(event.pointerId)
-    dragRef.current = null
   }
 
   const cancelDrag = (event: PointerEvent<HTMLButtonElement>) => {
@@ -287,7 +303,7 @@ export function GanttTimeline({
             const layout = taskBarLayout(task, range.start, range.end)
             const barStyle = {
               left: `${layout.left}%`,
-              width: `${Math.max(layout.width, 1.2)}%`,
+              width: `${layout.width}%`,
             } satisfies CSSProperties
             return (
               <div
@@ -295,45 +311,59 @@ export function GanttTimeline({
                 data-row-id={row.id}
                 key={row.id}
               >
-                <div
-                  className={`gantt-task-bar gantt-task-bar--${task.status}${
-                    selectedTaskId === task.id ? ' is-selected' : ''
-                  }`}
-                  style={barStyle}
-                >
-                  <button
-                    aria-label={`移动 ${task.title}`}
-                    className="gantt-task-bar__move"
-                    onClick={() => onSelectTask(task.id)}
-                    onKeyDown={(event) =>
-                      proposeFromKeyboard(event, task, 'move')
-                    }
-                    onPointerCancel={cancelDrag}
-                    onPointerDown={(event) => beginDrag(event, task, 'move')}
-                    onPointerMove={updateDrag}
-                    onPointerUp={endDrag}
-                    type="button"
+                {layout.width > 0 ? (
+                  <div
+                    className={`gantt-task-bar gantt-task-bar--${task.status}${
+                      selectedTaskId === task.id ? ' is-selected' : ''
+                    }`}
+                    style={barStyle}
                   >
-                    <span
-                      aria-hidden="true"
-                      className="gantt-task-bar__progress"
-                      style={{ width: `${Math.min(100, Math.max(0, task.progress))}%` }}
+                    <button
+                      aria-label={`移动 ${task.title}`}
+                      className="gantt-task-bar__move"
+                      onClick={() => onSelectTask(task.id)}
+                      onKeyDown={(event) =>
+                        proposeFromKeyboard(event, task, 'move')
+                      }
+                      onPointerCancel={cancelDrag}
+                      onPointerDown={(event) => beginDrag(event, task, 'move')}
+                      onPointerMove={updateDrag}
+                      onPointerUp={endDrag}
+                      type="button"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="gantt-task-bar__progress"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(0, task.progress),
+                          )}%`,
+                        }}
+                      />
+                      <span className="gantt-task-bar__label">
+                        <span>{task.code}</span>
+                        <span className="gantt-task-bar__progress-text">
+                          {task.progress}%
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      aria-label={`调整 ${task.title} 截止日期`}
+                      className="gantt-task-bar__resize"
+                      onKeyDown={(event) =>
+                        proposeFromKeyboard(event, task, 'resize')
+                      }
+                      onPointerCancel={cancelDrag}
+                      onPointerDown={(event) =>
+                        beginDrag(event, task, 'resize')
+                      }
+                      onPointerMove={updateDrag}
+                      onPointerUp={endDrag}
+                      type="button"
                     />
-                    <span className="gantt-task-bar__label">{task.code}</span>
-                  </button>
-                  <button
-                    aria-label={`调整 ${task.title} 截止日期`}
-                    className="gantt-task-bar__resize"
-                    onKeyDown={(event) =>
-                      proposeFromKeyboard(event, task, 'resize')
-                    }
-                    onPointerCancel={cancelDrag}
-                    onPointerDown={(event) => beginDrag(event, task, 'resize')}
-                    onPointerMove={updateDrag}
-                    onPointerUp={endDrag}
-                    type="button"
-                  />
-                </div>
+                  </div>
+                ) : null}
               </div>
             )
           })}

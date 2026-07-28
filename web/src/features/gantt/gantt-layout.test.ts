@@ -40,6 +40,48 @@ describe('gantt date layout', () => {
       ),
     ).toEqual({ left: 0, width: 0 })
   })
+
+  it('hides tasks fully outside the range and clips overlapping tasks', () => {
+    expect(
+      taskBarLayout(
+        { startDate: '2026-07-10', dueDate: '2026-07-19' },
+        '2026-07-20',
+        '2026-07-29',
+      ),
+    ).toEqual({ left: 0, width: 0 })
+    expect(
+      taskBarLayout(
+        { startDate: '2026-07-30', dueDate: '2026-08-02' },
+        '2026-07-20',
+        '2026-07-29',
+      ),
+    ).toEqual({ left: 0, width: 0 })
+    expect(
+      taskBarLayout(
+        { startDate: '2026-07-18', dueDate: '2026-07-23' },
+        '2026-07-20',
+        '2026-07-29',
+      ),
+    ).toEqual({ left: 0, width: 33.33 })
+    expect(
+      taskBarLayout(
+        { startDate: '2026-07-26', dueDate: '2026-08-02' },
+        '2026-07-20',
+        '2026-07-29',
+      ),
+    ).toEqual({ left: 66.67, width: 33.33 })
+  })
+
+  it('gives a visible in-range instant task a bounded minimum width', () => {
+    const layout = taskBarLayout(
+      { startDate: '2026-07-29', dueDate: '2026-07-29' },
+      '2026-07-20',
+      '2026-07-29',
+    )
+
+    expect(layout.width).toBeGreaterThan(0)
+    expect(layout.left + layout.width).toBeLessThanOrEqual(100)
+  })
 })
 
 describe('gantt date interactions', () => {

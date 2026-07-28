@@ -131,11 +131,51 @@ describe('GanttPage layout', () => {
       'width: 62%',
     )
     expect(
+      within(
+        screen.getByRole('region', { name: '甘特时间轴' }),
+      ).getAllByText('62%')[0],
+    ).toBeVisible()
+    expect(
       screen.getByText('MCP 权限校验 → 断线恢复测试（前置任务已逾期）'),
     ).toBeInTheDocument()
     expect(container.querySelector('[data-dependency="task-051-task-047"]')).toHaveClass(
       'is-risk',
     )
+  })
+
+  it('does not render bars for tasks fully outside the selected range', async () => {
+    mockTasks([
+      ...ganttTasks,
+      task({
+        id: 'task-before',
+        code: 'TASK-BEFORE',
+        title: '范围前任务',
+        startDate: '2026-06-01',
+        dueDate: '2026-06-03',
+      }),
+      task({
+        id: 'task-after',
+        code: 'TASK-AFTER',
+        title: '范围后任务',
+        startDate: '2026-09-01',
+        dueDate: '2026-09-03',
+      }),
+    ])
+    const user = userEvent.setup()
+    renderApp(<GanttPage />)
+
+    await screen.findByRole('button', { name: '查看 范围前任务' })
+    await user.click(screen.getByRole('button', { name: '日' }))
+    const timeline = screen.getByRole('region', { name: '甘特时间轴' })
+    expect(
+      within(timeline).queryByRole('button', { name: '移动 范围前任务' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(timeline).queryByRole('button', { name: '移动 范围后任务' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(timeline).getByRole('button', { name: '移动 MCP 权限校验' }),
+    ).toBeVisible()
   })
 
   it('renders loading, error, and empty states', async () => {
@@ -266,7 +306,41 @@ describe('GanttPage scheduling workflow', () => {
     expect(trigger).toHaveFocus()
   })
 
-  it('cleans up pointer previews when a drag is cancelled', async () => {
+  it('creates one pointer proposal only on completion using the final delta', async () => {
+    mockTasks()
+    renderApp(<GanttPage />)
+    const bar = await screen.findByRole('button', {
+      name: '移动 MCP 权限校验',
+    })
+    Object.defineProperties(bar, {
+      releasePointerCapture: {
+        configurable: true,
+        value: vi.fn(),
+      },
+      setPointerCapture: {
+        configurable: true,
+        value: vi.fn(),
+      },
+    })
+    fireEvent.pointerDown(bar, { clientX: 100, pointerId: 7 })
+    fireEvent.pointerMove(bar, { clientX: 125, pointerId: 7 })
+    expect(screen.queryByText(/MCP 权限校验：/)).not.toBeInTheDocument()
+
+    fireEvent.pointerMove(bar, { clientX: 150, pointerId: 7 })
+    expect(screen.queryByText(/MCP 权限校验：/)).not.toBeInTheDocument()
+    fireEvent.pointerUp(bar, { clientX: 150, pointerId: 7 })
+
+    expect(
+      screen.getByText(
+        'MCP 权限校验：7 月 24 日–7 月 28 日 → 7 月 26 日–7 月 30 日',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('status', { name: '排期调整确认' })).toHaveLength(
+      1,
+    )
+  })
+
+  it('cleans up pointer state without proposing when a drag is cancelled', async () => {
     mockTasks()
     renderApp(<GanttPage />)
     const bar = await screen.findByRole('button', {
