@@ -19,6 +19,7 @@ import type { Requirement } from '../../data/domain'
 import { projectRepository } from '../../data/query-hooks'
 import {
   applyRequirementDrop,
+  canSuggestDelivery,
   RequirementPage,
 } from './RequirementPage'
 
@@ -78,7 +79,12 @@ describe('RequirementPage lifecycle board', () => {
     expect(card).not.toBeNull()
     expect(within(card as HTMLElement).getByText('REQ-013')).toBeVisible()
     expect(within(card as HTMLElement).getByText('P0')).toBeVisible()
-    expect(within(card as HTMLElement).getByText('3/4 任务')).toBeVisible()
+    expect(within(card as HTMLElement).getByText('4/4 任务')).toBeVisible()
+    expect(
+      within(card as HTMLElement).getByText(
+        '关联任务完成后可流转至已交付',
+      ),
+    ).toBeVisible()
   })
 
   it('suggests delivery without mutating and exposes a labeled status select', async () => {
@@ -102,11 +108,58 @@ describe('RequirementPage lifecycle board', () => {
       .toHaveValue('developing')
     expect(within(dialog).getByRole('heading', { name: '验收标准' }))
       .toBeVisible()
-    expect(within(dialog).getByText('3/4 任务已完成')).toBeVisible()
+    expect(within(dialog).getByText('4/4 任务已完成')).toBeVisible()
     expect(within(dialog).getByRole('heading', { name: '活动历史' }))
       .toBeVisible()
     expect(within(dialog).getByText('暂无相关活动')).toBeVisible()
     expect(updateStatus).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      title: '未完成的开发需求',
+      linkedTaskIds: ['task-a', 'task-b', 'task-c', 'task-d'],
+      completedTaskCount: 3,
+    },
+    {
+      title: '没有关联任务的开发需求',
+      linkedTaskIds: [],
+      completedTaskCount: 0,
+    },
+  ])('does not suggest delivery for $title', async ({
+    completedTaskCount,
+    linkedTaskIds,
+    title,
+  }) => {
+    vi.spyOn(projectRepository, 'listRequirements').mockResolvedValueOnce([
+      requirement({
+        id: `req-${completedTaskCount}-${linkedTaskIds.length}`,
+        title,
+        status: 'developing',
+        linkedTaskIds,
+        completedTaskCount,
+      }),
+    ])
+    const user = userEvent.setup()
+    renderApp(<RequirementPage />)
+
+    const trigger = await screen.findByRole('button', {
+      name: `查看 ${title}`,
+    })
+    const card = trigger.closest('article')
+    expect(card).not.toBeNull()
+    expect(
+      within(card as HTMLElement).queryByText(
+        '关联任务完成后可流转至已交付',
+      ),
+    ).not.toBeInTheDocument()
+
+    await user.click(trigger)
+    expect(
+      within(screen.getByRole('dialog', { name: title })).queryByText(
+        '关联任务完成后可流转至已交付',
+      ),
+    ).not.toBeInTheDocument()
   })
 
   it('updates only after an explicit save and moves the latest query result', async () => {
@@ -335,5 +388,36 @@ describe('applyRequirementDrop', () => {
     const latest = await projectRepository.listRequirements('atlas')
     expect(latest.find((item) => item.id === 'req-017')?.status)
       .toBe('developing')
+  })
+})
+
+describe('canSuggestDelivery', () => {
+  it('suggests only a developing requirement with all linked tasks complete', () => {
+    expect(canSuggestDelivery(requirement({
+      status: 'developing',
+      linkedTaskIds: ['task-a', 'task-b'],
+      completedTaskCount: 2,
+    }))).toBe(true)
+    expect(canSuggestDelivery(requirement({
+      status: 'delivered',
+      linkedTaskIds: ['task-a'],
+      completedTaskCount: 1,
+    }))).toBe(false)
+  })
+
+  it('rejects incomplete developing requirements', () => {
+    expect(canSuggestDelivery(requirement({
+      status: 'developing',
+      linkedTaskIds: ['task-a', 'task-b', 'task-c', 'task-d'],
+      completedTaskCount: 3,
+    }))).toBe(false)
+  })
+
+  it('rejects a developing requirement with no linked tasks', () => {
+    expect(canSuggestDelivery(requirement({
+      status: 'developing',
+      linkedTaskIds: [],
+      completedTaskCount: 0,
+    }))).toBe(false)
   })
 })

@@ -23,6 +23,10 @@ describe('mock project repository', () => {
         (item) => item.status === 'delivered' || item.status === 'accepted',
       ),
     ).toHaveLength(14)
+    expect(
+      allRequirements.find((item) => item.id === 'req-013')
+        ?.completedTaskCount,
+    ).toBe(4)
     expect(allDefects).toHaveLength(7)
     expect(
       allDefects.filter(
@@ -52,6 +56,7 @@ describe('mock project repository', () => {
       activeActors: 6,
       activeAgents: 3,
     })
+    expect(dashboard.metrics.deliveredRequirements).toBe(14)
   })
 
   it('returns the approved dashboard metrics and ordered risk/activity data', async () => {
@@ -181,6 +186,7 @@ describe('mock project repository', () => {
     )
     expect(requirements.find((item) => item.id === 'req-013')).toMatchObject({
       linkedTaskIds: ['task-040', 'task-047', 'task-051', 'task-052'],
+      completedTaskCount: 4,
       acceptanceCriteria: [
         '重复注册返回已有身份',
         '所有写操作携带 agent_id',

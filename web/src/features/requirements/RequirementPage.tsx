@@ -57,6 +57,15 @@ type RequirementStatusInput = {
   status: RequirementStatus
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function canSuggestDelivery(requirement: Requirement): boolean {
+  return (
+    requirement.status === 'developing' &&
+    requirement.linkedTaskIds.length > 0 &&
+    requirement.completedTaskCount === requirement.linkedTaskIds.length
+  )
+}
+
 // Exported for stable DnD transition tests without pointer-geometry coupling.
 // eslint-disable-next-line react-refresh/only-export-components
 export function applyRequirementDrop<T>(
@@ -105,6 +114,11 @@ function RequirementCardBody({
           {requirement.priority}
         </Badge>
       </div>
+      {canSuggestDelivery(requirement) ? (
+        <p className="requirement-card__suggestion">
+          关联任务完成后可流转至已交付
+        </p>
+      ) : null}
       <div className="requirement-card__footer">
         <span>
           {requirement.completedTaskCount}/{requirement.linkedTaskIds.length}
@@ -274,7 +288,7 @@ function RequirementInspectorFields({
         </div>
       </dl>
 
-      {requirement.status === 'developing' ? (
+      {canSuggestDelivery(requirement) ? (
         <p className="requirement-inspector__suggestion">
           关联任务完成后可流转至已交付
         </p>
