@@ -87,28 +87,30 @@ export type ActivityOperation =
 export interface ActivityEvent {
   id: string
   actor: Actor
-  message: string
+  action: string
   operation: ActivityOperation
-  timestamp: string
+  createdAt: string
 }
 
 export interface RiskItem {
   id: string
-  level: RiskLevel
+  entityType: 'task' | 'requirement' | 'defect'
+  entityId: string
   title: string
-  description: string
-  taskId?: string
-  owner: Actor
+  assignee: Actor
+  progress: number
+  dueDate: string
+  level: RiskLevel
 }
 
 export interface DashboardMetrics {
   totalTasks: number
-  completed: number
+  completedTasks: number
   deliveredRequirements: number
   totalRequirements: number
   activeDefects: number
   seriousDefects: number
-  velocity: number
+  velocityPerWeek: number
   activeActors: number
   activeAgents: number
 }

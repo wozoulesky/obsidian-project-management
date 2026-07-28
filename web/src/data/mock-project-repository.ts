@@ -37,12 +37,12 @@ export function createMockProjectRepository(): ProjectRepository {
       return clone({
         metrics: {
           totalTasks: 50,
-          completed: 34,
+          completedTasks: 34,
           deliveredRequirements: 14,
           totalRequirements: 20,
           activeDefects: 7,
           seriousDefects: 2,
-          velocity: 16.4,
+          velocityPerWeek: 16.4,
           activeActors: 6,
           activeAgents: 3,
         },
@@ -65,9 +65,9 @@ export function createMockProjectRepository(): ProjectRepository {
       const activity: ActivityEvent = {
         id: `activity-${task.id}-progress-${input.progress}`,
         actor: task.assignee,
-        message: `将「${task.title}」更新至 ${input.progress}%`,
+        action: `将「${task.title}」更新至 ${input.progress}%`,
         operation: 'task.update',
-        timestamp: '2026-07-28T12:00:00+08:00',
+        createdAt: '2026-07-28T12:00:00+08:00',
       }
       activityState.unshift(activity)
 
@@ -82,9 +82,9 @@ export function createMockProjectRepository(): ProjectRepository {
       const activity: ActivityEvent = {
         id: `activity-${task.id}-schedule-${input.startDate}-${input.dueDate}`,
         actor: task.assignee,
-        message: `调整「${task.title}」排期至 ${input.startDate}–${input.dueDate}`,
+        action: `调整「${task.title}」排期至 ${input.startDate}–${input.dueDate}`,
         operation: 'task.schedule',
-        timestamp: '2026-07-28T12:05:00+08:00',
+        createdAt: '2026-07-28T12:05:00+08:00',
       }
       activityState.unshift(activity)
 
