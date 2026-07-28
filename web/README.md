@@ -1,6 +1,10 @@
-# 本地项目管理系统
+# 本地项目管理系统 — Web 前端
+
+[项目中文文档](../README.md) | [English documentation](../README_EN.md)
 
 React、TypeScript 与 Vite 构建的本地项目管理 Web 应用。
+
+> 当前版本使用内存演示数据，刷新页面会重置，不包含后端、鉴权或持久化数据库。完整安装、使用、部署和安全说明请阅读项目根目录文档。
 
 ## 环境要求
 
@@ -35,5 +39,9 @@ $env:VITE_FIXTURE_MODE='large'; npm run dev
 ## React Router 安全范围
 
 本项目是仅使用 `BrowserRouter` 的客户端 SPA，不使用 React Router 的
-unstable RSC API。当前锁定 `react-router-dom@7.18.1`；`npm audit`
-剩余的 RSC 专属公告不影响当前调用范围。待修复版本 `8.3.0` 发布后跟踪升级。
+unstable RSC API。当前锁定 `react-router-dom@7.18.1`；截至 2026-07-28，
+`npm audit` 会报告
+[GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2)。
+公告说明只有使用 unstable RSC API 的应用会受影响，本项目当前不使用该调用路径。
+修复版本 `8.3.0` 是主版本升级，应在独立分支完成兼容性评估和完整回归；不要直接运行
+`npm audit fix --force`。
