@@ -44,6 +44,7 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.tasks,
     projectQueryKeys.gantt,
     projectQueryKeys.defects,
+    projectQueryKeys.dashboardPrefix,
   ],
 } as const
 
