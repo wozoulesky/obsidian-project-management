@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts'
+import type { EChartsCoreOption } from 'echarts/core'
 import { useMemo } from 'react'
 
 import type { TrendPoint } from '../../data/domain'
@@ -24,12 +24,12 @@ function tooltipFormatter(params: unknown): string {
     `实际完成：${actual}`,
     `计划完成：${planned}`,
     `差值：${actual - planned}`,
-  ].join('<br/>')
+  ].join('\n')
 }
 
 export function TrendChart({ points }: TrendChartProps) {
   const latestPoint = points.at(-1)
-  const option = useMemo<EChartsOption>(
+  const option = useMemo<EChartsCoreOption>(
     () => ({
       animationDuration: 240,
       dataset: {
@@ -52,6 +52,7 @@ export function TrendChart({ points }: TrendChartProps) {
       },
       tooltip: {
         trigger: 'axis',
+        renderMode: 'richText',
         formatter: tooltipFormatter,
       },
       xAxis: {

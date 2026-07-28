@@ -6,12 +6,13 @@ import type { ReactElement, ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 
-vi.mock('echarts', () => ({
+vi.mock('echarts/core', () => ({
   init: vi.fn(() => ({
     setOption: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
   })),
+  use: vi.fn(),
 }))
 
 class ResizeObserverStub {

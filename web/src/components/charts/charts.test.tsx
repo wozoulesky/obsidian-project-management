@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
-import type { EChartsType, SetOptionOpts } from 'echarts'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts/core'
+import type { EChartsType, SetOptionOpts } from 'echarts/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EChart } from './EChart'
@@ -93,7 +93,10 @@ describe('TrendChart', () => {
         lineStyle?: { type?: string }
         areaStyle?: { opacity?: number }
       }>
-      tooltip: { formatter: (params: unknown) => string }
+      tooltip: {
+        formatter: (params: unknown) => string
+        renderMode?: string
+      }
     }
     expect(option.dataset.source).toEqual([
       { date: '2026-07-21', actual: 18, planned: 23 },
@@ -119,6 +122,18 @@ describe('TrendChart', () => {
         },
       ]),
     ).toContain('差值：-6')
+    const maliciousTooltip = option.tooltip.formatter([
+      {
+        value: {
+          date: '<img src=x onerror=alert(1)>',
+          actual: 34,
+          planned: 40,
+        },
+      },
+    ])
+    expect(option.tooltip.renderMode).toBe('richText')
+    expect(maliciousTooltip).toContain('<img src=x onerror=alert(1)>')
+    expect(maliciousTooltip).not.toContain('<br')
   })
 })
 

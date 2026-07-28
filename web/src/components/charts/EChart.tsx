@@ -1,10 +1,35 @@
-import { init, type EChartsOption, type EChartsType } from 'echarts'
+import { LineChart, PieChart } from 'echarts/charts'
+import {
+  DatasetComponent,
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  TooltipComponent,
+} from 'echarts/components'
+import {
+  init,
+  use as registerEChartsModules,
+  type EChartsCoreOption,
+  type EChartsType,
+} from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
 import { useEffect, useRef } from 'react'
+
+registerEChartsModules([
+  LineChart,
+  PieChart,
+  DatasetComponent,
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  TooltipComponent,
+  CanvasRenderer,
+])
 
 export type EChartProps = {
   ariaLabel: string
   className?: string
-  option: EChartsOption
+  option: EChartsCoreOption
 }
 
 export function EChart({

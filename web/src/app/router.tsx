@@ -1,6 +1,11 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
-import { DashboardPage } from '../features/dashboard/DashboardPage'
+const DashboardPage = lazy(() =>
+  import('../features/dashboard/DashboardPage').then((module) => ({
+    default: module.DashboardPage,
+  })),
+)
 
 const routes = [
   { path: '/tasks', heading: '计划 / 任务' },
@@ -14,7 +19,20 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate replace to="/dashboard" />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route
+        path="/dashboard"
+        element={
+          <Suspense
+            fallback={
+              <section className="dashboard-page" aria-busy="true">
+                <p role="status">正在加载仪表盘…</p>
+              </section>
+            }
+          >
+            <DashboardPage />
+          </Suspense>
+        }
+      />
       {routes.map(({ heading, path }) => (
         <Route
           element={

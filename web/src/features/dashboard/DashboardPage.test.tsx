@@ -1,4 +1,9 @@
-import { cleanup, screen, within } from '@testing-library/react'
+import {
+  cleanup,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -72,5 +77,62 @@ describe('DashboardPage', () => {
     expect(
       await screen.findByRole('alert'),
     ).toHaveTextContent('项目健康数据加载失败，请稍后重试。')
+  })
+
+  it('derives the selected risk from each new dashboard snapshot', async () => {
+    const user = userEvent.setup()
+    const baseline = await projectRepository.getDashboard('atlas', 30)
+    const selected = baseline.risks[0]!
+    vi.spyOn(projectRepository, 'getDashboard').mockImplementation(
+      async (_projectId, days = 30) => {
+        if (days === 7) {
+          return {
+            ...baseline,
+            risks: [
+              {
+                ...selected,
+                title: '更新后的断线恢复风险',
+                dueDate: '2026-08-02',
+              },
+            ],
+            trend: [{ date: '2026-08-01', actual: 70, planned: 72 }],
+          }
+        }
+        if (days === 90) {
+          return {
+            ...baseline,
+            risks: [],
+            trend: [{ date: '2026-08-01', actual: 90, planned: 92 }],
+          }
+        }
+        return baseline
+      },
+    )
+
+    renderApp(<DashboardPage />)
+    await user.click(
+      await screen.findByRole('button', {
+        name: '查看风险：断线恢复测试',
+      }),
+    )
+    await user.click(screen.getByRole('button', { name: '7 天' }))
+
+    const updatedInspector = await screen.findByRole('complementary', {
+      name: '风险详情',
+    })
+    expect(
+      within(updatedInspector).getByText('更新后的断线恢复风险'),
+    ).toBeInTheDocument()
+    expect(
+      within(updatedInspector).getByText('2026-08-02'),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '90 天' }))
+    await screen.findByText('90 项已完成')
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('complementary', { name: '风险详情' }),
+      ).not.toBeInTheDocument()
+    })
   })
 })

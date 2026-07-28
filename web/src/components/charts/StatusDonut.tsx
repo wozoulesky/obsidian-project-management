@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts'
+import type { EChartsCoreOption } from 'echarts/core'
 import { useMemo } from 'react'
 
 import type { TaskStatus } from '../../data/domain'
@@ -58,7 +58,7 @@ export function StatusDonut({
       statusPresentation.map(({ token }) => resolveTokenColor(token)),
     [],
   )
-  const option = useMemo<EChartsOption>(
+  const option = useMemo<EChartsCoreOption>(
     () => ({
       color: colors,
       title: {

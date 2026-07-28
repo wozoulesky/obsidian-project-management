@@ -16,9 +16,11 @@ const periods: DashboardPeriod[] = [7, 30, 90]
 
 export function DashboardPage() {
   const [period, setPeriod] = useState<DashboardPeriod>(30)
-  const [selectedRisk, setSelectedRisk] = useState<RiskItem | null>(null)
+  const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
   const dashboard = useDashboard(period)
   const snapshot = dashboard.data
+  const selectedRisk =
+    snapshot?.risks.find((risk) => risk.id === selectedRiskId) ?? null
 
   if (dashboard.isError) {
     return (
@@ -113,7 +115,10 @@ export function DashboardPage() {
             selectedRisk ? 'data-grid-with-inspector' : undefined
           }
         >
-          <RiskQueue risks={snapshot.risks} onSelect={setSelectedRisk} />
+          <RiskQueue
+            risks={snapshot.risks}
+            onSelect={(risk: RiskItem) => setSelectedRiskId(risk.id)}
+          />
           {selectedRisk ? (
             <aside
               aria-label="风险详情"
