@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -288,6 +295,49 @@ describe('GanttPage scheduling workflow', () => {
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
   })
 
+  it('uses a synchronous lock for same-tick confirmations and releases it after settlement', async () => {
+    mockTasks()
+    let resolveUpdate!: (task: Task) => void
+    const update = vi
+      .spyOn(projectRepository, 'updateTaskDates')
+      .mockImplementation(
+        () =>
+          new Promise<Task>((resolve) => {
+            resolveUpdate = resolve
+          }),
+      )
+    const user = userEvent.setup()
+    renderApp(<GanttPage />)
+
+    const bar = await screen.findByRole('button', {
+      name: '移动 MCP 权限校验',
+    })
+    bar.focus()
+    await user.keyboard('{ArrowRight}')
+    const confirm = screen.getByRole('button', { name: '确认排期调整' })
+    act(() => {
+      confirm.click()
+      confirm.click()
+    })
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      resolveUpdate(
+        task({ startDate: '2026-07-25', dueDate: '2026-07-29' }),
+      )
+    })
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('status', { name: '排期调整确认' }),
+      ).not.toBeInTheDocument(),
+    )
+
+    bar.focus()
+    await user.keyboard('{ArrowRight}')
+    fireEvent.click(screen.getByRole('button', { name: '确认排期调整' }))
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
+  })
+
   it('opens the inspector from the latest task snapshot and restores focus', async () => {
     mockTasks()
     const user = userEvent.setup()
@@ -304,6 +354,24 @@ describe('GanttPage scheduling workflow', () => {
       }),
     )
     expect(trigger).toHaveFocus()
+  })
+
+  it('restores focus to the actual timeline entry even when the task tree collapses', async () => {
+    mockTasks()
+    const user = userEvent.setup()
+    renderApp(<GanttPage />)
+
+    const timelineTrigger = await screen.findByRole('button', {
+      name: '移动 MCP 权限校验',
+    })
+    await user.click(timelineTrigger)
+    const dialog = screen.getByRole('dialog', { name: 'MCP 权限校验' })
+    await user.click(screen.getByRole('button', { name: '折叠任务树' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: '关闭 MCP 权限校验' }),
+    )
+
+    expect(timelineTrigger).toHaveFocus()
   })
 
   it('creates one pointer proposal only on completion using the final delta', async () => {
@@ -326,8 +394,6 @@ describe('GanttPage scheduling workflow', () => {
     fireEvent.pointerMove(bar, { clientX: 125, pointerId: 7 })
     expect(screen.queryByText(/MCP 权限校验：/)).not.toBeInTheDocument()
 
-    fireEvent.pointerMove(bar, { clientX: 150, pointerId: 7 })
-    expect(screen.queryByText(/MCP 权限校验：/)).not.toBeInTheDocument()
     fireEvent.pointerUp(bar, { clientX: 150, pointerId: 7 })
 
     expect(
@@ -338,6 +404,45 @@ describe('GanttPage scheduling workflow', () => {
     expect(screen.getAllByRole('status', { name: '排期调整确认' })).toHaveLength(
       1,
     )
+  })
+
+  it('cleans lost pointer capture without proposing and starts the next drag fresh', async () => {
+    mockTasks()
+    renderApp(<GanttPage />)
+    const bar = await screen.findByRole('button', {
+      name: '移动 MCP 权限校验',
+    })
+    const releasePointerCapture = vi.fn()
+    Object.defineProperties(bar, {
+      hasPointerCapture: {
+        configurable: true,
+        value: vi.fn(() => false),
+      },
+      releasePointerCapture: {
+        configurable: true,
+        value: releasePointerCapture,
+      },
+      setPointerCapture: {
+        configurable: true,
+        value: vi.fn(),
+      },
+    })
+
+    fireEvent.pointerDown(bar, { clientX: 100, pointerId: 7 })
+    fireEvent.pointerMove(bar, { clientX: 150, pointerId: 7 })
+    fireEvent.lostPointerCapture(bar, { pointerId: 7 })
+    fireEvent.pointerUp(bar, { clientX: 150, pointerId: 7 })
+    expect(screen.queryByText(/MCP 权限校验：/)).not.toBeInTheDocument()
+    expect(releasePointerCapture).not.toHaveBeenCalled()
+
+    fireEvent.pointerDown(bar, { clientX: 100, pointerId: 8 })
+    fireEvent.pointerMove(bar, { clientX: 125, pointerId: 8 })
+    fireEvent.pointerUp(bar, { clientX: 125, pointerId: 8 })
+    expect(
+      screen.getByText(
+        'MCP 权限校验：7 月 24 日–7 月 28 日 → 7 月 25 日–7 月 29 日',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('cleans up pointer state without proposing when a drag is cancelled', async () => {

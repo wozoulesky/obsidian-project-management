@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import { EntityInspector } from '../../components/data/EntityInspector'
 import type { Task } from '../../data/domain'
@@ -131,16 +131,18 @@ function proposalSummary(task: Task, proposal: PendingProposal): string {
 
 function GanttTaskInspector({
   onClose,
+  returnFocusId,
   task,
 }: {
   onClose: () => void
+  returnFocusId: string
   task: Task
 }) {
   return (
     <EntityInspector
       fallbackFocusId="gantt-page-heading"
       onClose={onClose}
-      returnFocusId={`gantt-task-trigger-${task.id}`}
+      returnFocusId={returnFocusId}
       title={task.title}
     >
       <div className="gantt-inspector">
@@ -183,7 +185,11 @@ export function GanttPage() {
   )
   const [taskTreeCollapsed, setTaskTreeCollapsed] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [selectedTaskTriggerId, setSelectedTaskTriggerId] = useState<
+    string | null
+  >(null)
   const [proposal, setProposal] = useState<PendingProposal | null>(null)
+  const confirmLockRef = useRef(false)
 
   const tasks = tasksQuery.data ?? EMPTY_TASKS
   const visibleRows = useMemo(
@@ -222,7 +228,8 @@ export function GanttPage() {
   }
 
   const confirmProposal = () => {
-    if (!proposal || updateDates.isPending) return
+    if (!proposal || updateDates.isPending || confirmLockRef.current) return
+    confirmLockRef.current = true
     updateDates.mutate(
       {
         taskId: proposal.taskId,
@@ -234,6 +241,9 @@ export function GanttPage() {
       {
         onSuccess: () => {
           setProposal(null)
+        },
+        onSettled: () => {
+          confirmLockRef.current = false
         },
       },
     )
@@ -354,11 +364,12 @@ export function GanttPage() {
                           aria-label={`查看 ${row.task.title}`}
                           className="gantt-task-tree__task gantt-task-tree__content"
                           id={`gantt-task-trigger-${row.task.id}`}
-                          onClick={() =>
+                          onClick={(event) => {
+                            setSelectedTaskTriggerId(event.currentTarget.id)
                             setSelectedTaskId((current) =>
                               current === row.task.id ? null : row.task.id,
                             )
-                          }
+                          }}
                           type="button"
                         >
                           <span>
@@ -383,7 +394,10 @@ export function GanttPage() {
                   setProposal(null)
                 }}
                 onPropose={createProposal}
-                onSelectTask={setSelectedTaskId}
+                onSelectTask={(taskId, triggerId) => {
+                  setSelectedTaskTriggerId(triggerId)
+                  setSelectedTaskId(taskId)
+                }}
                 range={range}
                 rows={visibleRows}
                 scale={scale}
@@ -392,9 +406,10 @@ export function GanttPage() {
             </div>
           </div>
 
-          {selectedTask ? (
+          {selectedTask && selectedTaskTriggerId ? (
             <GanttTaskInspector
               onClose={() => setSelectedTaskId(null)}
+              returnFocusId={selectedTaskTriggerId}
               task={selectedTask}
             />
           ) : null}

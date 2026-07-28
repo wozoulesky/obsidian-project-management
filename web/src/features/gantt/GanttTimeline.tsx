@@ -49,7 +49,7 @@ interface GanttTimelineProps {
   rows: GanttVisibleRow[]
   scale: GanttScale
   selectedTaskId: string | null
-  onSelectTask: (taskId: string) => void
+  onSelectTask: (taskId: string, triggerId: string) => void
 }
 
 interface DragState {
@@ -188,6 +188,20 @@ export function GanttTimeline({
     event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
+  const releaseCapture = (
+    target: HTMLButtonElement,
+    pointerId: number,
+  ) => {
+    if (!target.releasePointerCapture) return
+    if (
+      target.hasPointerCapture &&
+      !target.hasPointerCapture(pointerId)
+    ) {
+      return
+    }
+    target.releasePointerCapture(pointerId)
+  }
+
   const updateDrag = (event: PointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -202,23 +216,34 @@ export function GanttTimeline({
   const endDrag = (event: PointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
-    event.currentTarget.releasePointerCapture?.(event.pointerId)
+    const finalDelta = dateDeltaFromPixels(
+      event.clientX - drag.startX,
+      drag.timelineWidth,
+      rangeDays,
+    )
+    releaseCapture(event.currentTarget, event.pointerId)
     dragRef.current = null
-    if (drag.latestDelta === 0) return
+    if (finalDelta === 0) return
     const dates = buildDateProposal(
       drag.kind,
       drag.task.startDate,
       drag.task.dueDate,
-      drag.latestDelta,
+      finalDelta,
     )
     if (dates) onPropose(drag.task, drag.kind, dates)
   }
 
   const cancelDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return
-    event.currentTarget.releasePointerCapture?.(event.pointerId)
+    releaseCapture(event.currentTarget, event.pointerId)
     dragRef.current = null
     onCancelProposal()
+  }
+
+  const loseCapture = (event: PointerEvent<HTMLButtonElement>) => {
+    if (dragRef.current?.pointerId === event.pointerId) {
+      dragRef.current = null
+    }
   }
 
   const proposeFromKeyboard = (
@@ -321,10 +346,14 @@ export function GanttTimeline({
                     <button
                       aria-label={`移动 ${task.title}`}
                       className="gantt-task-bar__move"
-                      onClick={() => onSelectTask(task.id)}
+                      id={`gantt-timeline-trigger-${task.id}`}
+                      onClick={(event) =>
+                        onSelectTask(task.id, event.currentTarget.id)
+                      }
                       onKeyDown={(event) =>
                         proposeFromKeyboard(event, task, 'move')
                       }
+                      onLostPointerCapture={loseCapture}
                       onPointerCancel={cancelDrag}
                       onPointerDown={(event) => beginDrag(event, task, 'move')}
                       onPointerMove={updateDrag}
@@ -351,9 +380,11 @@ export function GanttTimeline({
                     <button
                       aria-label={`调整 ${task.title} 截止日期`}
                       className="gantt-task-bar__resize"
+                      id={`gantt-timeline-resize-${task.id}`}
                       onKeyDown={(event) =>
                         proposeFromKeyboard(event, task, 'resize')
                       }
+                      onLostPointerCapture={loseCapture}
                       onPointerCancel={cancelDrag}
                       onPointerDown={(event) =>
                         beginDrag(event, task, 'resize')
