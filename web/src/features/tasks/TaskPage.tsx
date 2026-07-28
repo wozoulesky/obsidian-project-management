@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { useTasks } from '../../data/query-hooks'
@@ -8,12 +7,24 @@ import { TaskTable } from './TaskTable'
 
 export function TaskPage() {
   const tasksQuery = useTasks()
-  const [searchParams] = useSearchParams()
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
   const tasks = tasksQuery.data ?? []
   const filteredTasks = filterTasks(tasks, searchParams)
+  const selectedTaskId = searchParams.get('selected')
   const selectedTask =
     filteredTasks.find((task) => task.id === selectedTaskId) ?? null
+
+  const setSelectedTaskId = (taskId: string | null) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      if (taskId) {
+        next.set('selected', taskId)
+      } else {
+        next.delete('selected')
+      }
+      return next
+    })
+  }
 
   if (tasksQuery.isPending) {
     return (
@@ -42,10 +53,7 @@ export function TaskPage() {
         </div>
         <p>{filteredTasks.length} / {tasks.length} 项</p>
       </header>
-      <TaskFilters
-        onFiltersChange={() => setSelectedTaskId(null)}
-        tasks={tasks}
-      />
+      <TaskFilters tasks={tasks} />
       <div className="data-grid-with-inspector task-page__workspace">
         {tasks.length === 0 ? (
           <p className="task-page__empty">当前没有任务。</p>

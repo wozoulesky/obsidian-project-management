@@ -97,6 +97,64 @@ describe('filterTasks', () => {
 })
 
 describe('TaskPage workflow', () => {
+  it('opens a valid visible task from the selected query parameter', async () => {
+    renderApp(<AppRoutes />, {
+      route: '/tasks?selected=task-047',
+    })
+
+    const dialog = await screen.findByRole('dialog', {
+      name: '断线恢复测试',
+    })
+    expect(within(dialog).getByText('TASK-047')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: '查看 断线恢复测试' }),
+    ).toBeVisible()
+  })
+
+  it('ignores missing, invalid, and filter-hidden selected tasks', async () => {
+    const missing = renderApp(<AppRoutes />, {
+      route: '/tasks?selected=missing-task',
+    })
+    await screen.findByRole('table', { name: '任务列表' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    missing.unmount()
+
+    const hidden = renderApp(<AppRoutes />, {
+      route: '/tasks?status=done&selected=task-047',
+    })
+    await screen.findByRole('table', { name: '任务列表' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    hidden.unmount()
+
+    renderApp(<AppRoutes />, {
+      route: '/tasks?selected=%3Cscript%3E',
+    })
+    await screen.findByRole('table', { name: '任务列表' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('stores selection in the URL and closes it without dropping filters', async () => {
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, {
+      route: '/tasks?priority=P0&sort=due_desc',
+    })
+
+    await user.click(
+      await screen.findByRole('button', { name: '查看 断线恢复测试' }),
+    )
+    expect(window.location.search).toContain('priority=P0')
+    expect(window.location.search).toContain('sort=due_desc')
+    expect(window.location.search).toContain('selected=task-047')
+
+    const dialog = screen.getByRole('dialog', { name: '断线恢复测试' })
+    await user.click(
+      within(dialog).getByRole('button', { name: '关闭 断线恢复测试' }),
+    )
+    expect(window.location.search).toContain('priority=P0')
+    expect(window.location.search).toContain('sort=due_desc')
+    expect(window.location.search).not.toContain('selected=')
+  })
+
   it('writes the overdue filter to the URL and only shows overdue work', async () => {
     const user = userEvent.setup()
     renderApp(<AppRoutes />, { route: '/tasks' })

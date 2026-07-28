@@ -64,14 +64,10 @@ export function filterTasks(
 }
 
 export interface TaskFiltersProps {
-  onFiltersChange?: () => void
   tasks: readonly Task[]
 }
 
-export function TaskFilters({
-  onFiltersChange,
-  tasks,
-}: TaskFiltersProps) {
+export function TaskFilters({ tasks }: TaskFiltersProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const assignees = Array.from(
     new Map(tasks.map((item) => [item.assignee.id, item.assignee])).values(),
@@ -85,11 +81,9 @@ export function TaskFilters({
       } else {
         next.delete(key)
       }
+      next.delete('selected')
       return next
     })
-    if (onFiltersChange) {
-      queueMicrotask(onFiltersChange)
-    }
   }
 
   const selectedStatus = includesValue(taskStatuses, searchParams.get('status'))

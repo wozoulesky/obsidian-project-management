@@ -118,7 +118,39 @@ describe('DefectPage workflow', () => {
       .toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('inspects reproduction, relationships, attachments, activity, and restores focus', async () => {
+  it('recalculates summary counts from the current active scope', async () => {
+    const existing = await projectRepository.listDefects('atlas')
+    const terminalSerious = defect({
+      id: 'defect-terminal-serious',
+      code: 'D-TERMINAL',
+      title: '已关闭严重缺陷',
+      severity: 'serious',
+      status: 'closed',
+    })
+    vi.spyOn(projectRepository, 'listDefects').mockResolvedValueOnce([
+      ...existing,
+      terminalSerious,
+    ])
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/defects' })
+
+    await screen.findByRole('table', { name: '缺陷风险队列' })
+    const summary = document.querySelector('.defect-summary') as HTMLElement
+    const severeLabel = within(summary).getByText('致命/严重')
+    expect(severeLabel.nextElementSibling).toHaveTextContent('3')
+    expect(
+      screen.getByRole('button', { name: '查看 已关闭严重缺陷' }),
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: '活跃缺陷' }))
+
+    expect(severeLabel.nextElementSibling).toHaveTextContent('2')
+    expect(
+      screen.queryByRole('button', { name: '查看 已关闭严重缺陷' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('toggles an expanded inspector and restores focus to its trigger', async () => {
     const user = userEvent.setup()
     renderApp(<AppRoutes />, { route: '/defects' })
 
@@ -126,19 +158,94 @@ describe('DefectPage workflow', () => {
       name: '查看 离线恢复失败',
     })
     expect(trigger).toHaveAttribute('id', 'defect-trigger-defect-104')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveAttribute(
+      'aria-controls',
+      'defect-inspector-defect-104',
+    )
     await user.click(trigger)
 
     const dialog = screen.getByRole('dialog', { name: '离线恢复失败' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(document.getElementById('defect-inspector-defect-104')).toContainElement(
+      dialog,
+    )
     expect(within(dialog).getByRole('list')).toHaveTextContent('重新启动客户端')
     expect(within(dialog).getByText(/TASK-047/)).toBeVisible()
     expect(within(dialog).getByText(/REQ-013/)).toBeVisible()
     expect(within(dialog).getByText('暂无附件')).toBeVisible()
     expect(within(dialog).getByText('暂无相关活动')).toBeVisible()
 
-    await user.click(
-      within(dialog).getByRole('button', { name: '关闭 离线恢复失败' }),
-    )
+    await user.click(trigger)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+
+  it('does not leak a pending conversion or its eventual task into another defect', async () => {
+    let resolveConversion: (() => void) | undefined
+    const original = projectRepository.createTaskFromDefect.bind(projectRepository)
+    vi.spyOn(projectRepository, 'createTaskFromDefect').mockImplementationOnce(
+      (defectId) =>
+        new Promise<void>((resolve) => {
+          resolveConversion = resolve
+        }).then(() => original(defectId)),
+    )
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/defects' })
+
+    await user.click(
+      await screen.findByRole('button', { name: '查看 待处理缺陷 1' }),
+    )
+    const firstDialog = screen.getByRole('dialog', { name: '待处理缺陷 1' })
+    await user.click(
+      within(firstDialog).getByRole('button', { name: '转为修复任务' }),
+    )
+    expect(
+      within(firstDialog).getByRole('button', { name: /正在创建/ }),
+    ).toBeDisabled()
+
+    await user.click(
+      screen.getByRole('button', { name: '查看 待处理缺陷 2' }),
+    )
+    const secondDialog = screen.getByRole('dialog', { name: '待处理缺陷 2' })
+    expect(
+      within(secondDialog).getByRole('button', { name: '转为修复任务' }),
+    ).toBeEnabled()
+    expect(within(secondDialog).queryByRole('alert')).not.toBeInTheDocument()
+
+    resolveConversion?.()
+    await screen.findByRole('dialog', { name: '待处理缺陷 2' })
+    expect(
+      within(secondDialog).queryByRole('link', { name: /FIX-D-200/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not leak a conversion error after selecting another defect', async () => {
+    vi.spyOn(projectRepository, 'createTaskFromDefect').mockRejectedValueOnce(
+      new Error('A 缺陷转换失败'),
+    )
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/defects' })
+
+    await user.click(
+      await screen.findByRole('button', { name: '查看 待处理缺陷 3' }),
+    )
+    const firstDialog = screen.getByRole('dialog', { name: '待处理缺陷 3' })
+    await user.click(
+      within(firstDialog).getByRole('button', { name: '转为修复任务' }),
+    )
+    expect(await within(firstDialog).findByRole('alert')).toHaveTextContent(
+      'A 缺陷转换失败',
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: '查看 待处理缺陷 4' }),
+    )
+    const secondDialog = screen.getByRole('dialog', { name: '待处理缺陷 4' })
+    expect(within(secondDialog).queryByRole('alert')).not.toBeInTheDocument()
+    expect(
+      within(secondDialog).getByRole('button', { name: '转为修复任务' }),
+    ).toBeEnabled()
   })
 
   it('disables conversion while pending and exposes the created task link', async () => {
@@ -170,8 +277,19 @@ describe('DefectPage workflow', () => {
     const link = await within(dialog).findByRole('link', {
       name: /FIX-D-104 修复：离线恢复失败/,
     })
-    expect(link).toHaveAttribute('href', expect.stringContaining('/tasks'))
+    expect(link).toHaveAttribute(
+      'href',
+      '/tasks?selected=task-fix-defect-104',
+    )
     expect(within(dialog).getAllByText(/FIX-D-104/)).toHaveLength(2)
+
+    await user.click(link)
+    const taskDialog = await screen.findByRole('dialog', {
+      name: '修复：离线恢复失败',
+    })
+    expect(within(taskDialog).getByText('FIX-D-104')).toBeVisible()
+    expect(within(taskDialog).getByText('重新启动客户端', { exact: false }))
+      .toBeVisible()
   })
 
   it('retains the inspector and reports conversion errors', async () => {

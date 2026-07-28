@@ -115,14 +115,6 @@ function DefectInspector({
   linkedRequirementCode?: string
   onClose: () => void
 }) {
-  const conversion = useCreateTaskFromDefect()
-  const repairTask =
-    conversion.data?.id === defect.linkedTaskId
-      ? conversion.data
-      : linkedTask?.id.startsWith('task-fix-')
-        ? linkedTask
-        : undefined
-
   return (
     <EntityInspector
       fallbackFocusId={fallbackFocusId}
@@ -183,29 +175,53 @@ function DefectInspector({
           <p>暂无相关活动</p>
         </section>
 
-        <div className="defect-inspector__conversion">
-          {repairTask ? (
-            <Link to={`/tasks?selected=${encodeURIComponent(repairTask.id)}`}>
-              {repairTask.code} {repairTask.title}
-            </Link>
-          ) : (
-            <button
-              className="button button--primary"
-              disabled={conversion.isPending}
-              onClick={() => conversion.mutate(defect.id)}
-              type="button"
-            >
-              {conversion.isPending ? '正在创建修复任务' : '转为修复任务'}
-            </button>
-          )}
-          {conversion.isError ? (
-            <p role="alert">
-              {errorMessage(conversion.error, '创建修复任务失败')}
-            </p>
-          ) : null}
-        </div>
+        <DefectConversionAction
+          defect={defect}
+          key={defect.id}
+          linkedTask={linkedTask}
+        />
       </div>
     </EntityInspector>
+  )
+}
+
+function DefectConversionAction({
+  defect,
+  linkedTask,
+}: {
+  defect: Defect
+  linkedTask?: Task
+}) {
+  const conversion = useCreateTaskFromDefect()
+  const repairTask =
+    conversion.data?.id === defect.linkedTaskId
+      ? conversion.data
+      : linkedTask?.id.startsWith('task-fix-')
+        ? linkedTask
+        : undefined
+
+  return (
+    <div className="defect-inspector__conversion">
+      {repairTask ? (
+        <Link to={`/tasks?selected=${encodeURIComponent(repairTask.id)}`}>
+          {repairTask.code} {repairTask.title}
+        </Link>
+      ) : (
+        <button
+          className="button button--primary"
+          disabled={conversion.isPending}
+          onClick={() => conversion.mutate(defect.id)}
+          type="button"
+        >
+          {conversion.isPending ? '正在创建修复任务' : '转为修复任务'}
+        </button>
+      )}
+      {conversion.isError ? (
+        <p role="alert">
+          {errorMessage(conversion.error, '创建修复任务失败')}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -236,13 +252,14 @@ export function DefectPage() {
     (requirement) => requirement.id === selectedDefect?.linkedRequirementId,
   )
   const summary = {
-    severe: allDefects.filter(
+    severe: visibleDefects.filter(
       (defect) =>
         defect.severity === 'fatal' || defect.severity === 'serious',
     ).length,
-    open: allDefects.filter((defect) => defect.status === 'open').length,
-    fixing: allDefects.filter((defect) => defect.status === 'fixing').length,
-    verifying: allDefects.filter((defect) => defect.status === 'verifying')
+    open: visibleDefects.filter((defect) => defect.status === 'open').length,
+    fixing: visibleDefects.filter((defect) => defect.status === 'fixing')
+      .length,
+    verifying: visibleDefects.filter((defect) => defect.status === 'verifying')
       .length,
   }
 
@@ -345,11 +362,16 @@ export function DefectPage() {
                   >
                     <td>
                       <button
+                        aria-controls={`defect-inspector-${defect.id}`}
+                        aria-expanded={defect.id === selectedDefectId}
                         aria-label={`查看 ${defect.title}`}
-                        aria-pressed={defect.id === selectedDefectId}
                         className="defect-table__view"
                         id={`defect-trigger-${defect.id}`}
-                        onClick={() => setSelectedDefectId(defect.id)}
+                        onClick={() =>
+                          setSelectedDefectId((current) =>
+                            current === defect.id ? null : defect.id,
+                          )
+                        }
                         type="button"
                       >
                         <small>{defect.code}</small>
@@ -378,17 +400,19 @@ export function DefectPage() {
         </div>
 
         {selectedDefect ? (
-          <DefectInspector
-            defect={selectedDefect}
-            fallbackFocusId="defect-page-heading"
-            linkedRequirementCode={
-              linkedRequirement
-                ? `${linkedRequirement.code} ${linkedRequirement.title}`
-                : undefined
-            }
-            linkedTask={linkedTask}
-            onClose={() => setSelectedDefectId(null)}
-          />
+          <div id={`defect-inspector-${selectedDefect.id}`}>
+            <DefectInspector
+              defect={selectedDefect}
+              fallbackFocusId="defect-page-heading"
+              linkedRequirementCode={
+                linkedRequirement
+                  ? `${linkedRequirement.code} ${linkedRequirement.title}`
+                  : undefined
+              }
+              linkedTask={linkedTask}
+              onClose={() => setSelectedDefectId(null)}
+            />
+          </div>
         ) : null}
       </div>
     </section>
