@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,7 +11,11 @@ import {
   SyncState,
 } from './DataState'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('shared project data states', () => {
   it('renders an accessible default loading skeleton and accepts a custom label', () => {
@@ -71,10 +75,18 @@ describe('shared project data states', () => {
 
   it('only marks valid timestamps older than five minutes as stale', () => {
     const now = Date.UTC(2026, 6, 28, 8, 0, 0)
+    const updatedAt = Date.UTC(2026, 6, 28, 2, 42, 0)
+    const setInterval = vi.spyOn(globalThis, 'setInterval')
     const { rerender } = render(
-      <StaleDataBanner dataUpdatedAt={now - 5 * 60_000 - 1} now={now} />,
+      <StaleDataBanner dataUpdatedAt={updatedAt} now={now} />,
     )
-    expect(screen.getByText('数据可能已过期')).toBeInTheDocument()
+    expect(setInterval).not.toHaveBeenCalled()
+    const stale = screen.getByText(/数据可能已过期/)
+    expect(stale).toHaveTextContent('数据可能已过期 · 最后更新 10:42')
+    expect(stale.querySelector('time')).toHaveAttribute(
+      'dateTime',
+      '2026-07-28T02:42:00.000Z',
+    )
 
     rerender(
       <StaleDataBanner dataUpdatedAt={now - 5 * 60_000} now={now} />,
@@ -86,6 +98,38 @@ describe('shared project data states', () => {
 
     rerender(<StaleDataBanner dataUpdatedAt={Number.NaN} now={now} />)
     expect(screen.queryByText('数据可能已过期')).not.toBeInTheDocument()
+  })
+
+  it('updates freshness every minute when now is not injected and clears its timer', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-28T00:00:00.000Z'))
+    const clearInterval = vi.spyOn(globalThis, 'clearInterval')
+    const updatedAt = Date.now()
+    const { unmount } = render(
+      <StaleDataBanner dataUpdatedAt={updatedAt} />,
+    )
+    expect(screen.queryByText(/数据可能已过期/)).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(6 * 60_000)
+    })
+    expect(screen.getByText(/数据可能已过期/)).toBeInTheDocument()
+
+    unmount()
+    expect(clearInterval).toHaveBeenCalled()
+  })
+
+  it('re-evaluates a changed data timestamp against an injected clock', () => {
+    const now = Date.UTC(2026, 6, 28, 8, 0, 0)
+    const { rerender } = render(
+      <StaleDataBanner dataUpdatedAt={now - 6 * 60_000} now={now} />,
+    )
+    expect(screen.getByText(/数据可能已过期/)).toBeInTheDocument()
+
+    rerender(
+      <StaleDataBanner dataUpdatedAt={now - 60_000} now={now} />,
+    )
+    expect(screen.queryByText(/数据可能已过期/)).not.toBeInTheDocument()
   })
 
   it('announces background refresh and reports a failed refresh non-destructively', () => {

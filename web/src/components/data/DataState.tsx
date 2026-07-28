@@ -1,12 +1,20 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 const STALE_AFTER_MS = 5 * 60_000
+const CLOCK_TICK_MS = 60_000
+const HONG_KONG_OFFSET_MS = 8 * 60 * 60_000
 const UNKNOWN_ERROR_MESSAGE = '读取项目数据时发生未知错误。'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim()
     ? error.message
     : UNKNOWN_ERROR_MESSAGE
+}
+
+function formatHongKongTime(timestamp: number): string {
+  return new Date(timestamp + HONG_KONG_OFFSET_MS)
+    .toISOString()
+    .slice(11, 16)
 }
 
 export function LoadingState({
@@ -85,8 +93,16 @@ export function StaleDataBanner({
   dataUpdatedAt: number
   now?: number
 }) {
-  const [renderedAt] = useState(Date.now)
-  const currentTime = now ?? renderedAt
+  const [clock, setClock] = useState(() => now ?? Date.now())
+  useEffect(() => {
+    if (now !== undefined) return undefined
+    const interval = globalThis.setInterval(() => {
+      setClock(Date.now())
+    }, CLOCK_TICK_MS)
+    return () => globalThis.clearInterval(interval)
+  }, [now])
+
+  const currentTime = now ?? clock
   const isValid =
     Number.isFinite(dataUpdatedAt) &&
     dataUpdatedAt > 0 &&
@@ -97,7 +113,10 @@ export function StaleDataBanner({
 
   return (
     <p className="data-state__stale" role="status">
-      数据可能已过期
+      数据可能已过期 · 最后更新{' '}
+      <time dateTime={new Date(dataUpdatedAt).toISOString()}>
+        {formatHongKongTime(dataUpdatedAt)}
+      </time>
     </p>
   )
 }

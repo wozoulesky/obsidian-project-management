@@ -337,4 +337,63 @@ describe('DefectPage workflow', () => {
     renderApp(<AppRoutes />, { route: '/defects' })
     expect(await screen.findByText('当前项目暂无缺陷')).toBeVisible()
   })
+
+  it('keeps the main defect table while linked work is pending without reporting none', async () => {
+    vi.spyOn(projectRepository, 'listTasks').mockImplementationOnce(
+      () => new Promise(() => {}),
+    )
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/defects' })
+
+    expect(
+      await screen.findByRole('table', { name: '缺陷风险队列' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('status', { name: '正在加载关联工作' }),
+    ).toBeVisible()
+    await user.click(
+      screen.getByRole('button', { name: '查看 离线恢复失败' }),
+    )
+    const dialog = screen.getByRole('dialog', { name: '离线恢复失败' })
+    expect(within(dialog).getByText('任务：正在加载关联任务')).toBeVisible()
+    expect(within(dialog).queryByText(/暂无关联任务/)).not.toBeInTheDocument()
+  })
+
+  it('shows secondary query reasons and retries without replacing defect content', async () => {
+    const listTasks = vi.spyOn(projectRepository, 'listTasks')
+      .mockRejectedValueOnce(new Error('关联任务数据库不可访问'))
+      .mockResolvedValueOnce([])
+    const listRequirements = vi.spyOn(projectRepository, 'listRequirements')
+      .mockRejectedValueOnce(new Error('关联需求数据库不可访问'))
+      .mockResolvedValueOnce([])
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/defects' })
+
+    expect(
+      await screen.findByRole('table', { name: '缺陷风险队列' }),
+    ).toBeVisible()
+    expect(screen.getByText('关联任务数据库不可访问')).toBeVisible()
+    expect(screen.getByText('关联需求数据库不可访问')).toBeVisible()
+    await user.click(
+      screen.getByRole('button', { name: '查看 离线恢复失败' }),
+    )
+    const dialog = screen.getByRole('dialog', { name: '离线恢复失败' })
+    expect(within(dialog).getByText('任务：关联任务读取失败')).toBeVisible()
+    expect(within(dialog).getByText('需求：关联需求读取失败')).toBeVisible()
+    expect(within(dialog).queryByText(/暂无关联/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '重试关联任务' }))
+    await user.click(screen.getByRole('button', { name: '重试关联需求' }))
+    expect(listTasks).toHaveBeenCalledTimes(2)
+    expect(listRequirements).toHaveBeenCalledTimes(2)
+    expect(
+      await within(dialog).findByText('任务：暂无关联任务'),
+    ).toBeVisible()
+    expect(
+      await within(dialog).findByText('需求：暂无关联需求'),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('table', { name: '缺陷风险队列' }),
+    ).toBeVisible()
+  })
 })

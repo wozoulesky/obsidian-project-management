@@ -1930,6 +1930,20 @@
   border-top: 1px solid var(--border);
 }
 
+.defect-page__related-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
 .defect-inspector__conversion a {
   color: var(--primary);
   font-size: 0.8125rem;

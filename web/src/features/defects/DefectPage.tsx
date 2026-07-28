@@ -113,12 +113,16 @@ function DefectInspector({
   fallbackFocusId,
   linkedTask,
   linkedRequirementCode,
+  linkedRequirementState,
+  linkedTaskState,
   onClose,
 }: {
   defect: Defect
   fallbackFocusId: string
   linkedTask?: Task
   linkedRequirementCode?: string
+  linkedRequirementState: 'error' | 'pending' | 'success'
+  linkedTaskState: 'error' | 'pending' | 'success'
   onClose: () => void
 }) {
   return (
@@ -159,16 +163,28 @@ function DefectInspector({
 
         <section className="defect-inspector__section">
           <h3>关联工作</h3>
-          <p>
-            任务：
-            {linkedTask ? `${linkedTask.code} ${linkedTask.title}` : '暂无关联任务'}
-          </p>
-          <p>
-            需求：
-            {linkedRequirementCode ??
-              defect.linkedRequirementId ??
-              '暂无关联需求'}
-          </p>
+          {linkedTaskState === 'pending' ? (
+            <p>任务：正在加载关联任务</p>
+          ) : linkedTaskState === 'error' ? (
+            <p>任务：关联任务读取失败</p>
+          ) : (
+            <p>
+              任务：
+              {linkedTask
+                ? `${linkedTask.code} ${linkedTask.title}`
+                : '暂无关联任务'}
+            </p>
+          )}
+          {linkedRequirementState === 'pending' ? (
+            <p>需求：正在加载关联需求</p>
+          ) : linkedRequirementState === 'error' ? (
+            <p>需求：关联需求读取失败</p>
+          ) : (
+            <p>
+              需求：
+              {linkedRequirementCode ?? '暂无关联需求'}
+            </p>
+          )}
         </section>
 
         <section className="defect-inspector__section">
@@ -257,6 +273,20 @@ export function DefectPage() {
   const linkedRequirement = requirementsQuery.data?.find(
     (requirement) => requirement.id === selectedDefect?.linkedRequirementId,
   )
+  const linkedTaskState =
+    tasksQuery.isPending && !tasksQuery.data
+      ? 'pending'
+      : tasksQuery.isError && !tasksQuery.data
+        ? 'error'
+        : 'success'
+  const linkedRequirementState =
+    requirementsQuery.isPending && !requirementsQuery.data
+      ? 'pending'
+      : requirementsQuery.isError && !requirementsQuery.data
+        ? 'error'
+        : 'success'
+  const isLinkedWorkPending =
+    linkedTaskState === 'pending' || linkedRequirementState === 'pending'
   const summary = {
     severe: visibleDefects.filter(
       (defect) =>
@@ -297,6 +327,46 @@ export function DefectPage() {
         isError={defectsQuery.isError}
         isFetching={defectsQuery.isFetching}
       />
+      {isLinkedWorkPending ? (
+        <p
+          aria-label="正在加载关联工作"
+          className="defect-page__related-state"
+          role="status"
+        >
+          正在加载关联工作
+        </p>
+      ) : null}
+      {tasksQuery.isError ? (
+        <div className="defect-page__related-state" role="alert">
+          <span>{errorMessage(tasksQuery.error, '关联任务读取失败')}</span>
+          <button
+            className="button button--ghost"
+            disabled={tasksQuery.isFetching}
+            onClick={() => tasksQuery.refetch()}
+            type="button"
+          >
+            重试关联任务
+          </button>
+        </div>
+      ) : null}
+      {requirementsQuery.isError ? (
+        <div className="defect-page__related-state" role="alert">
+          <span>
+            {errorMessage(
+              requirementsQuery.error,
+              '关联需求读取失败',
+            )}
+          </span>
+          <button
+            className="button button--ghost"
+            disabled={requirementsQuery.isFetching}
+            onClick={() => requirementsQuery.refetch()}
+            type="button"
+          >
+            重试关联需求
+          </button>
+        </div>
+      ) : null}
       <header className="defect-page__header">
         <div>
           <p className="defect-page__eyebrow">QUALITY / RISK</p>
@@ -423,7 +493,9 @@ export function DefectPage() {
                   ? `${linkedRequirement.code} ${linkedRequirement.title}`
                   : undefined
               }
+              linkedRequirementState={linkedRequirementState}
               linkedTask={linkedTask}
+              linkedTaskState={linkedTaskState}
               onClose={() => setSelectedDefectId(null)}
             />
           </div>
