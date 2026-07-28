@@ -185,7 +185,7 @@ describe('mock project repository', () => {
       '服务端按 Agent 角色权限表拦截越权写操作，并返回明确错误信息。',
     )
     expect(requirements.find((item) => item.id === 'req-013')).toMatchObject({
-      linkedTaskIds: ['task-040', 'task-047', 'task-051', 'task-052'],
+      linkedTaskIds: ['task-040', 'task-042', 'task-043', 'task-052'],
       completedTaskCount: 4,
       acceptanceCriteria: [
         '重复注册返回已有身份',
@@ -216,6 +216,44 @@ describe('mock project repository', () => {
     expect(tasks.find((task) => task.id === 'task-051')?.progress).toBe(80)
     expect(dashboard.activities[0]?.action).toContain('80%')
     expect(dashboard.activities[0]?.note).toBe('权限路径已验证')
+  })
+
+  it('derives requirement completion from current linked task state', async () => {
+    const repository = createMockProjectRepository()
+    const linkedTaskIds = ['task-040', 'task-042', 'task-043', 'task-052']
+    const initialTasks = await repository.listTasks('atlas')
+    const initialRequirement = (await repository.listRequirements('atlas'))
+      .find((item) => item.id === 'req-013')
+
+    expect(initialRequirement?.linkedTaskIds).toEqual(linkedTaskIds)
+    expect(
+      initialTasks
+        .filter((task) => linkedTaskIds.includes(task.id))
+        .every((task) => task.status === 'done'),
+    ).toBe(true)
+    expect(initialRequirement?.completedTaskCount).toBe(4)
+
+    await repository.updateTaskProgress('task-043', {
+      progress: 75,
+      status: 'in_progress',
+      note: '',
+    })
+    expect(
+      (await repository.listRequirements('atlas'))
+        .find((item) => item.id === 'req-013')
+        ?.completedTaskCount,
+    ).toBe(3)
+
+    await repository.updateTaskProgress('task-043', {
+      progress: 100,
+      status: 'done',
+      note: '',
+    })
+    expect(
+      (await repository.listRequirements('atlas'))
+        .find((item) => item.id === 'req-013')
+        ?.completedTaskCount,
+    ).toBe(4)
   })
 
   it('persists updated task dates', async () => {

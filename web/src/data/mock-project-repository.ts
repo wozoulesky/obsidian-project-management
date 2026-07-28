@@ -1,6 +1,7 @@
 import type {
   ActivityEvent,
   DashboardSnapshot,
+  Requirement,
   RequirementStatus,
   Task,
   TaskDateInput,
@@ -47,6 +48,14 @@ export function createMockProjectRepository(): ProjectRepository {
     }
     return task
   }
+  const deriveRequirementProgress = (
+    requirement: Requirement,
+  ): Requirement => ({
+    ...requirement,
+    completedTaskCount: requirement.linkedTaskIds.filter(
+      (taskId) => taskState.find((task) => task.id === taskId)?.status === 'done',
+    ).length,
+  })
 
   return {
     async getDashboard(projectId, days = 30): Promise<DashboardSnapshot> {
@@ -155,7 +164,7 @@ export function createMockProjectRepository(): ProjectRepository {
 
     async listRequirements(projectId) {
       void projectId
-      return clone(requirementState)
+      return clone(requirementState.map(deriveRequirementProgress))
     },
 
     async updateRequirementStatus(
@@ -169,7 +178,7 @@ export function createMockProjectRepository(): ProjectRepository {
         throw new Error(`Requirement not found: ${requirementId}`)
       }
       requirement.status = status
-      return clone(requirement)
+      return clone(deriveRequirementProgress(requirement))
     },
 
     async listDefects(projectId) {

@@ -1,5 +1,4 @@
 import {
-  defaultKeyboardCoordinateGetter,
   DndContext,
   KeyboardSensor,
   PointerSensor,
@@ -7,9 +6,14 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type Announcements,
+  type KeyboardCoordinateGetter,
+  type ScreenReaderInstructions,
   type UniqueIdentifier,
 } from '@dnd-kit/core'
 import {
+  useCallback,
+  useRef,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -56,6 +60,20 @@ type RequirementStatusInput = {
   requirementId: string
   status: RequirementStatus
 }
+type StatusCommitCallbacks = {
+  onError?: (error: Error) => void
+  onSuccess?: () => void
+}
+type CommitStatus = (
+  requirementId: string,
+  status: RequirementStatus,
+  callbacks?: StatusCommitCallbacks,
+) => boolean
+
+const requirementScreenReaderInstructions: ScreenReaderInstructions = {
+  draggable:
+    '按空格键拿起需求卡片，使用左右方向键切换生命周期列，再按空格键放下；按 Escape 键取消。',
+}
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function canSuggestDelivery(requirement: Requirement): boolean {
@@ -64,6 +82,87 @@ export function canSuggestDelivery(requirement: Requirement): boolean {
     requirement.linkedTaskIds.length > 0 &&
     requirement.completedTaskCount === requirement.linkedTaskIds.length
   )
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function getAdjacentBoardStatus(
+  status: string,
+  key: string,
+): BoardStatus | null {
+  const currentIndex = boardStates.findIndex(
+    (candidate) => candidate.status === status,
+  )
+  if (currentIndex < 0) {
+    return null
+  }
+  const nextIndex = key === 'ArrowLeft'
+    ? currentIndex - 1
+    : key === 'ArrowRight'
+      ? currentIndex + 1
+      : currentIndex
+
+  if (nextIndex === currentIndex) {
+    return null
+  }
+  return boardStates[nextIndex]?.status ?? null
+}
+
+const requirementKeyboardCoordinates: KeyboardCoordinateGetter = (
+  event,
+  { context, currentCoordinates },
+) => {
+  const currentStatus = context.over &&
+    boardStatusSet.has(String(context.over.id) as RequirementStatus)
+    ? String(context.over.id)
+    : String(context.active?.data.current?.status ?? '')
+  const targetStatus = getAdjacentBoardStatus(currentStatus, event.key)
+  if (!targetStatus) {
+    return undefined
+  }
+
+  const currentRect = context.droppableRects.get(currentStatus)
+  const targetRect = context.droppableRects.get(targetStatus)
+  if (!currentRect || !targetRect) {
+    return undefined
+  }
+
+  return {
+    x: currentCoordinates.x + targetRect.left - currentRect.left,
+    y: currentCoordinates.y + targetRect.top - currentRect.top,
+  }
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function createRequirementAnnouncements(
+  requirements: Requirement[],
+): Announcements {
+  const getTitle = (id: UniqueIdentifier) =>
+    requirements.find((requirement) => requirement.id === String(id))
+      ?.title ?? '当前需求'
+  const getStatusLabel = (id: UniqueIdentifier | undefined) => {
+    const status = id ? String(id) as RequirementStatus : null
+    return status && boardStatusSet.has(status)
+      ? statusLabels[status]
+      : null
+  }
+
+  return {
+    onDragStart: ({ active }) => `已拿起需求「${getTitle(active.id)}」。`,
+    onDragOver: ({ active, over }) => {
+      const label = getStatusLabel(over?.id)
+      return label
+        ? `需求「${getTitle(active.id)}」已移动到${label}列。`
+        : `需求「${getTitle(active.id)}」未位于有效生命周期列。`
+    },
+    onDragEnd: ({ active, over }) => {
+      const label = getStatusLabel(over?.id)
+      return label
+        ? `已将需求「${getTitle(active.id)}」放入${label}列。`
+        : `需求「${getTitle(active.id)}」未发生状态变更。`
+    },
+    onDragCancel: ({ active }) =>
+      `已取消移动需求「${getTitle(active.id)}」。`,
+  }
 }
 
 // Exported for stable DnD transition tests without pointer-geometry coupling.
@@ -139,10 +238,12 @@ function RequirementCardBody({
 }
 
 function DraggableRequirementCard({
+  disabled,
   onSelect,
   requirement,
   selected,
 }: {
+  disabled: boolean
   onSelect: (id: string) => void
   requirement: Requirement
   selected: boolean
@@ -153,7 +254,11 @@ function DraggableRequirementCard({
     listeners,
     setNodeRef,
     transform,
-  } = useDraggable({ id: requirement.id })
+  } = useDraggable({
+    id: requirement.id,
+    data: { status: requirement.status },
+    disabled,
+  })
   const style: CSSProperties | undefined = transform
     ? {
         transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
@@ -171,6 +276,7 @@ function DraggableRequirementCard({
         {...listeners}
         aria-label={`拖动 ${requirement.title}`}
         className="requirement-card__drag-handle"
+        disabled={disabled}
         type="button"
       >
         拖动
@@ -205,12 +311,14 @@ function StaticRequirementCard({
 }
 
 function RequirementColumn({
+  dragDisabled,
   label,
   onSelect,
   requirements,
   selectedRequirementId,
   status,
 }: {
+  dragDisabled: boolean
   label: string
   onSelect: (id: string) => void
   requirements: Requirement[]
@@ -236,6 +344,7 @@ function RequirementColumn({
         ) : (
           requirements.map((requirement) => (
             <DraggableRequirementCard
+              disabled={dragDisabled}
               key={requirement.id}
               onSelect={onSelect}
               requirement={requirement}
@@ -249,11 +358,14 @@ function RequirementColumn({
 }
 
 function RequirementInspectorFields({
+  commitStatus,
+  isStatusPending,
   requirement,
 }: {
+  commitStatus: CommitStatus
+  isStatusPending: boolean
   requirement: Requirement
 }) {
-  const updateStatus = useUpdateRequirementStatus()
   const [status, setStatus] = useState<RequirementStatus>(requirement.status)
   const [formError, setFormError] = useState('')
   const linkedTaskTotal = requirement.linkedTaskIds.length
@@ -261,14 +373,13 @@ function RequirementInspectorFields({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setFormError('')
-    updateStatus.mutate(
-      { requirementId: requirement.id, status },
+    commitStatus(
+      requirement.id,
+      status,
       {
         onError: (error) => {
           setFormError(
-            error instanceof Error
-              ? error.message
-              : '需求状态保存失败，请稍后重试。',
+            error.message || '需求状态保存失败，请稍后重试。',
           )
         },
       },
@@ -354,11 +465,11 @@ function RequirementInspectorFields({
         {formError ? <p role="alert">{formError}</p> : null}
         <Button
           aria-label="保存需求状态"
-          disabled={updateStatus.isPending}
+          disabled={isStatusPending}
           type="submit"
           variant="primary"
         >
-          {updateStatus.isPending ? '正在保存…' : '保存状态'}
+          {isStatusPending ? '正在保存…' : '保存状态'}
         </Button>
       </form>
     </div>
@@ -366,9 +477,13 @@ function RequirementInspectorFields({
 }
 
 function RequirementInspector({
+  commitStatus,
+  isStatusPending,
   onClose,
   requirement,
 }: {
+  commitStatus: CommitStatus
+  isStatusPending: boolean
   onClose: () => void
   requirement: Requirement
 }) {
@@ -380,6 +495,8 @@ function RequirementInspector({
       title={requirement.title}
     >
       <RequirementInspectorFields
+        commitStatus={commitStatus}
+        isStatusPending={isStatusPending}
         key={`${requirement.id}-${requirement.status}`}
         requirement={requirement}
       />
@@ -396,13 +513,46 @@ export function RequirementPage() {
   const [terminalFilter, setTerminalFilter] =
     useState<TerminalFilter>('board')
   const [dragError, setDragError] = useState('')
+  const [isStatusPending, setIsStatusPending] = useState(false)
+  const statusPendingRef = useRef(false)
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
     }),
     useSensor(KeyboardSensor, {
-      coordinateGetter: defaultKeyboardCoordinateGetter,
+      coordinateGetter: requirementKeyboardCoordinates,
     }),
+  )
+  const commitStatus = useCallback<CommitStatus>(
+    (requirementId, status, callbacks = {}) => {
+      if (statusPendingRef.current) {
+        return false
+      }
+
+      statusPendingRef.current = true
+      setIsStatusPending(true)
+      updateStatus.mutate(
+        { requirementId, status },
+        {
+          onError: (error) => {
+            callbacks.onError?.(
+              error instanceof Error
+                ? error
+                : new Error('需求状态更新失败，请稍后重试。'),
+            )
+          },
+          onSuccess: () => {
+            callbacks.onSuccess?.()
+          },
+          onSettled: () => {
+            statusPendingRef.current = false
+            setIsStatusPending(false)
+          },
+        },
+      )
+      return true
+    },
+    [updateStatus],
   )
 
   if (requirementsQuery.isPending) {
@@ -480,21 +630,31 @@ export function RequirementPage() {
             <p className="requirement-page__empty">当前没有需求。</p>
           ) : terminalFilter === 'board' ? (
             <DndContext
+              accessibility={{
+                announcements: createRequirementAnnouncements(requirements),
+                screenReaderInstructions: requirementScreenReaderInstructions,
+              }}
               onDragEnd={({ active, over }) => {
+                if (statusPendingRef.current) {
+                  return
+                }
                 setDragError('')
                 applyRequirementDrop(
                   requirements,
                   active.id,
                   over?.id ?? null,
-                  (input) => updateStatus.mutate(input, {
-                    onError: (error) => {
-                      setDragError(
-                        error instanceof Error
-                          ? error.message
-                          : '需求状态更新失败，请稍后重试。',
-                      )
+                  (input) => commitStatus(
+                    input.requirementId,
+                    input.status,
+                    {
+                      onError: (error) => {
+                        setDragError(
+                          error.message ||
+                            '需求状态更新失败，请稍后重试。',
+                        )
+                      },
                     },
-                  }),
+                  ),
                 )
               }}
               sensors={sensors}
@@ -502,6 +662,7 @@ export function RequirementPage() {
               <div className="requirement-board">
                 {boardStates.map(({ label, status }) => (
                   <RequirementColumn
+                    dragDisabled={isStatusPending}
                     key={status}
                     label={label}
                     onSelect={setSelectedRequirementId}
@@ -544,6 +705,8 @@ export function RequirementPage() {
         </div>
         {selectedRequirement ? (
           <RequirementInspector
+            commitStatus={commitStatus}
+            isStatusPending={isStatusPending}
             onClose={() => setSelectedRequirementId(null)}
             requirement={selectedRequirement}
           />

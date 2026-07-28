@@ -29,6 +29,7 @@ export const mutationInvalidationKeys = {
   taskProgress: [
     projectQueryKeys.tasks,
     projectQueryKeys.gantt,
+    projectQueryKeys.requirements,
     projectQueryKeys.dashboardPrefix,
   ],
   taskDates: [

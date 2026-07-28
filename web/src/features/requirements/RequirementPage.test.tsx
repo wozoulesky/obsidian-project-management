@@ -1,5 +1,7 @@
 import {
+  act,
   cleanup,
+  fireEvent,
   screen,
   waitFor,
   within,
@@ -20,8 +22,48 @@ import { projectRepository } from '../../data/query-hooks'
 import {
   applyRequirementDrop,
   canSuggestDelivery,
+  createRequirementAnnouncements,
+  getAdjacentBoardStatus,
   RequirementPage,
 } from './RequirementPage'
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
+}
+
+function mockBoardRects() {
+  return vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockImplementation(function (this: HTMLElement) {
+      const region = this.matches('[aria-label$="需求"]')
+        ? this
+        : this.closest<HTMLElement>('[aria-label$="需求"]')
+      const label = region?.getAttribute('aria-label')
+      const left = label === '已评审需求'
+        ? 0
+        : label === '开发中需求'
+          ? 240
+          : label === '已交付需求'
+            ? 480
+            : 0
+      return {
+        bottom: 200,
+        height: 200,
+        left,
+        right: left + 220,
+        top: 0,
+        width: 220,
+        x: left,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect
+    })
+}
 
 function requirement(overrides: Partial<Requirement>): Requirement {
   return {
@@ -198,9 +240,10 @@ describe('RequirementPage lifecycle board', () => {
   })
 
   it('keeps the selected value and reports an update error', async () => {
-    vi.spyOn(projectRepository, 'updateRequirementStatus').mockRejectedValueOnce(
-      new Error('状态服务不可用'),
-    )
+    const updateStatus = vi.spyOn(
+      projectRepository,
+      'updateRequirementStatus',
+    ).mockRejectedValueOnce(new Error('状态服务不可用'))
     const user = userEvent.setup()
     renderApp(<RequirementPage />)
 
@@ -222,6 +265,16 @@ describe('RequirementPage lifecycle board', () => {
       '状态服务不可用',
     )
     expect(select).toHaveValue('delivered')
+
+    await user.click(
+      within(dialog).getByRole('button', { name: '保存需求状态' }),
+    )
+    await waitFor(() => {
+      expect(updateStatus).toHaveBeenCalledTimes(2)
+    })
+    await waitFor(() => {
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
+    })
   })
 
   it('disables save while the explicit update is pending', async () => {
@@ -243,6 +296,103 @@ describe('RequirementPage lifecycle board', () => {
     await user.click(save)
 
     expect(save).toBeDisabled()
+  })
+
+  it('serializes inspector save and drag, then unlocks after settlement', async () => {
+    mockBoardRects()
+    const pending = deferred<Requirement>()
+    const updateStatus = vi.spyOn(
+      projectRepository,
+      'updateRequirementStatus',
+    ).mockImplementationOnce(() => pending.promise)
+    const user = userEvent.setup()
+    renderApp(<RequirementPage />)
+
+    await user.click(await screen.findByRole('button', {
+      name: '查看 Agent 身份注册',
+    }))
+    const dialog = screen.getByRole('dialog', { name: 'Agent 身份注册' })
+    await user.selectOptions(
+      within(dialog).getByRole('combobox', { name: '需求状态' }),
+      'delivered',
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: '保存需求状态' }),
+    )
+
+    await waitFor(() => {
+      expect(updateStatus).toHaveBeenCalledTimes(1)
+    })
+    const handles = screen.getAllByRole('button', { name: /^拖动 / })
+    await waitFor(() => {
+      expect(handles.every((handle) => handle.hasAttribute('disabled')))
+        .toBe(true)
+    })
+    const developingHandle = screen.getByRole('button', {
+      name: '拖动 Agent 身份注册',
+    })
+    fireEvent.keyDown(developingHandle, { code: 'Space', key: ' ' })
+    fireEvent.keyDown(developingHandle, {
+      code: 'ArrowLeft',
+      key: 'ArrowLeft',
+    })
+    fireEvent.keyDown(developingHandle, { code: 'Space', key: ' ' })
+    expect(updateStatus).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      pending.resolve(requirement({
+        id: 'req-013',
+        title: 'Agent 身份注册',
+        status: 'delivered',
+      }))
+      await pending.promise
+    })
+    await waitFor(() => {
+      expect(developingHandle).not.toBeDisabled()
+    })
+
+    developingHandle.focus()
+    await user.keyboard('[Space]{ArrowLeft}[Space]')
+    await waitFor(() => {
+      expect(updateStatus).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('reports a rejected drag mutation and unlocks the handles', async () => {
+    mockBoardRects()
+    vi.spyOn(projectRepository, 'updateRequirementStatus').mockRejectedValueOnce(
+      new Error('拖拽状态更新失败'),
+    )
+    const user = userEvent.setup()
+    renderApp(<RequirementPage />)
+
+    const handle = await screen.findByRole('button', {
+      name: '拖动 项目排期可视化',
+    })
+    handle.focus()
+    await user.keyboard('[Space]{ArrowRight}[Space]')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '拖拽状态更新失败',
+    )
+    await waitFor(() => {
+      expect(handle).not.toBeDisabled()
+    })
+  })
+
+  it('exposes localized keyboard drag instructions and wired handles', async () => {
+    renderApp(<RequirementPage />)
+
+    const handle = await screen.findByRole('button', {
+      name: '拖动 Agent 身份注册',
+    })
+    expect(handle).toHaveAttribute('role', 'button')
+    expect(handle).toHaveAttribute('tabindex', '0')
+    const describedBy = handle.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(describedBy as string)).toHaveTextContent(
+      '按空格键拿起需求卡片',
+    )
   })
 
   it('closes after its selected card is filtered out and focuses the page heading', async () => {
@@ -419,5 +569,41 @@ describe('canSuggestDelivery', () => {
       linkedTaskIds: [],
       completedTaskCount: 0,
     }))).toBe(false)
+  })
+})
+
+describe('requirement DnD accessibility helpers', () => {
+  it('moves left or right to one adjacent lifecycle column', () => {
+    expect(getAdjacentBoardStatus('developing', 'ArrowLeft')).toBe('reviewed')
+    expect(getAdjacentBoardStatus('developing', 'ArrowRight'))
+      .toBe('delivered')
+    expect(getAdjacentBoardStatus('reviewed', 'ArrowLeft')).toBeNull()
+    expect(getAdjacentBoardStatus('delivered', 'ArrowRight')).toBeNull()
+  })
+
+  it('announces requirement titles and localized statuses without internal IDs', () => {
+    const announcements = createRequirementAnnouncements([
+      requirement({
+        id: 'internal-req-id',
+        title: '中文需求标题',
+        status: 'developing',
+      }),
+    ])
+    const active = { id: 'internal-req-id' }
+    const over = { id: 'delivered' }
+    const start = announcements.onDragStart({ active } as never)
+    const overMessage = announcements.onDragOver({ active, over } as never)
+    const end = announcements.onDragEnd({ active, over } as never)
+    const cancel = announcements.onDragCancel(
+      { active, over: null } as never,
+    )
+
+    expect(start).toContain('中文需求标题')
+    expect(overMessage).toContain('已交付')
+    expect(end).toContain('中文需求标题')
+    expect(end).toContain('已交付')
+    expect(cancel).toContain('已取消')
+    expect([start, overMessage, end, cancel].join(' '))
+      .not.toContain('internal-req-id')
   })
 })

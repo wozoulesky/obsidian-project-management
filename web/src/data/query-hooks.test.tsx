@@ -49,6 +49,7 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.tasks)).toBe(true)
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.requirements)).toBe(true)
   })
 
   it('invalidates all scheduling-dependent views', async () => {

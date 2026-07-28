@@ -207,7 +207,7 @@ function createRequirements(): Requirement[] {
       title: 'Agent 身份注册',
       priority: 'P0',
       status: 'developing',
-      linkedTaskIds: ['task-040', 'task-047', 'task-051', 'task-052'],
+      linkedTaskIds: ['task-040', 'task-042', 'task-043', 'task-052'],
       completedTaskCount: 4,
       acceptanceCriteria: [
         '重复注册返回已有身份',
