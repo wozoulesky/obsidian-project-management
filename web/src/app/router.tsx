@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { TaskPage } from '../features/tasks/TaskPage'
 
 const DashboardPage = lazy(() =>
   import('../features/dashboard/DashboardPage').then((module) => ({
@@ -8,9 +7,20 @@ const DashboardPage = lazy(() =>
   })),
 )
 
+const TaskPage = lazy(() =>
+  import('../features/tasks/TaskPage').then((module) => ({
+    default: module.TaskPage,
+  })),
+)
+
+const RequirementPage = lazy(() =>
+  import('../features/requirements/RequirementPage').then((module) => ({
+    default: module.RequirementPage,
+  })),
+)
+
 const routes = [
   { path: '/gantt', heading: '甘特图' },
-  { path: '/requirements', heading: '需求' },
   { path: '/defects', heading: '缺陷' },
   { path: '/settings', heading: '设置' },
 ] as const
@@ -33,7 +43,34 @@ export function AppRoutes() {
           </Suspense>
         }
       />
-      <Route path="/tasks" element={<TaskPage />} />
+      <Route
+        path="/tasks"
+        element={
+          <Suspense
+            fallback={
+              <section className="task-page" aria-busy="true">
+                <p role="status">正在加载任务…</p>
+              </section>
+            }
+          >
+            <TaskPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/requirements"
+        element={
+          <Suspense
+            fallback={
+              <section className="requirement-page" aria-busy="true">
+                <p role="status">正在加载需求…</p>
+              </section>
+            }
+          >
+            <RequirementPage />
+          </Suspense>
+        }
+      />
       {routes.map(({ heading, path }) => (
         <Route
           element={

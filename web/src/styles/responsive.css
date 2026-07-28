@@ -146,4 +146,33 @@
   .task-table {
     max-height: 60vh;
   }
+
+  .requirement-page {
+    padding: var(--space-3);
+  }
+
+  .requirement-page__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .requirement-page__controls {
+    justify-content: space-between;
+  }
+
+  .requirement-page__content {
+    padding: var(--space-2);
+  }
+
+  .requirement-board {
+    min-width: 44rem;
+    grid-template-columns: repeat(3, minmax(13.5rem, 1fr));
+  }
+
+  .requirement-page__workspace .entity-inspector {
+    width: 100%;
+    max-height: none;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
 }
