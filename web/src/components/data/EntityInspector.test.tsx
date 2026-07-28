@@ -30,6 +30,35 @@ function InspectorHarness({ onClose = vi.fn() }: { onClose?: () => void }) {
   )
 }
 
+function ReplacedTriggerHarness() {
+  const [open, setOpen] = useState(false)
+  const [replacement, setReplacement] = useState(false)
+
+  return (
+    <>
+      <button
+        id="replaceable-trigger"
+        key={replacement ? 'replacement' : 'original'}
+        onClick={() => setOpen(true)}
+        type="button"
+      >
+        {replacement ? '替换后的触发点' : '打开可替换触发点'}
+      </button>
+      {open ? (
+        <EntityInspector
+          onClose={() => setOpen(false)}
+          returnFocusId="replaceable-trigger"
+          title="可替换实体"
+        >
+          <button onClick={() => setReplacement(true)} type="button">
+            替换触发点节点
+          </button>
+        </EntityInspector>
+      ) : null}
+    </>
+  )
+}
+
 describe('EntityInspector', () => {
   it('labels the dialog with its title and moves focus to close', async () => {
     const user = userEvent.setup()
@@ -81,5 +110,27 @@ describe('EntityInspector', () => {
     await user.keyboard('{Escape}')
 
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('restores focus by id when the captured trigger node was replaced', async () => {
+    const user = userEvent.setup()
+    render(<ReplacedTriggerHarness />)
+
+    const originalTrigger = screen.getByRole('button', {
+      name: '打开可替换触发点',
+    })
+    await user.click(originalTrigger)
+    await user.click(
+      screen.getByRole('button', { name: '替换触发点节点' }),
+    )
+    const replacementTrigger = screen.getByRole('button', {
+      name: '替换后的触发点',
+    })
+    expect(replacementTrigger).not.toBe(originalTrigger)
+    await user.click(
+      screen.getByRole('button', { name: '关闭 可替换实体' }),
+    )
+
+    expect(replacementTrigger).toHaveFocus()
   })
 })

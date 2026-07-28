@@ -1,4 +1,4 @@
-import { useRef, type RefObject } from 'react'
+import { useMemo, useRef, type RefObject } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -34,6 +34,7 @@ function taskColumns(onSelect: (taskId: string) => void): ColumnDef<Task>[] {
         <button
           aria-label={`查看 ${row.original.title}`}
           className="task-table__task-button"
+          id={`task-trigger-${row.original.id}`}
           onClick={() => onSelect(row.original.id)}
           type="button"
         >
@@ -173,10 +174,11 @@ export function TaskTable({
   tasks,
 }: TaskTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const columns = useMemo(() => taskColumns(onSelect), [onSelect])
   // TanStack Table intentionally exposes a stateful table instance API.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    columns: taskColumns(onSelect),
+    columns,
     data: tasks,
     getCoreRowModel: getCoreRowModel(),
   })

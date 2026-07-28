@@ -206,4 +206,38 @@ describe('TaskPage workflow', () => {
       within(secondDialog).getByRole('textbox', { name: '备注' }),
     ).toHaveValue('')
   })
+
+  it('restores focus to the latest task trigger after switching tasks', async () => {
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/tasks' })
+
+    const firstTrigger = await screen.findByRole('button', {
+      name: '查看 MCP 权限校验',
+    })
+    await user.click(firstTrigger)
+    expect(
+      screen.getByRole('dialog', { name: 'MCP 权限校验' }),
+    ).toBeVisible()
+
+    const latestTrigger = screen.getByRole('button', {
+      name: '查看 断线恢复测试',
+    })
+    await user.click(latestTrigger)
+
+    const latestDialog = screen.getByRole('dialog', {
+      name: '断线恢复测试',
+    })
+    expect(
+      within(latestDialog).getByRole('spinbutton', { name: '任务进度' }),
+    ).toHaveValue(45)
+    await user.click(
+      within(latestDialog).getByRole('button', {
+        name: '关闭 断线恢复测试',
+      }),
+    )
+
+    expect(
+      screen.getByRole('button', { name: '查看 断线恢复测试' }),
+    ).toHaveFocus()
+  })
 })
