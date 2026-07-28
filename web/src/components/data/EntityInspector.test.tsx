@@ -59,6 +59,40 @@ function ReplacedTriggerHarness() {
   )
 }
 
+function RemovedTriggerHarness() {
+  const [open, setOpen] = useState(false)
+  const [showTrigger, setShowTrigger] = useState(true)
+
+  return (
+    <>
+      <h1 id="fallback-heading" tabIndex={-1}>
+        任务工作台
+      </h1>
+      {showTrigger ? (
+        <button
+          id="removable-trigger"
+          onClick={() => setOpen(true)}
+          type="button"
+        >
+          打开可移除触发点
+        </button>
+      ) : null}
+      {open ? (
+        <EntityInspector
+          fallbackFocusId="fallback-heading"
+          onClose={() => setOpen(false)}
+          returnFocusId="removable-trigger"
+          title="可移除实体"
+        >
+          <button onClick={() => setShowTrigger(false)} type="button">
+            移除触发点
+          </button>
+        </EntityInspector>
+      ) : null}
+    </>
+  )
+}
+
 describe('EntityInspector', () => {
   it('labels the dialog with its title and moves focus to close', async () => {
     const user = userEvent.setup()
@@ -132,5 +166,20 @@ describe('EntityInspector', () => {
     )
 
     expect(replacementTrigger).toHaveFocus()
+  })
+
+  it('focuses the fallback when return and captured targets were removed', async () => {
+    const user = userEvent.setup()
+    render(<RemovedTriggerHarness />)
+
+    await user.click(
+      screen.getByRole('button', { name: '打开可移除触发点' }),
+    )
+    await user.click(screen.getByRole('button', { name: '移除触发点' }))
+    await user.click(
+      screen.getByRole('button', { name: '关闭 可移除实体' }),
+    )
+
+    expect(screen.getByRole('heading', { name: '任务工作台' })).toHaveFocus()
   })
 })

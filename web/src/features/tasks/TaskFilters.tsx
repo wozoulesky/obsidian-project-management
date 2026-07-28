@@ -64,10 +64,14 @@ export function filterTasks(
 }
 
 export interface TaskFiltersProps {
+  onFiltersChange?: () => void
   tasks: readonly Task[]
 }
 
-export function TaskFilters({ tasks }: TaskFiltersProps) {
+export function TaskFilters({
+  onFiltersChange,
+  tasks,
+}: TaskFiltersProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const assignees = Array.from(
     new Map(tasks.map((item) => [item.assignee.id, item.assignee])).values(),
@@ -83,6 +87,9 @@ export function TaskFilters({ tasks }: TaskFiltersProps) {
       }
       return next
     })
+    if (onFiltersChange) {
+      queueMicrotask(onFiltersChange)
+    }
   }
 
   const selectedStatus = includesValue(taskStatuses, searchParams.get('status'))
@@ -105,7 +112,12 @@ export function TaskFilters({ tasks }: TaskFiltersProps) {
       <button
         aria-pressed={selectedStatus === 'overdue'}
         className="task-filters__overdue"
-        onClick={() => setParam('status', 'overdue')}
+        onClick={() =>
+          setParam(
+            'status',
+            selectedStatus === 'overdue' ? '' : 'overdue',
+          )
+        }
         type="button"
       >
         已延期

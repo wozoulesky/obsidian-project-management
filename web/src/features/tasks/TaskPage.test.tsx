@@ -9,8 +9,21 @@ import { createFixtureSeed } from '../../data/fixtures'
 import { projectRepository } from '../../data/query-hooks'
 import { filterTasks } from './TaskFilters'
 import { TaskInspector } from './TaskInspector'
+import { TaskTable } from './TaskTable'
 
 const fixtureTasks = createFixtureSeed().tasks
+
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 44,
+    getVirtualItems: () =>
+      Array.from({ length: Math.min(count, 3) }, (_, index) => ({
+        index,
+        start: index * 44,
+      })),
+    measureElement: vi.fn(),
+  }),
+}))
 
 function task(overrides: Partial<Task>): Task {
   return {
@@ -96,6 +109,53 @@ describe('TaskPage workflow', () => {
       .toBeVisible()
     expect(screen.queryByRole('button', { name: '查看 甘特图渲染' }))
       .not.toBeInTheDocument()
+  })
+
+  it('toggles the overdue filter off and restores the full result', async () => {
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/tasks' })
+
+    await screen.findByRole('button', { name: '查看 MCP 权限校验' })
+    const overdue = screen.getByRole('button', { name: '已延期' })
+    await user.click(overdue)
+    expect(overdue).toHaveAttribute('aria-pressed', 'true')
+    expect(window.location.search).toContain('status=overdue')
+
+    await user.click(overdue)
+
+    expect(window.location.search).not.toContain('status=')
+    expect(overdue).toHaveAttribute('aria-pressed', 'false')
+    expect(
+      screen.getByRole('button', { name: '查看 MCP 权限校验' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: '查看 甘特图渲染' }),
+    ).toBeVisible()
+  })
+
+  it('closes and clears an inspector hidden by a new filter', async () => {
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/tasks' })
+
+    await user.click(
+      await screen.findByRole('button', { name: '查看 MCP 权限校验' }),
+    )
+    expect(
+      screen.getByRole('dialog', { name: 'MCP 权限校验' }),
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: '已延期' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: '任务工作台' }),
+    ).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: '已延期' }))
+    expect(
+      screen.getByRole('button', { name: '查看 MCP 权限校验' }),
+    ).toBeVisible()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('updates MCP permission validation to 80 percent', async () => {
@@ -239,5 +299,36 @@ describe('TaskPage workflow', () => {
     expect(
       screen.getByRole('button', { name: '查看 断线恢复测试' }),
     ).toHaveFocus()
+  })
+
+  it('uses the shared six-column grid in the virtual table branch', () => {
+    const virtualTasks = Array.from({ length: 101 }, (_, index) =>
+      task({
+        id: `virtual-${index}`,
+        code: `VIRTUAL-${index}`,
+        title: `虚拟任务 ${index}`,
+      }),
+    )
+    const { container } = renderApp(
+      <TaskTable
+        onSelect={vi.fn()}
+        selectedTaskId={null}
+        tasks={virtualTasks}
+      />,
+    )
+
+    const table = screen.getByRole('table', { name: '任务列表' })
+    expect(within(table).getAllByRole('columnheader')).toHaveLength(6)
+    expect(within(table).getAllByRole('row')[0]).toHaveClass(
+      'task-table__grid-row',
+    )
+    const virtualBody = container.querySelector(
+      '.task-table__virtual-body',
+    )
+    expect(virtualBody).toBeInTheDocument()
+    const renderedRows = within(virtualBody as HTMLElement).getAllByRole('row')
+    expect(renderedRows.length).toBeGreaterThan(0)
+    expect(renderedRows[0]).toHaveClass('task-table__grid-row')
+    expect(within(renderedRows[0]!).getAllByRole('cell')).toHaveLength(6)
   })
 })

@@ -7,6 +7,7 @@ import {
 
 export interface EntityInspectorProps {
   children: ReactNode
+  fallbackFocusId?: string
   onClose: () => void
   returnFocusId?: string
   title: string
@@ -14,6 +15,7 @@ export interface EntityInspectorProps {
 
 export function EntityInspector({
   children,
+  fallbackFocusId,
   onClose,
   returnFocusId,
   title,
@@ -22,13 +24,15 @@ export function EntityInspector({
   const inspectorRef = useRef<HTMLElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const onCloseRef = useRef(onClose)
+  const fallbackFocusIdRef = useRef(fallbackFocusId)
   const returnFocusIdRef = useRef(returnFocusId)
   const restoreTargetRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     onCloseRef.current = onClose
+    fallbackFocusIdRef.current = fallbackFocusId
     returnFocusIdRef.current = returnFocusId
-  }, [onClose, returnFocusId])
+  }, [fallbackFocusId, onClose, returnFocusId])
 
   useEffect(() => {
     const initialTrigger =
@@ -44,33 +48,28 @@ export function EntityInspector({
         onCloseRef.current()
       }
     }
-    const handleFocusIn = (event: FocusEvent) => {
-      const target =
-        event.target instanceof HTMLElement ? event.target : null
-      if (
-        target &&
-        target !== document.body &&
-        !inspectorRef.current?.contains(target)
-      ) {
-        restoreTargetRef.current = target
-      }
-    }
-
     document.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('focusin', handleFocusIn)
     closeButtonRef.current?.focus()
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('focusin', handleFocusIn)
       const idTarget = returnFocusIdRef.current
         ? document.getElementById(returnFocusIdRef.current)
         : null
+      const capturedTarget = restoreTargetRef.current
+      const fallbackTarget = fallbackFocusIdRef.current
+        ? document.getElementById(fallbackFocusIdRef.current)
+        : null
       const restoreTarget =
-        idTarget instanceof HTMLElement
+        idTarget instanceof HTMLElement && idTarget.isConnected
           ? idTarget
-          : restoreTargetRef.current
-      if (restoreTarget?.isConnected) {
+          : capturedTarget?.isConnected
+            ? capturedTarget
+            : fallbackTarget instanceof HTMLElement &&
+                fallbackTarget.isConnected
+              ? fallbackTarget
+              : null
+      if (restoreTarget) {
         restoreTarget.focus()
       }
     }

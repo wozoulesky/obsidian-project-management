@@ -13,7 +13,7 @@ export function TaskPage() {
   const tasks = tasksQuery.data ?? []
   const filteredTasks = filterTasks(tasks, searchParams)
   const selectedTask =
-    tasks.find((task) => task.id === selectedTaskId) ?? null
+    filteredTasks.find((task) => task.id === selectedTaskId) ?? null
 
   if (tasksQuery.isPending) {
     return (
@@ -36,11 +36,16 @@ export function TaskPage() {
       <header className="task-page__header">
         <div>
           <p className="task-page__eyebrow">计划 / 任务</p>
-          <h1>任务工作台</h1>
+          <h1 id="task-page-heading" tabIndex={-1}>
+            任务工作台
+          </h1>
         </div>
         <p>{filteredTasks.length} / {tasks.length} 项</p>
       </header>
-      <TaskFilters tasks={tasks} />
+      <TaskFilters
+        onFiltersChange={() => setSelectedTaskId(null)}
+        tasks={tasks}
+      />
       <div className="data-grid-with-inspector task-page__workspace">
         {tasks.length === 0 ? (
           <p className="task-page__empty">当前没有任务。</p>
@@ -55,6 +60,7 @@ export function TaskPage() {
         )}
         {selectedTask ? (
           <TaskInspector
+            fallbackFocusId="task-page-heading"
             onClose={() => setSelectedTaskId(null)}
             task={selectedTask}
           />

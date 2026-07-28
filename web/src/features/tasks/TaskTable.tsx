@@ -110,7 +110,12 @@ function TaskRow({
 }) {
   return (
     <tr
-      className={row.original.id === selectedTaskId ? 'is-selected' : undefined}
+      className={[
+        'task-table__grid-row',
+        row.original.id === selectedTaskId ? 'is-selected' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       {row.getVisibleCells().map((cell) => (
         <td key={cell.id}>
@@ -148,9 +153,12 @@ function VirtualTaskBody({
         const row = rows[virtualRow.index]!
         return (
           <tr
-            className={
-              row.original.id === selectedTaskId ? 'is-selected' : undefined
-            }
+            className={[
+              'task-table__grid-row',
+              row.original.id === selectedTaskId ? 'is-selected' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             data-index={virtualRow.index}
             key={row.id}
             ref={rowVirtualizer.measureElement}
@@ -189,7 +197,7 @@ export function TaskTable({
       <table aria-label="任务列表">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id}>
+            <tr className="task-table__grid-row" key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
                 <th key={header.id} scope="col">
                   {header.isPlaceholder

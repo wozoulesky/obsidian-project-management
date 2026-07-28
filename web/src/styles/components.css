@@ -696,13 +696,33 @@
 }
 
 .task-table table {
-  min-width: 48rem;
+  display: grid;
+  min-width: 55rem;
 }
 
-.task-table th {
+.task-table thead {
   position: sticky;
-  z-index: 1;
+  z-index: 2;
   top: 0;
+  display: block;
+  background: var(--canvas);
+}
+
+.task-table tbody {
+  display: block;
+  width: 100%;
+}
+
+.task-table__grid-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns:
+    minmax(18rem, 2.4fr)
+    minmax(7rem, 0.8fr)
+    minmax(8rem, 1fr)
+    minmax(10rem, 1.2fr)
+    minmax(8rem, 0.9fr)
+    minmax(5rem, 0.6fr);
 }
 
 .task-table th,
@@ -754,9 +774,7 @@
 
 .task-table__virtual-body tr {
   position: absolute;
-  display: table;
   width: 100%;
-  table-layout: fixed;
 }
 
 .entity-inspector {
