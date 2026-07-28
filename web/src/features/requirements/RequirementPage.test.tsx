@@ -446,17 +446,23 @@ describe('RequirementPage query and terminal states', () => {
 
     renderApp(<RequirementPage />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('正在加载需求')
+    expect(
+      screen.getByRole('status', { name: '正在加载项目数据' }),
+    ).toBeVisible()
   })
 
   it('shows query errors', async () => {
     vi.spyOn(projectRepository, 'listRequirements').mockRejectedValueOnce(
-      new Error('offline'),
+      new Error('数据库文件不可访问'),
     )
 
     renderApp(<RequirementPage />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('需求加载失败')
+    expect(
+      await screen.findByRole('heading', { name: '无法读取本地项目数据' }),
+    ).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent('数据库文件不可访问')
+    expect(screen.getByRole('button', { name: '重试' })).toBeVisible()
   })
 
   it('shows an empty project state', async () => {
@@ -464,7 +470,7 @@ describe('RequirementPage query and terminal states', () => {
 
     renderApp(<RequirementPage />)
 
-    expect(await screen.findByText('当前没有需求。')).toBeVisible()
+    expect(await screen.findByText('当前项目暂无需求')).toBeVisible()
   })
 
   it('shows rejected and shelved only through the terminal-state filter', async () => {

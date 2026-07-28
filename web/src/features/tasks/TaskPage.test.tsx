@@ -1,14 +1,28 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../app/router'
 import { renderApp } from '../../app/test-utils'
 import type { Task } from '../../data/domain'
 import { createFixtureSeed } from '../../data/fixtures'
-import { projectRepository } from '../../data/query-hooks'
+import {
+  projectQueryKeys,
+  projectRepository,
+} from '../../data/query-hooks'
 import { filterTasks } from './TaskFilters'
 import { TaskInspector } from './TaskInspector'
+import { TaskPage } from './TaskPage'
 import { TaskTable } from './TaskTable'
 
 const fixtureTasks = createFixtureSeed().tasks
@@ -40,6 +54,24 @@ function task(overrides: Partial<Task>): Task {
     milestoneId: 'm2',
     dependencyIds: [],
     ...overrides,
+  }
+}
+
+function renderTaskPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>{children}</BrowserRouter>
+    </QueryClientProvider>
+  )
+  return {
+    queryClient,
+    ...render(<TaskPage />, { wrapper }),
   }
 }
 
@@ -97,6 +129,73 @@ describe('filterTasks', () => {
 })
 
 describe('TaskPage workflow', () => {
+  it('uses shared loading, error with retry, and empty states', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(projectRepository, 'listTasks').mockImplementationOnce(
+      () => new Promise(() => {}),
+    )
+    const loading = renderApp(<AppRoutes />, { route: '/tasks' })
+    expect(
+      await screen.findByRole('status', { name: '正在加载项目数据' }),
+    ).toBeVisible()
+    loading.unmount()
+
+    const listTasks = vi.spyOn(projectRepository, 'listTasks')
+    listTasks.mockReset()
+      .mockRejectedValueOnce(new Error('数据库文件不可访问'))
+      .mockResolvedValueOnce([])
+    const error = renderApp(<AppRoutes />, { route: '/tasks' })
+    expect(
+      await screen.findByRole('heading', { name: '无法读取本地项目数据' }),
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: '重试' }))
+    expect(listTasks).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText('当前项目暂无任务')).toBeVisible()
+    error.unmount()
+  })
+
+  it('retains task content while a background refresh is pending', async () => {
+    vi.spyOn(projectRepository, 'listTasks')
+      .mockResolvedValueOnce(fixtureTasks)
+      .mockImplementationOnce(() => new Promise(() => {}))
+    const { queryClient } = renderTaskPage()
+
+    await screen.findByRole('button', {
+      name: '查看 MCP 权限校验',
+    })
+    act(() => {
+      void queryClient.invalidateQueries({ queryKey: projectQueryKeys.tasks })
+    })
+
+    expect(
+      await screen.findByRole('status', { name: '正在刷新项目数据' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: '查看 MCP 权限校验' }),
+    ).toBeVisible()
+  })
+
+  it('retains task content and warns when a background refresh fails', async () => {
+    vi.spyOn(projectRepository, 'listTasks')
+      .mockResolvedValueOnce(fixtureTasks)
+      .mockRejectedValueOnce(new Error('数据库文件不可访问'))
+    const { queryClient } = renderTaskPage()
+
+    await screen.findByRole('button', {
+      name: '查看 MCP 权限校验',
+    })
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: projectQueryKeys.tasks })
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '刷新失败，正在显示上次数据。数据库文件不可访问',
+    )
+    expect(
+      screen.getByRole('button', { name: '查看 MCP 权限校验' }),
+    ).toBeVisible()
+  })
+
   it('opens a valid visible task from the selected query parameter', async () => {
     renderApp(<AppRoutes />, {
       route: '/tasks?selected=task-047',

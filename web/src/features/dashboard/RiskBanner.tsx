@@ -7,7 +7,7 @@ export function RiskBanner({ risks }: { risks: RiskItem[] }) {
   if (risks.length === 0) {
     return (
       <section className="risk-banner risk-banner--clear" aria-label="项目风险">
-        <span>当前没有高风险事项</span>
+        <span>当前无逾期或临期事项</span>
       </section>
     )
   }

@@ -2,6 +2,11 @@ import { useState } from 'react'
 
 import { StatusDonut } from '../../components/charts/StatusDonut'
 import { TrendChart } from '../../components/charts/TrendChart'
+import {
+  ErrorState,
+  LoadingState,
+  RefreshState,
+} from '../../components/data/DataState'
 import { Badge } from '../../components/ui/Badge'
 import type { RiskItem } from '../../data/domain'
 import { useDashboard } from '../../data/query-hooks'
@@ -22,21 +27,26 @@ export function DashboardPage() {
   const selectedRisk =
     snapshot?.risks.find((risk) => risk.id === selectedRiskId) ?? null
 
-  if (dashboard.isError) {
+  if (dashboard.isError && !snapshot) {
     return (
       <section className="dashboard-page">
-        <p role="alert">项目健康数据加载失败，请稍后重试。</p>
+        <ErrorState
+          error={dashboard.error}
+          isRetrying={dashboard.isFetching}
+          onRetry={() => dashboard.refetch()}
+        />
       </section>
     )
   }
 
-  if (dashboard.isPending || !snapshot) {
+  if (dashboard.isPending && !snapshot) {
     return (
-      <section className="dashboard-page" aria-busy="true">
-        <p role="status">正在加载项目健康数据…</p>
+      <section className="dashboard-page">
+        <LoadingState />
       </section>
     )
   }
+  if (!snapshot) return null
 
   const completionRate =
     snapshot.metrics.totalTasks === 0
@@ -49,6 +59,12 @@ export function DashboardPage() {
 
   return (
     <section className="dashboard-page">
+      <RefreshState
+        dataUpdatedAt={dashboard.dataUpdatedAt}
+        error={dashboard.error}
+        isError={dashboard.isError}
+        isFetching={dashboard.isFetching}
+      />
       <header className="dashboard-page__header">
         <div>
           <p className="dashboard-page__eyebrow">PROJECT HEALTH</p>

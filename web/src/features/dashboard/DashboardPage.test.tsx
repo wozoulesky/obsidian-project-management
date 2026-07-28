@@ -69,14 +69,33 @@ describe('DashboardPage', () => {
 
   it('shows an alert when the dashboard query fails', async () => {
     vi.spyOn(projectRepository, 'getDashboard').mockRejectedValueOnce(
-      new Error('fixture failure'),
+      new Error('数据库文件不可访问'),
     )
 
     renderApp(<DashboardPage />)
 
     expect(
+      await screen.findByRole('heading', { name: '无法读取本地项目数据' }),
+    ).toBeInTheDocument()
+    expect(
       await screen.findByRole('alert'),
-    ).toHaveTextContent('项目健康数据加载失败，请稍后重试。')
+    ).toHaveTextContent('数据库文件不可访问')
+    expect(screen.getByRole('button', { name: '重试' })).toBeVisible()
+  })
+
+  it('keeps dashboard metrics visible when the risk queue is empty', async () => {
+    const snapshot = await projectRepository.getDashboard('atlas', 30)
+    vi.spyOn(projectRepository, 'getDashboard').mockResolvedValueOnce({
+      ...snapshot,
+      risks: [],
+    })
+
+    renderApp(<DashboardPage />)
+
+    expect(
+      await screen.findByText('当前无逾期或临期事项'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '项目指标' })).toBeVisible()
   })
 
   it('derives the selected risk from each new dashboard snapshot', async () => {

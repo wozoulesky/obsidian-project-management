@@ -1,6 +1,12 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import { EntityInspector } from '../../components/data/EntityInspector'
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  RefreshState,
+} from '../../components/data/DataState'
 import type { Task } from '../../data/domain'
 import {
   useGanttTasks,
@@ -249,19 +255,21 @@ export function GanttPage() {
     )
   }
 
-  if (tasksQuery.isPending) {
+  if (tasksQuery.isPending && !tasksQuery.data) {
     return (
-      <section aria-busy="true" className="gantt-page">
-        <p role="status">正在加载甘特图…</p>
+      <section className="gantt-page">
+        <LoadingState />
       </section>
     )
   }
-  if (tasksQuery.isError) {
+  if (tasksQuery.isError && !tasksQuery.data) {
     return (
       <section className="gantt-page">
-        <p role="alert">
-          {errorMessage(tasksQuery.error, '甘特图数据加载失败')}
-        </p>
+        <ErrorState
+          error={tasksQuery.error}
+          isRetrying={tasksQuery.isFetching}
+          onRetry={() => tasksQuery.refetch()}
+        />
       </section>
     )
   }
@@ -272,6 +280,12 @@ export function GanttPage() {
 
   return (
     <section className="gantt-page">
+      <RefreshState
+        dataUpdatedAt={tasksQuery.dataUpdatedAt}
+        error={tasksQuery.error}
+        isError={tasksQuery.isError}
+        isFetching={tasksQuery.isFetching}
+      />
       <header className="gantt-page__header">
         <div>
           <p className="gantt-page__eyebrow">PLAN / DEPENDENCY</p>
@@ -307,7 +321,7 @@ export function GanttPage() {
       </header>
 
       {tasks.length === 0 ? (
-        <p className="gantt-page__empty">暂无排期任务</p>
+        <EmptyState title="当前项目暂无排期任务" />
       ) : (
         <div className="gantt-page__workspace data-grid-with-inspector">
           <div className="gantt-scroll-region">

@@ -317,18 +317,24 @@ describe('DefectPage workflow', () => {
     const pending = new Promise<Defect[]>(() => undefined)
     vi.spyOn(projectRepository, 'listDefects').mockReturnValueOnce(pending)
     const loading = renderApp(<AppRoutes />, { route: '/defects' })
-    expect(await screen.findByRole('status')).toHaveTextContent('正在加载缺陷')
+    expect(
+      await screen.findByRole('status', { name: '正在加载项目数据' }),
+    ).toBeVisible()
     loading.unmount()
 
     vi.spyOn(projectRepository, 'listDefects').mockRejectedValueOnce(
       new Error('缺陷数据不可用'),
     )
     const error = renderApp(<AppRoutes />, { route: '/defects' })
-    expect(await screen.findByRole('alert')).toHaveTextContent('缺陷数据不可用')
+    expect(
+      await screen.findByRole('heading', { name: '无法读取本地项目数据' }),
+    ).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent('缺陷数据不可用')
+    expect(screen.getByRole('button', { name: '重试' })).toBeVisible()
     error.unmount()
 
     vi.spyOn(projectRepository, 'listDefects').mockResolvedValueOnce([])
     renderApp(<AppRoutes />, { route: '/defects' })
-    expect(await screen.findByText('暂无缺陷')).toBeVisible()
+    expect(await screen.findByText('当前项目暂无缺陷')).toBeVisible()
   })
 })

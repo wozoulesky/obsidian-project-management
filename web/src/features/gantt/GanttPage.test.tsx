@@ -194,16 +194,22 @@ describe('GanttPage layout', () => {
         }),
     )
     const loading = renderApp(<GanttPage />)
-    expect(screen.getByRole('status')).toHaveTextContent('正在加载甘特图')
+    expect(
+      screen.getByRole('status', { name: '正在加载项目数据' }),
+    ).toBeVisible()
     resolveTasks([])
-    expect(await screen.findByText('暂无排期任务')).toBeInTheDocument()
+    expect(await screen.findByText('当前项目暂无排期任务')).toBeInTheDocument()
     loading.unmount()
 
     vi.spyOn(projectRepository, 'listGanttTasks').mockRejectedValueOnce(
       new Error('排期服务不可用'),
     )
     renderApp(<GanttPage />)
-    expect(await screen.findByRole('alert')).toHaveTextContent('排期服务不可用')
+    expect(
+      await screen.findByRole('heading', { name: '无法读取本地项目数据' }),
+    ).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent('排期服务不可用')
+    expect(screen.getByRole('button', { name: '重试' })).toBeVisible()
   })
 })
 

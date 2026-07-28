@@ -1,5 +1,11 @@
 import { useSearchParams } from 'react-router-dom'
 
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  RefreshState,
+} from '../../components/data/DataState'
 import { useTasks } from '../../data/query-hooks'
 import { filterTasks, TaskFilters } from './TaskFilters'
 import { TaskInspector } from './TaskInspector'
@@ -26,24 +32,34 @@ export function TaskPage() {
     })
   }
 
-  if (tasksQuery.isPending) {
+  if (tasksQuery.isPending && !tasksQuery.data) {
     return (
-      <section aria-busy="true" className="task-page">
-        <p role="status">正在加载任务…</p>
+      <section className="task-page">
+        <LoadingState />
       </section>
     )
   }
 
-  if (tasksQuery.isError) {
+  if (tasksQuery.isError && !tasksQuery.data) {
     return (
       <section className="task-page">
-        <p role="alert">任务加载失败，请稍后重试。</p>
+        <ErrorState
+          error={tasksQuery.error}
+          isRetrying={tasksQuery.isFetching}
+          onRetry={() => tasksQuery.refetch()}
+        />
       </section>
     )
   }
 
   return (
     <section className="task-page">
+      <RefreshState
+        dataUpdatedAt={tasksQuery.dataUpdatedAt}
+        error={tasksQuery.error}
+        isError={tasksQuery.isError}
+        isFetching={tasksQuery.isFetching}
+      />
       <header className="task-page__header">
         <div>
           <p className="task-page__eyebrow">计划 / 任务</p>
@@ -56,7 +72,7 @@ export function TaskPage() {
       <TaskFilters tasks={tasks} />
       <div className="data-grid-with-inspector task-page__workspace">
         {tasks.length === 0 ? (
-          <p className="task-page__empty">当前没有任务。</p>
+          <EmptyState title="当前项目暂无任务" />
         ) : filteredTasks.length === 0 ? (
           <p className="task-page__empty">没有符合筛选条件的任务。</p>
         ) : (

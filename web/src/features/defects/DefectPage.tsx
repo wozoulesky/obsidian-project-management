@@ -2,6 +2,12 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { EntityInspector } from '../../components/data/EntityInspector'
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  RefreshState,
+} from '../../components/data/DataState'
 import type {
   Defect,
   DefectStatus,
@@ -263,26 +269,34 @@ export function DefectPage() {
       .length,
   }
 
-  if (defectsQuery.isPending) {
+  if (defectsQuery.isPending && !defectsQuery.data) {
     return (
-      <section className="defect-page" aria-busy="true">
-        <p role="status">正在加载缺陷…</p>
+      <section className="defect-page">
+        <LoadingState />
       </section>
     )
   }
 
-  if (defectsQuery.isError) {
+  if (defectsQuery.isError && !defectsQuery.data) {
     return (
       <section className="defect-page">
-        <p role="alert">
-          {errorMessage(defectsQuery.error, '缺陷数据加载失败')}
-        </p>
+        <ErrorState
+          error={defectsQuery.error}
+          isRetrying={defectsQuery.isFetching}
+          onRetry={() => defectsQuery.refetch()}
+        />
       </section>
     )
   }
 
   return (
     <section className="defect-page">
+      <RefreshState
+        dataUpdatedAt={defectsQuery.dataUpdatedAt}
+        error={defectsQuery.error}
+        isError={defectsQuery.isError}
+        isFetching={defectsQuery.isFetching}
+      />
       <header className="defect-page__header">
         <div>
           <p className="defect-page__eyebrow">QUALITY / RISK</p>
@@ -338,7 +352,7 @@ export function DefectPage() {
       <div className="defect-page__workspace data-grid-with-inspector">
         <div className="defect-table data-grid">
           {allDefects.length === 0 ? (
-            <p className="defect-page__empty">暂无缺陷</p>
+            <EmptyState title="当前项目暂无缺陷" />
           ) : visibleDefects.length === 0 ? (
             <p className="defect-page__empty">当前范围暂无缺陷</p>
           ) : (

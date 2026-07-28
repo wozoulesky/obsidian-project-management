@@ -20,6 +20,12 @@ import {
 } from 'react'
 
 import { EntityInspector } from '../../components/data/EntityInspector'
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  RefreshState,
+} from '../../components/data/DataState'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import type {
@@ -555,23 +561,27 @@ export function RequirementPage() {
     [updateStatus],
   )
 
-  if (requirementsQuery.isPending) {
-    return (
-      <section aria-busy="true" className="requirement-page">
-        <p role="status">正在加载需求…</p>
-      </section>
-    )
-  }
-
-  if (requirementsQuery.isError) {
+  if (requirementsQuery.isPending && !requirementsQuery.data) {
     return (
       <section className="requirement-page">
-        <p role="alert">需求加载失败，请稍后重试。</p>
+        <LoadingState />
       </section>
     )
   }
 
-  const requirements = requirementsQuery.data
+  if (requirementsQuery.isError && !requirementsQuery.data) {
+    return (
+      <section className="requirement-page">
+        <ErrorState
+          error={requirementsQuery.error}
+          isRetrying={requirementsQuery.isFetching}
+          onRetry={() => requirementsQuery.refetch()}
+        />
+      </section>
+    )
+  }
+
+  const requirements = requirementsQuery.data ?? []
   const visibleRequirements =
     terminalFilter === 'board'
       ? requirements.filter((requirement) =>
@@ -593,6 +603,12 @@ export function RequirementPage() {
 
   return (
     <section className="requirement-page">
+      <RefreshState
+        dataUpdatedAt={requirementsQuery.dataUpdatedAt}
+        error={requirementsQuery.error}
+        isError={requirementsQuery.isError}
+        isFetching={requirementsQuery.isFetching}
+      />
       <header className="requirement-page__header">
         <div>
           <p className="requirement-page__eyebrow">计划 / 需求</p>
@@ -627,7 +643,7 @@ export function RequirementPage() {
       <div className="data-grid-with-inspector requirement-page__workspace">
         <div className="requirement-page__content">
           {requirements.length === 0 ? (
-            <p className="requirement-page__empty">当前没有需求。</p>
+          <EmptyState title="当前项目暂无需求" />
           ) : terminalFilter === 'board' ? (
             <DndContext
               accessibility={{
