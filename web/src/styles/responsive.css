@@ -175,4 +175,36 @@
     border-top: 1px solid var(--border);
     border-left: 0;
   }
+
+  .defect-page {
+    padding: var(--space-3);
+  }
+
+  .defect-page__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .defect-page__scope {
+    align-self: flex-start;
+  }
+
+  .defect-summary {
+    overflow-x: auto;
+  }
+
+  .defect-summary > div {
+    flex: 0 0 auto;
+  }
+
+  .defect-table {
+    max-height: 60vh;
+  }
+
+  .defect-page__workspace .entity-inspector {
+    width: 100%;
+    max-height: none;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
 }

@@ -19,9 +19,14 @@ const RequirementPage = lazy(() =>
   })),
 )
 
+const DefectPage = lazy(() =>
+  import('../features/defects/DefectPage').then((module) => ({
+    default: module.DefectPage,
+  })),
+)
+
 const routes = [
   { path: '/gantt', heading: '甘特图' },
-  { path: '/defects', heading: '缺陷' },
   { path: '/settings', heading: '设置' },
 ] as const
 
@@ -68,6 +73,20 @@ export function AppRoutes() {
             }
           >
             <RequirementPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/defects"
+        element={
+          <Suspense
+            fallback={
+              <section className="defect-page" aria-busy="true">
+                <p role="status">正在加载缺陷…</p>
+              </section>
+            }
+          >
+            <DefectPage />
           </Suspense>
         }
       />
