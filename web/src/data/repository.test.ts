@@ -98,6 +98,40 @@ describe('mock project repository', () => {
     )
   })
 
+  it('re-derives dashboard status counts after a task status mutation', async () => {
+    const repository = createMockProjectRepository()
+    const before = await repository.getDashboard('atlas')
+
+    expect(
+      (await repository.listTasks('atlas')).find(
+        (task) => task.id === 'task-051',
+      )?.status,
+    ).toBe('in_progress')
+
+    await repository.updateTaskProgress('task-051', {
+      progress: 100,
+      status: 'done',
+      note: '权限路径已完成',
+    })
+
+    const after = await repository.getDashboard('atlas')
+    const statusTotal = Object.values(after.taskStatusCounts).reduce(
+      (total, count) => total + count,
+      0,
+    )
+
+    expect(after.taskStatusCounts.in_progress).toBe(
+      before.taskStatusCounts.in_progress - 1,
+    )
+    expect(after.taskStatusCounts.done).toBe(
+      before.taskStatusCounts.done + 1,
+    )
+    expect(after.taskStatusCounts.done).toBe(
+      after.metrics.completedTasks,
+    )
+    expect(statusTotal).toBe(after.metrics.totalTasks)
+  })
+
   it('selects the exact deterministic trend for each dashboard range', async () => {
     const repository = createMockProjectRepository()
 
