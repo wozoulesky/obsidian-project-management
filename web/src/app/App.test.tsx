@@ -5,11 +5,10 @@ import { App } from './App'
 import { renderApp } from './test-utils'
 
 describe('App', () => {
-  it('exposes the local project management application', () => {
+  it('uses standard page landmarks without overriding the application role', () => {
     renderApp(<App />)
 
-    expect(
-      screen.getByRole('application', { name: '本地项目管理系统' }),
-    ).toBeInTheDocument()
+    expect(screen.queryByRole('application')).not.toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
   })
 })

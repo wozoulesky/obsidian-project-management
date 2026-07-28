@@ -11,9 +11,20 @@ describe('Progress', () => {
 
     expect(
       screen.getByRole('progressbar', { name: '项目进度' }),
-    ).toBeInTheDocument()
+    ).toHaveAttribute('aria-valuenow', '100')
     expect(container.querySelector('.progress > span')).toHaveStyle({
       width: '100%',
+    })
+  })
+
+  it('normalizes non-finite values to zero', () => {
+    const { container } = render(<Progress label="项目进度" value={NaN} />)
+
+    expect(
+      screen.getByRole('progressbar', { name: '项目进度' }),
+    ).toHaveAttribute('aria-valuenow', '0')
+    expect(container.querySelector('.progress > span')).toHaveStyle({
+      width: '0%',
     })
   })
 })

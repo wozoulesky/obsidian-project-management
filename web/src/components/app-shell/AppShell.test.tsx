@@ -8,15 +8,15 @@ afterEach(cleanup)
 
 describe('AppShell', () => {
   it('exposes the primary project navigation', () => {
-    renderApp(<AppShell />)
+    renderApp(<AppShell />, { route: '/dashboard' })
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
+    const dashboardLink = screen.getByRole('link', { name: '仪表盘' })
 
     expect(navigation).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '仪表盘' })).toHaveAttribute(
-      'href',
-      '/dashboard',
-    )
+    expect(dashboardLink).toHaveAttribute('href', '/dashboard')
+    expect(dashboardLink).toHaveAttribute('aria-current', 'page')
+    expect(dashboardLink).toHaveClass('app-rail__link--active')
     expect(screen.getByRole('link', { name: '计划 / 任务' })).toHaveAttribute(
       'href',
       '/tasks',

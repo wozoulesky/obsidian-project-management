@@ -13,7 +13,7 @@ export function Progress({ label, value }: ProgressProps) {
       aria-label={label}
       aria-valuemax={100}
       aria-valuemin={0}
-      aria-valuenow={value}
+      aria-valuenow={normalizedValue}
       className="progress"
       role="progressbar"
     >

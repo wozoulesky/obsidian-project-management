@@ -24,13 +24,13 @@
 
 .button--primary {
   color: var(--surface);
-  background: var(--primary);
-  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 70%, var(--rail));
+  border-color: color-mix(in srgb, var(--primary) 70%, var(--rail));
 }
 
 .button--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary) 88%, var(--rail));
-  border-color: color-mix(in srgb, var(--primary) 88%, var(--rail));
+  background: color-mix(in srgb, var(--primary) 62%, var(--rail));
+  border-color: color-mix(in srgb, var(--primary) 62%, var(--rail));
 }
 
 .button--secondary {
