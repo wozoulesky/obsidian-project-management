@@ -83,6 +83,21 @@ describe('mock project repository', () => {
     })
   })
 
+  it('derives a complete task status distribution for the dashboard', async () => {
+    const repository = createMockProjectRepository()
+
+    const dashboard = await repository.getDashboard('atlas')
+    const statusTotal = Object.values(dashboard.taskStatusCounts).reduce(
+      (total, count) => total + count,
+      0,
+    )
+
+    expect(statusTotal).toBe(dashboard.metrics.totalTasks)
+    expect(dashboard.taskStatusCounts.done).toBe(
+      dashboard.metrics.completedTasks,
+    )
+  })
+
   it('selects the exact deterministic trend for each dashboard range', async () => {
     const repository = createMockProjectRepository()
 

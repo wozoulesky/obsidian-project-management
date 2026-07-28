@@ -55,6 +55,20 @@ export function createMockProjectRepository(): ProjectRepository {
         (defect) => !inactiveDefectStatuses.has(defect.status),
       )
       const actorList = Object.values(seed.actors)
+      const taskStatusCounts = taskState.reduce<
+        DashboardSnapshot['taskStatusCounts']
+      >(
+        (counts, task) => {
+          counts[task.status] += 1
+          return counts
+        },
+        {
+          not_started: 0,
+          in_progress: 0,
+          done: 0,
+          overdue: 0,
+        },
+      )
       return clone({
         metrics: {
           totalTasks: taskState.length,
@@ -76,6 +90,7 @@ export function createMockProjectRepository(): ProjectRepository {
           activeAgents: actorList.filter((actor) => actor.kind === 'agent')
             .length,
         },
+        taskStatusCounts,
         trend: seed.trendByDays[days],
         risks: seed.risks,
         activities: activityState,

@@ -62,6 +62,41 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .dashboard-page {
+    padding: var(--space-3);
+  }
+
+  .dashboard-page__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .period-control {
+    width: 100%;
+  }
+
+  .period-control__button {
+    flex: 1;
+  }
+
+  .risk-banner {
+    align-items: flex-start;
+  }
+
+  .dashboard-layout--charts {
+    grid-template-areas:
+      "main"
+      "status";
+  }
+
+  .activity-feed__item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .activity-feed__meta {
+    grid-column: auto;
+  }
+
   .data-grid-with-inspector {
     grid-template-columns: minmax(0, 1fr);
   }

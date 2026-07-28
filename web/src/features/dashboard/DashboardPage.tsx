@@ -1,0 +1,162 @@
+import { useState } from 'react'
+
+import { StatusDonut } from '../../components/charts/StatusDonut'
+import { TrendChart } from '../../components/charts/TrendChart'
+import { Badge } from '../../components/ui/Badge'
+import type { RiskItem } from '../../data/domain'
+import { useDashboard } from '../../data/query-hooks'
+import { ActivityFeed } from './ActivityFeed'
+import { MetricBand } from './MetricBand'
+import { RiskBanner } from './RiskBanner'
+import { RiskQueue } from './RiskQueue'
+
+type DashboardPeriod = 7 | 30 | 90
+
+const periods: DashboardPeriod[] = [7, 30, 90]
+
+export function DashboardPage() {
+  const [period, setPeriod] = useState<DashboardPeriod>(30)
+  const [selectedRisk, setSelectedRisk] = useState<RiskItem | null>(null)
+  const dashboard = useDashboard(period)
+  const snapshot = dashboard.data
+
+  if (dashboard.isError) {
+    return (
+      <section className="dashboard-page">
+        <p role="alert">项目健康数据加载失败，请稍后重试。</p>
+      </section>
+    )
+  }
+
+  if (dashboard.isPending || !snapshot) {
+    return (
+      <section className="dashboard-page" aria-busy="true">
+        <p role="status">正在加载项目健康数据…</p>
+      </section>
+    )
+  }
+
+  const completionRate =
+    snapshot.metrics.totalTasks === 0
+      ? 0
+      : Math.round(
+          (snapshot.metrics.completedTasks / snapshot.metrics.totalTasks) *
+            100,
+        )
+  const latestTrend = snapshot.trend.at(-1)
+
+  return (
+    <section className="dashboard-page">
+      <header className="dashboard-page__header">
+        <div>
+          <p className="dashboard-page__eyebrow">PROJECT HEALTH</p>
+          <h1>仪表盘</h1>
+        </div>
+        <div className="period-control" aria-label="趋势时间范围">
+          {periods.map((days) => (
+            <button
+              aria-pressed={period === days}
+              className="period-control__button"
+              key={days}
+              onClick={() => setPeriod(days)}
+              type="button"
+            >
+              {days} 天
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <RiskBanner risks={snapshot.risks} />
+      <MetricBand metrics={snapshot.metrics} />
+
+      <div className="dashboard-layout dashboard-layout--charts">
+        <section className="dashboard-card dashboard-main">
+          <div className="dashboard-card__header">
+            <div>
+              <p className="dashboard-card__eyebrow">DELIVERY TREND</p>
+              <h2>完成趋势</h2>
+            </div>
+            {latestTrend ? (
+              <span className="dashboard-card__summary tabular-numerals">
+                {latestTrend.actual} 项已完成
+              </span>
+            ) : null}
+          </div>
+          <TrendChart points={snapshot.trend} />
+        </section>
+
+        <section className="dashboard-card dashboard-status">
+          <div className="dashboard-card__header">
+            <div>
+              <p className="dashboard-card__eyebrow">TASK STATUS</p>
+              <h2>状态分布</h2>
+            </div>
+          </div>
+          <StatusDonut
+            completionRate={completionRate}
+            counts={snapshot.taskStatusCounts}
+          />
+        </section>
+      </div>
+
+      <section className="dashboard-card dashboard-risk-section">
+        <div className="dashboard-card__header">
+          <div>
+            <p className="dashboard-card__eyebrow">RISK QUEUE</p>
+            <h2>风险队列</h2>
+          </div>
+          <Badge tone="critical">{snapshot.risks.length} 项</Badge>
+        </div>
+        <div
+          className={
+            selectedRisk ? 'data-grid-with-inspector' : undefined
+          }
+        >
+          <RiskQueue risks={snapshot.risks} onSelect={setSelectedRisk} />
+          {selectedRisk ? (
+            <aside
+              aria-label="风险详情"
+              className="inspector risk-inspector"
+            >
+              <div className="risk-inspector__heading">
+                <h3>{selectedRisk.title}</h3>
+                <Badge tone={selectedRisk.level}>
+                  {selectedRisk.level === 'critical' ? '严重' : '预警'}
+                </Badge>
+              </div>
+              <dl>
+                <div>
+                  <dt>负责人</dt>
+                  <dd>{selectedRisk.assignee.name}</dd>
+                </div>
+                <div>
+                  <dt>进度</dt>
+                  <dd className="tabular-numerals">
+                    {selectedRisk.progress}%
+                  </dd>
+                </div>
+                <div>
+                  <dt>截止</dt>
+                  <dd className="tabular-numerals">
+                    {selectedRisk.dueDate}
+                  </dd>
+                </div>
+              </dl>
+            </aside>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="dashboard-card">
+        <div className="dashboard-card__header">
+          <div>
+            <p className="dashboard-card__eyebrow">RECENT ACTIVITY</p>
+            <h2>最近活动</h2>
+          </div>
+        </div>
+        <ActivityFeed activities={snapshot.activities} />
+      </section>
+    </section>
+  )
+}

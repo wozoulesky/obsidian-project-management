@@ -118,6 +118,7 @@ export interface DashboardMetrics {
 
 export interface DashboardSnapshot {
   metrics: DashboardMetrics
+  taskStatusCounts: Record<TaskStatus, number>
   trend: TrendPoint[]
   risks: RiskItem[]
   activities: ActivityEvent[]

@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
+import { DashboardPage } from '../features/dashboard/DashboardPage'
+
 const routes = [
-  { path: '/dashboard', heading: '仪表盘' },
   { path: '/tasks', heading: '计划 / 任务' },
   { path: '/gantt', heading: '甘特图' },
   { path: '/requirements', heading: '需求' },
@@ -13,6 +14,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate replace to="/dashboard" />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
       {routes.map(({ heading, path }) => (
         <Route
           element={
