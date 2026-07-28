@@ -15,28 +15,6 @@ import { createMockProjectRepository } from './mock-project-repository'
 export const projectRepository = createMockProjectRepository()
 export const projectId = 'atlas'
 
-const e2eFixtureStorageKey = 'project-os:e2e-fixture'
-const e2eFixtureModes = ['tasks-error'] as const
-type E2eFixtureMode = (typeof e2eFixtureModes)[number]
-
-function readE2eFixtureMode(): E2eFixtureMode | null {
-  const fixtureAccessEnabled =
-    import.meta.env.DEV ||
-    import.meta.env.VITE_E2E_FIXTURES === 'true'
-  if (!fixtureAccessEnabled || typeof sessionStorage === 'undefined') {
-    return null
-  }
-
-  try {
-    const value = sessionStorage.getItem(e2eFixtureStorageKey)
-    return e2eFixtureModes.some((mode) => mode === value)
-      ? (value as E2eFixtureMode)
-      : null
-  } catch {
-    return null
-  }
-}
-
 export function resetProjectRepositoryForTests() {
   Object.assign(projectRepository, createMockProjectRepository())
 }
@@ -50,6 +28,34 @@ export const projectQueryKeys = {
   defects: ['defects', projectId] as const,
   gantt: ['gantt', projectId] as const,
 }
+
+const createTaskQueryOptions =
+  import.meta.env.DEV || import.meta.env.VITE_E2E_FIXTURES === 'true'
+    ? () => {
+        let shouldFail = false
+
+        try {
+          shouldFail =
+            typeof sessionStorage !== 'undefined' &&
+            sessionStorage.getItem('project-os:e2e-fixture') === 'tasks-error'
+        } catch {
+          // Some browser privacy modes deny storage access; keep the safe default.
+        }
+
+        return {
+          queryKey: projectQueryKeys.tasks,
+          queryFn: shouldFail
+            ? () => {
+                throw new Error('任务数据加载失败，请重试。')
+              }
+            : () => projectRepository.listTasks(projectId),
+          ...(shouldFail ? { retry: false as const } : {}),
+        }
+      }
+    : () => ({
+        queryKey: projectQueryKeys.tasks,
+        queryFn: () => projectRepository.listTasks(projectId),
+      })
 
 export const mutationInvalidationKeys = {
   taskProgress: [
@@ -92,17 +98,7 @@ export function useDashboard(days: 7 | 30 | 90 = 30) {
 }
 
 export function useTasks() {
-  const fixtureMode = readE2eFixtureMode()
-  return useQuery({
-    queryKey: projectQueryKeys.tasks,
-    queryFn: () => {
-      if (fixtureMode === 'tasks-error') {
-        throw new Error('任务数据加载失败，请重试。')
-      }
-      return projectRepository.listTasks(projectId)
-    },
-    ...(fixtureMode === 'tasks-error' ? { retry: false } : {}),
-  })
+  return useQuery(createTaskQueryOptions())
 }
 
 export function useUpdateTaskProgress() {

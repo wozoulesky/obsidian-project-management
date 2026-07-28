@@ -20,7 +20,6 @@ test.beforeEach(async ({ page }, testInfo) => {
 })
 
 test('task inspector matches its visual baseline', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 1024 })
   await openReadyPage(page, '/tasks?selected=task-051')
   await expect(
     page.getByRole('dialog', { name: 'MCP 权限校验' }),
