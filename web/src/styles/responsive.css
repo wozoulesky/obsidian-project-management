@@ -123,6 +123,39 @@
     display: none;
   }
 
+  .gantt-page {
+    padding: var(--space-3);
+  }
+
+  .gantt-page__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gantt-page__controls {
+    justify-content: space-between;
+  }
+
+  .gantt-task-tree-toggle {
+    display: inline-flex;
+  }
+
+  .gantt-proposal {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gantt-proposal > div {
+    justify-content: flex-end;
+  }
+
+  .gantt-page__workspace .entity-inspector {
+    width: 100%;
+    max-height: none;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
   .task-page {
     padding: var(--space-3);
   }

@@ -25,8 +25,13 @@ const DefectPage = lazy(() =>
   })),
 )
 
+const GanttPage = lazy(() =>
+  import('../features/gantt/GanttPage').then((module) => ({
+    default: module.GanttPage,
+  })),
+)
+
 const routes = [
-  { path: '/gantt', heading: '甘特图' },
   { path: '/settings', heading: '设置' },
 ] as const
 
@@ -87,6 +92,20 @@ export function AppRoutes() {
             }
           >
             <DefectPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/gantt"
+        element={
+          <Suspense
+            fallback={
+              <section className="gantt-page" aria-busy="true">
+                <p role="status">正在加载甘特图…</p>
+              </section>
+            }
+          >
+            <GanttPage />
           </Suspense>
         }
       />
