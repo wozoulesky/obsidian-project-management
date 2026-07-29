@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   actorStatusSchema,
   agentActorRoleSchema,
+  projectMemberSchema,
 } from '@project-os/contracts'
 import type { PersistedActor } from '@project-os/contracts'
 import {
@@ -14,9 +15,29 @@ import {
   successResult,
 } from '../tool-result.js'
 
-const agentIdSchema = z.string().min(1).describe(
+const agentIdSchema = projectMemberSchema.shape.actorId.describe(
   'Persisted Agent ID returned by agent_register',
 )
+const agentRegisterInputSchema = z.strictObject({
+  name: z.string().min(1).describe('Stable Agent name within the client'),
+  role: agentActorRoleSchema.describe('Project OS Agent role'),
+  client: z.string().min(1).describe(
+    'Calling client, for example codex, claude-code, or kimi-code',
+  ),
+  capabilities: z.array(z.string()).optional().describe(
+    'Optional capability labels advertised by the Agent',
+  ),
+})
+const agentWhoamiInputSchema = z.strictObject({
+  agent_id: agentIdSchema,
+})
+const agentListInputSchema = z.strictObject({
+  agent_id: agentIdSchema,
+  status: actorStatusSchema.optional().describe(
+    'Optional active or inactive status filter',
+  ),
+  limit: z.number().int().min(1).max(200).optional(),
+})
 
 function presentAgent(actor: PersistedActor): Record<string, unknown> {
   return {
@@ -63,16 +84,7 @@ export function registerIdentityTools(
       'Register or resume a persistent Project OS Agent identity. '
       + 'This writes agent identity/activity data and returns the Agent ID '
       + 'required by later MCP calls.',
-    inputSchema: {
-      name: z.string().min(1).describe('Stable Agent name within the client'),
-      role: agentActorRoleSchema.describe('Project OS Agent role'),
-      client: z.string().min(1).describe(
-        'Calling client, for example codex, claude-code, or kimi-code',
-      ),
-      capabilities: z.array(z.string()).optional().describe(
-        'Optional capability labels advertised by the Agent',
-      ),
-    },
+    inputSchema: agentRegisterInputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -97,9 +109,7 @@ export function registerIdentityTools(
     description:
       'Validate and resume a registered Agent identity. '
       + 'Requires agent_id and updates its last-active timestamp.',
-    inputSchema: {
-      agent_id: agentIdSchema,
-    },
+    inputSchema: agentWhoamiInputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -119,13 +129,7 @@ export function registerIdentityTools(
     description:
       'List registered Project OS Agents. Requires an active agent_id and '
       + 'updates the caller last-active timestamp; it does not modify others.',
-    inputSchema: {
-      agent_id: agentIdSchema,
-      status: actorStatusSchema.optional().describe(
-        'Optional active or inactive status filter',
-      ),
-      limit: z.number().int().min(1).max(200).optional(),
-    },
+    inputSchema: agentListInputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,

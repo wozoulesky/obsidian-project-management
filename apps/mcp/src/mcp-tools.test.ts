@@ -210,4 +210,61 @@ describe('Project OS MCP identity and project tools', () => {
       },
     })
   })
+
+  it('rejects unknown registration keys before identity creation', async () => {
+    const invalid = await harness.call('agent_register', {
+      name: 'typo-agent',
+      role: 'dev-agent',
+      client: 'codex',
+      capabilities_typo: ['write'],
+    })
+
+    expect(invalid.isError).toBe(true)
+    expect(new ActorService(database).list({ kind: 'agent' })).toEqual([])
+  })
+
+  it('rejects unknown project update keys before the handler executes', async () => {
+    const registered = await register()
+    const agentId = registered.agent_id as string
+    const created = await harness.call('project_create', {
+      agent_id: agentId,
+      name: 'Strict Project',
+      owner_id: agentId,
+    })
+    const project = structured(created).project as Record<string, unknown>
+    const projectId = project.id as string
+    const actorBefore = new ActorService(database).get(agentId)
+
+    const invalid = await harness.call('project_update', {
+      agent_id: agentId,
+      project_id: projectId,
+      statsu: 'completed',
+      version: project.version,
+    })
+
+    expect(invalid.isError).toBe(true)
+    expect(new ProjectService(database).get(projectId)).toMatchObject({
+      status: 'not_started',
+      version: 1,
+    })
+    expect(new ActorService(database).get(agentId).version).toBe(
+      actorBefore.version,
+    )
+  })
+
+  it('rejects a partial project list cursor before the handler executes', async () => {
+    const registered = await register()
+    const agentId = registered.agent_id as string
+    const actorBefore = new ActorService(database).get(agentId)
+
+    const invalid = await harness.call('project_list', {
+      agent_id: agentId,
+      after_code: 'PRJ-0001',
+    })
+
+    expect(invalid.isError).toBe(true)
+    expect(new ActorService(database).get(agentId).version).toBe(
+      actorBefore.version,
+    )
+  })
 })

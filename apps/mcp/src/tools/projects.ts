@@ -1,5 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  createProjectInputSchema,
+  persistedProjectSchema,
+  projectMemberSchema,
   projectStatusSchema,
 } from '@project-os/contracts'
 import {
@@ -17,11 +20,58 @@ import {
 } from '../tool-result.js'
 import { requireAgent } from './identity.js'
 
-const agentIdSchema = z.string().min(1).describe(
+const agentIdSchema = projectMemberSchema.shape.actorId.describe(
   'Active Agent ID returned by agent_register',
 )
-const projectIdSchema = z.string().min(1).describe('Project ID')
-const nullableDateSchema = z.iso.date().nullable()
+const projectIdSchema = projectMemberSchema.shape.projectId.describe(
+  'Project ID',
+)
+const projectCreateInputSchema = z.strictObject({
+  agent_id: agentIdSchema,
+  name: createProjectInputSchema.shape.name,
+  description: createProjectInputSchema.shape.description.optional(),
+  owner_id: createProjectInputSchema.shape.ownerId.describe(
+    'Active project owner Actor ID',
+  ),
+  start_date: createProjectInputSchema.shape.startDate.optional(),
+  due_date: createProjectInputSchema.shape.dueDate.optional(),
+})
+const projectGetInputSchema = z.strictObject({
+  agent_id: agentIdSchema,
+  project_id: projectIdSchema,
+})
+const projectListInputSchema = z.strictObject({
+  agent_id: agentIdSchema,
+  owner_id: createProjectInputSchema.shape.ownerId.optional(),
+  status: projectStatusSchema.optional(),
+  after_code: persistedProjectSchema.shape.code.optional(),
+  after_id: persistedProjectSchema.shape.id.optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+}).superRefine((value, context) => {
+  const hasAfterCode = value.after_code !== undefined
+  const hasAfterId = value.after_id !== undefined
+  if (hasAfterCode !== hasAfterId) {
+    context.addIssue({
+      code: 'custom',
+      message: 'after_code and after_id must be provided together',
+      path: hasAfterCode ? ['after_id'] : ['after_code'],
+    })
+  }
+})
+const projectUpdateInputSchema = z.strictObject({
+  agent_id: agentIdSchema,
+  project_id: projectIdSchema,
+  name: persistedProjectSchema.shape.name.optional(),
+  description: persistedProjectSchema.shape.description.optional(),
+  owner_id: persistedProjectSchema.shape.ownerId.optional(),
+  start_date: persistedProjectSchema.shape.startDate.optional(),
+  due_date: persistedProjectSchema.shape.dueDate.optional(),
+  status: persistedProjectSchema.shape.status.optional(),
+  progress: persistedProjectSchema.shape.progress.optional(),
+  version: persistedProjectSchema.shape.version.describe(
+    'Current project version for optimistic concurrency',
+  ),
+})
 
 type ToolServices = {
   actors: ActorService
@@ -45,14 +95,7 @@ export function registerProjectTools(
     description:
       'Create a Project OS project and owner membership. Requires agent_id '
       + 'with project.write permission and records MCP activity.',
-    inputSchema: {
-      agent_id: agentIdSchema,
-      name: z.string().min(1),
-      description: z.string().optional(),
-      owner_id: z.string().min(1).describe('Active project owner Actor ID'),
-      start_date: nullableDateSchema.optional(),
-      due_date: nullableDateSchema.optional(),
-    },
+    inputSchema: projectCreateInputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -86,10 +129,7 @@ export function registerProjectTools(
     description:
       'Get one Project OS project. Requires an active agent_id with '
       + 'project.read permission and updates caller activity.',
-    inputSchema: {
-      agent_id: agentIdSchema,
-      project_id: projectIdSchema,
-    },
+    inputSchema: projectGetInputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -113,14 +153,7 @@ export function registerProjectTools(
     description:
       'List Project OS projects. Requires an active agent_id with '
       + 'project.read permission and updates caller activity.',
-    inputSchema: {
-      agent_id: agentIdSchema,
-      owner_id: z.string().min(1).optional(),
-      status: projectStatusSchema.optional(),
-      after_code: z.string().min(1).optional(),
-      after_id: z.string().min(1).optional(),
-      limit: z.number().int().min(1).max(200).optional(),
-    },
+    inputSchema: projectListInputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -156,20 +189,7 @@ export function registerProjectTools(
       'Update a Project OS project using optimistic version concurrency. '
       + 'Requires agent_id with project.write permission and records MCP '
       + 'activity.',
-    inputSchema: {
-      agent_id: agentIdSchema,
-      project_id: projectIdSchema,
-      name: z.string().min(1).optional(),
-      description: z.string().optional(),
-      owner_id: z.string().min(1).optional(),
-      start_date: nullableDateSchema.optional(),
-      due_date: nullableDateSchema.optional(),
-      status: projectStatusSchema.optional(),
-      progress: z.number().int().min(0).max(100).optional(),
-      version: z.number().int().positive().describe(
-        'Current project version for optimistic concurrency',
-      ),
-    },
+    inputSchema: projectUpdateInputSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
