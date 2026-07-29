@@ -34,6 +34,11 @@ describe('mock project repository', () => {
 
     expect(allTasks).toHaveLength(tasks.length)
     expect(allTasks.every((task) => task.projectId === 'atlas')).toBe(true)
+    expect(
+      allTasks.every(
+        (task) => Number.isInteger(task.version) && (task.version ?? 0) > 0,
+      ),
+    ).toBe(true)
   })
 
   it('gets project membership and persists a project-scoped task', async () => {

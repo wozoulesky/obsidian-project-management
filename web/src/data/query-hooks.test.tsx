@@ -130,6 +130,53 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
   })
 
+  it('invalidates the task actual project after a global progress update', async () => {
+    const { queryClient, wrapper, isInvalidated } = createHarness()
+    queryClient.setQueryData(projectQueryKeys.tasksFor('borealis'), {
+      seeded: true,
+    })
+    queryClient.setQueryData(projectQueryKeys.ganttFor('borealis'), {
+      seeded: true,
+    })
+    queryClient.setQueryData(projectQueryKeys.requirementsFor('borealis'), {
+      seeded: true,
+    })
+    queryClient.setQueryData(projectQueryKeys.dashboardFor('borealis', 7), {
+      seeded: true,
+    })
+    queryClient.setQueryData(projectQueryKeys.projectFor('borealis'), {
+      seeded: true,
+    })
+    queryClient.setQueryData(projectQueryKeys.projects, { seeded: true })
+    const { result } = renderHook(() => useUpdateTaskProgress(), { wrapper })
+
+    await act(() =>
+      result.current.mutateAsync({
+        taskId: 'task-051',
+        projectId: 'borealis',
+        input: {
+          progress: 71,
+          status: 'in_progress',
+          note: '',
+          version: 3,
+        },
+      }),
+    )
+
+    expect(isInvalidated(projectQueryKeys.tasksFor('borealis'))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.ganttFor('borealis'))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.requirementsFor('borealis'))).toBe(
+      true,
+    )
+    expect(isInvalidated(projectQueryKeys.dashboardFor('borealis', 7))).toBe(
+      true,
+    )
+    expect(isInvalidated(projectQueryKeys.projectFor('borealis'))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.projects)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
+  })
+
   it('invalidates all scheduling-dependent views', async () => {
     const { wrapper, isInvalidated } = createHarness()
     const { result } = renderHook(() => useUpdateTaskDates(), { wrapper })

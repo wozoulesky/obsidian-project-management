@@ -18,6 +18,7 @@ import { NavLink } from 'react-router-dom'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { VisuallyHidden } from '../ui/VisuallyHidden'
+import { QuickSubmitDialog } from '../../features/tasks/QuickSubmitDialog'
 
 type AppShellProps = {
   children?: ReactNode
@@ -36,13 +37,22 @@ const navigationItems = [
 
 export function AppShell({ children }: AppShellProps) {
   const [isRailExpanded, setIsRailExpanded] = useState(false)
+  const [isQuickSubmitOpen, setIsQuickSubmitOpen] = useState(false)
+  const [quickSubmitAnnouncement, setQuickSubmitAnnouncement] = useState('')
   const toggleLabel = isRailExpanded ? '收起侧边栏' : '展开侧边栏'
+  const closeQuickSubmit = () => {
+    setIsQuickSubmitOpen(false)
+    queueMicrotask(() => {
+      document.getElementById('quick-submit-trigger')?.focus()
+    })
+  }
 
   return (
     <div
       className={`app-shell${isRailExpanded ? ' app-shell--rail-expanded' : ''}`}
     >
       <aside
+        aria-hidden={isQuickSubmitOpen || undefined}
         className={`app-rail${isRailExpanded ? ' app-rail--expanded' : ''}`}
       >
         <NavLink
@@ -70,7 +80,7 @@ export function AppShell({ children }: AppShellProps) {
         <nav aria-label="主导航" className="app-rail__nav">
           {navigationItems.map(({ icon: Icon, label, path }) => (
             <NavLink
-              aria-label={label}
+              aria-label={isQuickSubmitOpen ? undefined : label}
               className={({ isActive }) =>
                 `app-rail__link${isActive ? ' app-rail__link--active' : ''}`
               }
@@ -89,29 +99,55 @@ export function AppShell({ children }: AppShellProps) {
         </nav>
       </aside>
 
-      <header className="app-header">
+      <header
+        aria-hidden={isQuickSubmitOpen || undefined}
+        className="app-header"
+      >
         <div className="app-header__project">
           <Badge tone="primary">PROJECT / LOCAL</Badge>
           <span className="app-header__project-name">Atlas 研发平台</span>
         </div>
         <div className="app-header__actions">
-          <div className="app-header__save-status" role="status">
+          <div
+            className="app-header__save-status"
+            role={quickSubmitAnnouncement ? 'status' : undefined}
+          >
             <span className="app-header__save-message">
               <Check aria-hidden="true" size={15} />
-              数据已保存到本地
+              {quickSubmitAnnouncement || '数据已保存到本地'}
             </span>
             <span className="app-header__updated">最后更新 10:42</span>
           </div>
-          <Button variant="primary">
+          <Button
+            id="quick-submit-trigger"
+            onClick={() => {
+              setQuickSubmitAnnouncement('')
+              setIsQuickSubmitOpen(true)
+            }}
+            variant="primary"
+          >
             <Plus aria-hidden="true" size={17} />
             快速提交
           </Button>
         </div>
       </header>
 
-      <main className="app-main" id="main-content">
+      <main
+        aria-hidden={isQuickSubmitOpen || undefined}
+        className="app-main"
+        id="main-content"
+      >
         {children}
       </main>
+      {isQuickSubmitOpen ? (
+        <QuickSubmitDialog
+          onClose={closeQuickSubmit}
+          onSuccess={(progress) => {
+            setQuickSubmitAnnouncement(`已更新至 ${progress}%`)
+            closeQuickSubmit()
+          }}
+        />
+      ) : null}
     </div>
   )
 }

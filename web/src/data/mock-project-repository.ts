@@ -237,6 +237,7 @@ export function createMockProjectRepository(): ProjectRepository {
       return clone(taskState.map((task) => ({
         ...task,
         projectId: task.projectId ?? 'atlas',
+        version: task.version ?? 1,
       })))
     },
 

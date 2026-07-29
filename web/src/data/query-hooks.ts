@@ -344,16 +344,21 @@ export function useUpdateTaskProgress() {
     }: {
       taskId: string
       input: TaskProgressInput
+      projectId?: string
     }) => context.repository.updateTaskProgress(taskId, input),
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
+      const selectedProjectId = variables.projectId ?? context.projectId
       await invalidateKeys(
         queryClient,
         [
-          projectQueryKeys.tasksFor(context.projectId),
+          projectQueryKeys.tasksFor(selectedProjectId),
           projectQueryKeys.allTasks,
-          projectQueryKeys.ganttFor(context.projectId),
-          projectQueryKeys.requirementsFor(context.projectId),
-          projectQueryKeys.dashboardPrefixFor(context.projectId),
+          projectQueryKeys.ganttFor(selectedProjectId),
+          projectQueryKeys.requirementsFor(selectedProjectId),
+          projectQueryKeys.dashboardPrefixFor(selectedProjectId),
+          projectQueryKeys.projectFor(selectedProjectId),
+          projectQueryKeys.projects,
+          projectQueryKeys.activities,
         ],
       )
     },
