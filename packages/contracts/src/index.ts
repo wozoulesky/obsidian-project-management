@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const idSchema = z.string().min(1)
 const dateSchema = z.iso.date()
-const timestampSchema = z.iso.datetime({ offset: true })
+const timestampSchema = z.iso.datetime({ offset: false })
 const versionSchema = z.number().int().positive()
 const progressSchema = z.number().int().min(0).max(100)
 
@@ -263,10 +263,28 @@ export const persistedDefectSchema = defectSchema.extend({
 export type PersistedDefect = z.infer<typeof persistedDefectSchema>
 
 export const activityOperationSchema = z.enum([
+  'actor.create',
+  'actor.update',
+  'actor.deactivate',
+  'actor.register',
+  'project.create',
+  'project.update',
+  'project.member.add',
+  'task.create',
   'task.update',
   'task.schedule',
+  'task.progress',
+  'requirement.create',
   'requirement.update',
   'defect.create',
+  'defect.update',
+  'defect.to_task',
+  'settings.update',
+  'backup.create',
+  'backup.restore',
+  'import.run',
+  'token.issue',
+  'token.revoke',
 ])
 export type ActivityOperation = z.infer<typeof activityOperationSchema>
 
@@ -389,7 +407,7 @@ export type TaskDateInput = z.infer<typeof taskDateInputSchema>
 
 export const paginationSchema = z.object({
   cursor: z.string().min(1).optional(),
-  limit: z.number().int().min(1).max(100).default(25),
+  limit: z.number().int().min(1).max(200).default(50),
 })
 export type Pagination = z.infer<typeof paginationSchema>
 
