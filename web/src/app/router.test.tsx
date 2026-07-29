@@ -10,7 +10,7 @@ describe('AppRoutes', () => {
   it.each([
     ['/projects', '全部项目'],
     ['/projects/atlas', 'Atlas'],
-    ['/actors', '负责人'],
+    ['/actors', '负责人目录'],
     ['/settings', '设置'],
   ])('renders the accessible %s route shell', async (route, heading) => {
     renderApp(<AppRoutes />, { route })

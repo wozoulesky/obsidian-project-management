@@ -18,7 +18,11 @@ import type {
   ActivityPage,
   ProjectRepository,
 } from './project-repository'
-import { createProjectTaskInputSchema } from './project-repository'
+import {
+  createHumanActorInputSchema,
+  createProjectTaskInputSchema,
+  updateActorInputSchema,
+} from './project-repository'
 
 const cursorPageSchema = <Output>(itemSchema: z.ZodType<Output>) =>
   z.object({
@@ -97,6 +101,37 @@ export function createHttpProjectRepository(
 
   return {
     listActors: () => allPages(client, '/actors', persistedActorSchema),
+    createHuman(input) {
+      const body = createHumanActorInputSchema.parse(input)
+      return client.request('/actors', persistedActorSchema, {
+        method: 'POST',
+        ...jsonBody(body),
+      })
+    },
+    updateActor(actorId, input) {
+      const body = updateActorInputSchema.parse(input)
+      return client.request(
+        `/actors/${encodeURIComponent(actorId)}`,
+        persistedActorSchema,
+        {
+          method: 'PATCH',
+          ...jsonBody(body),
+        },
+      )
+    },
+    deactivateActor(actorId, version) {
+      const body = z.object({
+        version: z.number().int().positive(),
+      }).strict().parse({ version })
+      return client.request(
+        `/actors/${encodeURIComponent(actorId)}/deactivate`,
+        persistedActorSchema,
+        {
+          method: 'POST',
+          ...jsonBody(body),
+        },
+      )
+    },
     listProjects: () =>
       allPages(client, '/projects', persistedProjectSchema),
     getProject(projectId) {

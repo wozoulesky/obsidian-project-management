@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   projectQueryKeys,
   projectRepository,
+  useCreateHuman,
   useCreateProject,
   useCreateTask,
   useCreateTaskFromDefect,
@@ -40,6 +41,26 @@ function createHarness() {
 }
 
 describe('repository query invalidation', () => {
+  it('invalidates every actor-dependent view after human creation', async () => {
+    const { queryClient, wrapper, isInvalidated } = createHarness()
+    queryClient.setQueryData(projectQueryKeys.projects, { seeded: true })
+    queryClient.setQueryData(projectQueryKeys.actors, { seeded: true })
+    const { result } = renderHook(() => useCreateHuman(), { wrapper })
+
+    await act(() => result.current.mutateAsync({
+      name: 'Ming',
+      role: 'member',
+      capabilities: ['research'],
+    }))
+
+    expect(isInvalidated(projectQueryKeys.actors)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.projects)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.tasks)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
+  })
+
   it('invalidates projects, actors, and every dashboard after creation', async () => {
     const { queryClient, wrapper, isInvalidated } = createHarness()
     queryClient.setQueryData(projectQueryKeys.projects, { seeded: true })

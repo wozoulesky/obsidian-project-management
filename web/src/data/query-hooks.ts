@@ -19,8 +19,10 @@ import type {
 } from './domain'
 import { createMockProjectRepository } from './mock-project-repository'
 import type {
+  CreateHumanActorInput,
   CreateProjectTaskInput,
   ProjectRepository,
+  UpdateActorInput,
 } from './project-repository'
 
 export const projectRepository = createMockProjectRepository()
@@ -135,6 +137,13 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.requirements,
     projectQueryKeys.dashboardPrefix,
   ],
+  actorMutation: [
+    projectQueryKeys.actors,
+    projectQueryKeys.projects,
+    ['tasks'],
+    ['dashboard'],
+    projectQueryKeys.activities,
+  ],
   taskDates: [
     projectQueryKeys.tasks,
     projectQueryKeys.allTasks,
@@ -202,6 +211,60 @@ export function useActors() {
   return useQuery({
     queryKey: projectQueryKeys.actors,
     queryFn: () => context.repository.listActors(),
+  })
+}
+
+const actorInvalidationKeys = [
+  projectQueryKeys.actors,
+  projectQueryKeys.projects,
+  ['tasks'],
+  ['dashboard'],
+  projectQueryKeys.activities,
+] as const
+
+export function useCreateHuman() {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: (input: CreateHumanActorInput) =>
+      context.repository.createHuman(input),
+    onSuccess: async () => {
+      await invalidateKeys(queryClient, actorInvalidationKeys)
+    },
+  })
+}
+
+export function useUpdateActor() {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: ({
+      actorId,
+      input,
+    }: {
+      actorId: string
+      input: UpdateActorInput
+    }) => context.repository.updateActor(actorId, input),
+    onSuccess: async () => {
+      await invalidateKeys(queryClient, actorInvalidationKeys)
+    },
+  })
+}
+
+export function useDeactivateActor() {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: ({
+      actorId,
+      version,
+    }: {
+      actorId: string
+      version: number
+    }) => context.repository.deactivateActor(actorId, version),
+    onSuccess: async () => {
+      await invalidateKeys(queryClient, actorInvalidationKeys)
+    },
   })
 }
 

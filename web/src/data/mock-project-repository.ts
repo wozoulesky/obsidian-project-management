@@ -13,8 +13,10 @@ import type {
 } from './domain'
 import { createFixtureSeed } from './fixtures'
 import {
+  createHumanActorInputSchema,
   createProjectTaskInputSchema,
   type ProjectRepository,
+  updateActorInputSchema,
 } from './project-repository'
 
 const clone = <T>(value: T): T => structuredClone(value)
@@ -63,7 +65,7 @@ export function createMockProjectRepository(): ProjectRepository {
     updatedAt: '2026-07-28T04:00:00.000Z',
     version: 1,
   }
-  const actorState = Object.values(seed.actors).map((actor) => ({
+  const actorState: Actor[] = Object.values(seed.actors).map((actor) => ({
     ...actor,
     status: actor.status ?? 'active',
   }))
@@ -105,6 +107,51 @@ export function createMockProjectRepository(): ProjectRepository {
   return {
     async listActors() {
       return clone(actorState)
+    },
+
+    async createHuman(input) {
+      const validated = createHumanActorInputSchema.parse(input)
+      const now = new Date().toISOString()
+      const actor: Actor = {
+        id: `human-${actorState.length + 1}`,
+        name: validated.name,
+        kind: 'human',
+        role: validated.role,
+        status: 'active',
+        client: null,
+        capabilities: validated.capabilities ?? [],
+        registeredAt: now,
+        lastActiveAt: null,
+        version: 1,
+      }
+      actorState.push(actor)
+      return clone(actor)
+    },
+
+    async updateActor(actorId, input) {
+      const actor = getActor(actorId)
+      const validated = updateActorInputSchema.parse(input)
+      if (actor.kind !== 'human') {
+        throw new Error('Agent profile changes happen through MCP')
+      }
+      if (actor.version !== validated.version) {
+        throw new Error('Actor version is stale')
+      }
+      if (validated.name !== undefined) actor.name = validated.name
+      if (validated.role !== undefined) actor.role = validated.role
+      if (validated.capabilities !== undefined) {
+        actor.capabilities = validated.capabilities
+      }
+      actor.version += 1
+      return clone(actor)
+    },
+
+    async deactivateActor(actorId, version) {
+      const actor = getActor(actorId)
+      if (actor.version !== version) throw new Error('Actor version is stale')
+      actor.status = 'inactive'
+      actor.version += 1
+      return clone(actor)
     },
 
     async listProjects() {

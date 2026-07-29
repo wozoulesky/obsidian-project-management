@@ -1,4 +1,8 @@
-import { prioritySchema } from '@project-os/contracts'
+import {
+  humanActorRoleSchema,
+  persistedActorSchema,
+  prioritySchema,
+} from '@project-os/contracts'
 import { z } from 'zod'
 
 import type {
@@ -19,6 +23,29 @@ import type {
 } from './domain'
 
 const routeIdSchema = z.string().min(1).max(256)
+const actorNameSchema = z.string().trim().min(1).max(200)
+const actorCapabilitiesSchema = z.array(
+  z.string().trim().min(1).max(200),
+).max(100)
+
+export const createHumanActorInputSchema = z.object({
+  name: actorNameSchema,
+  role: humanActorRoleSchema,
+  capabilities: actorCapabilitiesSchema.optional(),
+}).strict()
+
+export type CreateHumanActorInput = z.infer<
+  typeof createHumanActorInputSchema
+>
+
+export const updateActorInputSchema = z.object({
+  name: actorNameSchema.optional(),
+  role: humanActorRoleSchema.optional(),
+  capabilities: actorCapabilitiesSchema.optional(),
+  version: persistedActorSchema.options[0].shape.version,
+}).strict()
+
+export type UpdateActorInput = z.infer<typeof updateActorInputSchema>
 
 export const createProjectTaskInputSchema = z.object({
   title: z.string().min(1).max(500),
@@ -60,6 +87,9 @@ export type ActivityPage = {
 
 export interface ProjectRepository {
   listActors(): Promise<Actor[]>
+  createHuman(input: CreateHumanActorInput): Promise<Actor>
+  updateActor(actorId: string, input: UpdateActorInput): Promise<Actor>
+  deactivateActor(actorId: string, version: number): Promise<Actor>
   listProjects(): Promise<Project[]>
   getProject(projectId: string): Promise<Project>
   listProjectMembers(projectId: string): Promise<ProjectMember[]>

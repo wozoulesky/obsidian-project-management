@@ -2467,9 +2467,118 @@
   gap: 0.125rem;
 }
 
+.actor-page {
+  display: grid;
+  gap: var(--space-4);
+  min-height: 100%;
+  padding: var(--space-6);
+}
+
+.actor-page__agent-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  border-radius: var(--radius-md);
+}
+
+.actor-page__agent-note strong {
+  color: var(--text-primary);
+}
+
+.actor-page__copy-status {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.actor-table table {
+  min-width: 72rem;
+}
+
+.actor-table th,
+.actor-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.actor-table td:first-child {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.actor-table td code {
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+}
+
+.actor-table tbody tr.is-inactive {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--canvas) 75%, var(--surface));
+}
+
+.actor-table tbody tr.is-inactive > *:not(:last-child) {
+  opacity: 0.65;
+}
+
+.actor-table__actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.actor-table__actions .button {
+  min-height: 2rem;
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.75rem;
+}
+
+.actor-status {
+  display: inline-flex;
+  padding: 0.125rem var(--space-2);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  border: 1px solid;
+  border-radius: 999px;
+}
+
+.actor-status--active {
+  color: color-mix(in srgb, var(--success) 72%, var(--rail));
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 32%, var(--border));
+}
+
+.actor-status--inactive {
+  color: var(--text-secondary);
+  background: var(--canvas);
+  border-color: var(--border);
+}
+
+.actor-form small {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.actor-confirm p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 42rem) {
   .project-page {
     padding: var(--space-4);
+  }
+
+  .actor-page {
+    padding: var(--space-4);
+  }
+
+  .actor-page__agent-note {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .project-page__filters,
