@@ -33,9 +33,23 @@ const GanttPage = lazy(() =>
   })),
 )
 
-const routes = [
-  { path: '/settings', heading: '设置' },
-] as const
+const ProjectPage = lazy(() =>
+  import('../features/projects/ProjectPage').then((module) => ({
+    default: module.ProjectPage,
+  })),
+)
+
+const ActorPage = lazy(() =>
+  import('../features/actors/ActorPage').then((module) => ({
+    default: module.ActorPage,
+  })),
+)
+
+const SettingsPage = lazy(() =>
+  import('../features/settings/SettingsPage').then((module) => ({
+    default: module.SettingsPage,
+  })),
+)
 
 function PageLoadingFallback({
   className,
@@ -130,17 +144,51 @@ export function AppRoutes() {
           </Suspense>
         }
       />
-      {routes.map(({ heading, path }) => (
-        <Route
-          element={
-            <section className="page-placeholder">
-              <h1>{heading}</h1>
-            </section>
-          }
-          key={path}
-          path={path}
-        />
-      ))}
+      <Route
+        path="/projects"
+        element={
+          <Suspense
+            fallback={
+              <PageLoadingFallback
+                className="route-shell"
+                label="正在加载项目…"
+              />
+            }
+          >
+            <ProjectPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/actors"
+        element={
+          <Suspense
+            fallback={
+              <PageLoadingFallback
+                className="route-shell"
+                label="正在加载负责人…"
+              />
+            }
+          >
+            <ActorPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <Suspense
+            fallback={
+              <PageLoadingFallback
+                className="route-shell"
+                label="正在加载设置…"
+              />
+            }
+          >
+            <SettingsPage />
+          </Suspense>
+        }
+      />
       <Route
         path="*"
         element={

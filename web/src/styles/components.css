@@ -107,6 +107,11 @@
   min-height: 100vh;
   grid-template-rows: var(--header-height) minmax(0, 1fr);
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  transition: grid-template-columns 160ms ease;
+}
+
+.app-shell--rail-expanded {
+  grid-template-columns: 13rem minmax(0, 1fr);
 }
 
 .app-rail {
@@ -121,6 +126,11 @@
   background: var(--rail);
 }
 
+.app-rail--expanded {
+  align-items: stretch;
+  padding-inline: var(--space-3);
+}
+
 .app-rail__brand {
   display: grid;
   width: 2.25rem;
@@ -130,6 +140,32 @@
   font-weight: 800;
   background: var(--surface);
   border-radius: var(--radius-md);
+}
+
+.app-rail--expanded .app-rail__brand {
+  align-self: center;
+}
+
+.app-rail__toggle {
+  display: grid;
+  width: 2.5rem;
+  min-height: 2.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+  color: color-mix(in srgb, var(--surface) 68%, transparent);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+}
+
+.app-rail__toggle:hover {
+  color: var(--surface);
+  background: color-mix(in srgb, var(--surface) 10%, transparent);
+}
+
+.app-rail--expanded .app-rail__toggle {
+  align-self: center;
 }
 
 .app-rail__nav {
@@ -152,6 +188,27 @@
   border-radius: var(--radius-md);
 }
 
+.app-rail--expanded .app-rail__nav {
+  align-items: stretch;
+}
+
+.app-rail--expanded .app-rail__link {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding-inline: var(--space-3);
+}
+
+.app-rail__label {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-rail__link:last-child {
   margin-top: auto;
 }
@@ -170,6 +227,12 @@
   content: "";
   background: var(--primary);
   border-radius: 0 2px 2px 0;
+}
+
+.app-rail__toggle:focus-visible,
+.app-rail__link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .app-header {
@@ -238,6 +301,30 @@
 .page-placeholder h1 {
   font-size: 1.5rem;
   line-height: 1.25;
+}
+
+.route-shell {
+  display: grid;
+  min-height: 100%;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-6);
+}
+
+.route-shell h1 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+
+.route-shell > p:last-child,
+.route-shell__eyebrow {
+  color: var(--text-secondary);
+}
+
+.route-shell__eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
 }
 
 .data-grid {

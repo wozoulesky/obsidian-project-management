@@ -2,13 +2,17 @@ import {
   Bug,
   ChartNoAxesGantt,
   Check,
+  FolderKanban,
   LayoutDashboard,
   Lightbulb,
   ListTodo,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Settings,
+  Users,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { Badge } from '../ui/Badge'
@@ -21,6 +25,8 @@ type AppShellProps = {
 
 const navigationItems = [
   { label: '仪表盘', path: '/dashboard', icon: LayoutDashboard },
+  { label: '项目', path: '/projects', icon: FolderKanban },
+  { label: '负责人', path: '/actors', icon: Users },
   { label: '计划 / 任务', path: '/tasks', icon: ListTodo },
   { label: '甘特图', path: '/gantt', icon: ChartNoAxesGantt },
   { label: '需求', path: '/requirements', icon: Lightbulb },
@@ -29,9 +35,16 @@ const navigationItems = [
 ] as const
 
 export function AppShell({ children }: AppShellProps) {
+  const [isRailExpanded, setIsRailExpanded] = useState(false)
+  const toggleLabel = isRailExpanded ? '收起侧边栏' : '展开侧边栏'
+
   return (
-    <div className="app-shell">
-      <aside className="app-rail">
+    <div
+      className={`app-shell${isRailExpanded ? ' app-shell--rail-expanded' : ''}`}
+    >
+      <aside
+        className={`app-rail${isRailExpanded ? ' app-rail--expanded' : ''}`}
+      >
         <NavLink
           aria-label="Project OS"
           className="app-rail__brand"
@@ -40,6 +53,20 @@ export function AppShell({ children }: AppShellProps) {
         >
           P
         </NavLink>
+        <button
+          aria-expanded={isRailExpanded}
+          aria-label={toggleLabel}
+          className="app-rail__toggle"
+          onClick={() => setIsRailExpanded((isExpanded) => !isExpanded)}
+          title={toggleLabel}
+          type="button"
+        >
+          {isRailExpanded ? (
+            <PanelLeftClose aria-hidden="true" size={18} strokeWidth={1.8} />
+          ) : (
+            <PanelLeftOpen aria-hidden="true" size={18} strokeWidth={1.8} />
+          )}
+        </button>
         <nav aria-label="主导航" className="app-rail__nav">
           {navigationItems.map(({ icon: Icon, label, path }) => (
             <NavLink
@@ -48,11 +75,15 @@ export function AppShell({ children }: AppShellProps) {
                 `app-rail__link${isActive ? ' app-rail__link--active' : ''}`
               }
               key={path}
-              title={label}
+              title={isRailExpanded ? undefined : label}
               to={path}
             >
               <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
-              <VisuallyHidden>{label}</VisuallyHidden>
+              {isRailExpanded ? (
+                <span className="app-rail__label">{label}</span>
+              ) : (
+                <VisuallyHidden>{label}</VisuallyHidden>
+              )}
             </NavLink>
           ))}
         </nav>
