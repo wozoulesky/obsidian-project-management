@@ -1,5 +1,6 @@
 .worktrees/
 node_modules/
+data/
 web/dist/
 web/playwright-report/
 web/test-results/

@@ -33,11 +33,11 @@ A local project-management frontend prototype for individual developers, small t
 
 ## Requirements
 
-- Node.js 20.19 or newer
+- Node.js 24 or newer
 - npm
 - Git
 
-Using the current Node.js LTS release is recommended. The repository includes `web/package-lock.json`, so prefer `npm ci` for reproducible installs.
+Using the current Node.js LTS release is recommended. The repository includes a root `package-lock.json`, so prefer `npm ci` for reproducible installs.
 
 ## Installation and local development
 
@@ -47,14 +47,14 @@ With SSH:
 
 ```bash
 git clone git@github.com:wozoulesky/project_manage.git
-cd project_manage/web
+cd project_manage
 ```
 
 Or with HTTPS:
 
 ```bash
 git clone https://github.com/wozoulesky/project_manage.git
-cd project_manage/web
+cd project_manage
 ```
 
 ### 2. Install dependencies
@@ -63,13 +63,13 @@ cd project_manage/web
 npm ci
 ```
 
-### 3. Start the development server
+### 3. Start the full development environment
 
 ```bash
 npm run dev
 ```
 
-Vite normally serves the app at `http://localhost:5173`. If that port is occupied, use the URL printed in the terminal.
+This starts both the local API at `http://127.0.0.1:4310` and the Vite Web app, normally at `http://localhost:5173`. Pressing `Ctrl+C` stops both processes; if either process fails, the other is cleaned up as well.
 
 ## Routes
 
@@ -86,18 +86,16 @@ The root path `/` redirects to the dashboard. Unknown paths render a 404 page wi
 
 ## Commands
 
-Run these commands from `web/`.
+Run these commands from the repository root.
 
 | Command | Purpose |
 |---|---|
-| `npm run dev` | Start the development server |
-| `npm run build` | Type-check and create a production build |
-| `npm run preview` | Preview the generated `dist/` directory |
-| `npm run lint` | Run ESLint |
-| `npm run test` | Run Vitest once |
-| `npm run test:watch` | Run Vitest in watch mode |
+| `npm run dev` | Start the API and Web development servers |
+| `npm start` | Start only the API server |
+| `npm run build` | Build all workspaces |
+| `npm test` | Run Vitest across all workspaces |
 | `npm run test:e2e` | Run Playwright end-to-end and visual tests |
-| `npm run check` | Run lint, unit tests, and the production build |
+| `npm run check` | Run Web lint, all unit tests, and production builds |
 
 ## End-to-end and visual testing
 
@@ -113,7 +111,7 @@ Then run:
 npm run test:e2e
 ```
 
-Playwright builds the app and starts a preview server at `http://127.0.0.1:4173`. The suite covers desktop and compact layouts, keyboard workflows, accessibility scans, business workflows, and visual baselines.
+Playwright builds the Web app, starts the local API with an isolated temporary SQLite database, and starts a preview server at `http://127.0.0.1:4173`. It stops the service processes after the run. The suite covers desktop and compact layouts, keyboard workflows, accessibility scans, business workflows, and visual baselines.
 
 The committed baselines were generated with Chromium on Windows and therefore use a `win32` filename suffix. Other operating systems, fonts, or browser-rendering environments may produce pixel differences. Review every difference manually before updating a baseline:
 

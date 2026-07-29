@@ -33,11 +33,11 @@
 
 ## 环境要求
 
-- Node.js 20.19 或更高版本
+- Node.js 24 或更高版本
 - npm
 - Git
 
-建议使用当前 Node.js LTS 版本。仓库已提交 `web/package-lock.json`，安装依赖时优先使用 `npm ci`。
+建议使用当前 Node.js LTS 版本。仓库已提交根目录 `package-lock.json`，安装依赖时优先使用 `npm ci`。
 
 ## 安装与启动
 
@@ -47,14 +47,14 @@
 
 ```bash
 git clone git@github.com:wozoulesky/project_manage.git
-cd project_manage/web
+cd project_manage
 ```
 
 也可以使用 HTTPS：
 
 ```bash
 git clone https://github.com/wozoulesky/project_manage.git
-cd project_manage/web
+cd project_manage
 ```
 
 ### 2. 安装依赖
@@ -63,13 +63,13 @@ cd project_manage/web
 npm ci
 ```
 
-### 3. 启动开发服务器
+### 3. 启动完整开发环境
 
 ```bash
 npm run dev
 ```
 
-Vite 默认会提供 `http://localhost:5173`；如果端口已被占用，请以终端实际输出的地址为准。
+该命令会同时启动本地 API（`http://127.0.0.1:4310`）和 Vite Web 应用（通常为 `http://localhost:5173`）。按 `Ctrl+C` 会同时关闭两个进程；任一进程异常退出时，另一个进程也会被清理。
 
 ## 页面入口
 
@@ -86,18 +86,16 @@ Vite 默认会提供 `http://localhost:5173`；如果端口已被占用，请以
 
 ## 常用命令
 
-以下命令均在 `web/` 目录运行。
+以下命令均在仓库根目录运行。
 
 | 命令 | 用途 |
 |---|---|
-| `npm run dev` | 启动开发服务器 |
-| `npm run build` | 执行 TypeScript 检查并生成生产构建 |
-| `npm run preview` | 本地预览 `dist/` 构建结果 |
-| `npm run lint` | 执行 ESLint |
-| `npm run test` | 执行一次 Vitest 测试 |
-| `npm run test:watch` | 以监听模式运行 Vitest |
+| `npm run dev` | 同时启动 API 和 Web 开发服务器 |
+| `npm start` | 仅启动 API 服务 |
+| `npm run build` | 构建所有工作区 |
+| `npm test` | 执行所有工作区的 Vitest 测试 |
 | `npm run test:e2e` | 执行 Playwright 端到端与视觉回归测试 |
-| `npm run check` | 依次执行 lint、单元测试和生产构建 |
+| `npm run check` | 执行 Web lint、全部单元测试和生产构建 |
 
 ## 端到端与视觉测试
 
@@ -113,7 +111,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Playwright 会自动构建并在 `http://127.0.0.1:4173` 启动预览服务。测试包含桌面和紧凑布局、键盘操作、无障碍扫描、业务闭环以及视觉基线。
+Playwright 会自动构建 Web 应用，同时用隔离的临时 SQLite 数据库启动本地 API，并在 `http://127.0.0.1:4173` 启动预览服务。测试结束后会关闭服务进程。测试包含桌面和紧凑布局、键盘操作、无障碍扫描、业务闭环以及视觉基线。
 
 视觉基线是在 Windows Chromium 环境生成的，文件名带有 `win32` 后缀。不同操作系统、字体或浏览器渲染环境可能产生像素差异；请先人工检查差异，再决定是否更新基线：
 
