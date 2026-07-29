@@ -293,8 +293,12 @@ describe('settings, tokens, export, backup, and seed', () => {
     const tokens = new TokenService(database)
     const issued = tokens.issue('local-codex', 'actor_owner', 'web')
     const databaseBytes = readFileSync(databasePath)
+    const tokenParts = issued.token.match(
+      /^pos_([A-Za-z0-9_-]{24})_([A-Za-z0-9_-]{43})$/,
+    )
 
-    expect(issued.token).toMatch(/^pos_[A-Za-z0-9_-]{40,}$/)
+    expect(tokenParts).not.toBeNull()
+    expect(issued.id).toBe(`token_${tokenParts?.[1]}`)
     expect(JSON.stringify(database.prepare(
       'SELECT * FROM access_tokens WHERE id = ?',
     ).get(issued.id))).not.toContain(issued.token)
@@ -305,6 +309,51 @@ describe('settings, tokens, export, backup, and seed', () => {
     expect(tokens.verify(issued.token)).toBe(true)
     expect(tokens.list()[0]?.lastUsedAt).not.toBeNull()
     database.close()
+  })
+
+  it('does at most one scrypt for a selector lookup', () => {
+    const database = openDatabase(join(temporaryDirectory, 'selector.sqlite'))
+    let scryptCalls = 0
+    const tokens = new TokenService(database, {
+      onScrypt: () => {
+        scryptCalls += 1
+      },
+    })
+    const issued = Array.from({ length: 8 }, (_, index) =>
+      tokens.issue(`token-${index}`))
+    scryptCalls = 0
+
+    expect(tokens.verify('not-a-token')).toBe(false)
+    expect(tokens.verify(
+      `pos_${'A'.repeat(24)}_${'B'.repeat(43)}`,
+    )).toBe(false)
+    expect(scryptCalls).toBe(0)
+    expect(tokens.verify(issued[4]!.token)).toBe(true)
+    expect(scryptCalls).toBe(1)
+
+    tokens.revoke(issued[5]!.id, issued[5]!.version)
+    scryptCalls = 0
+    expect(tokens.verify(issued[5]!.token)).toBe(false)
+    expect(scryptCalls).toBe(0)
+    database.close()
+  })
+
+  it('returns false when another connection revokes during verification', () => {
+    const databasePath = join(temporaryDirectory, 'verify-race.sqlite')
+    const primary = openDatabase(databasePath)
+    const secondary = openDatabase(databasePath)
+    const issued = new TokenService(primary).issue('race')
+    const secondaryTokens = new TokenService(secondary)
+    const verifier = new TokenService(primary, {
+      beforeVerifyFinalize: () => {
+        secondaryTokens.revoke(issued.id, issued.version)
+      },
+    })
+
+    expect(verifier.verify(issued.token)).toBe(false)
+    expect(secondaryTokens.list()[0]?.revokedAt).not.toBeNull()
+    secondary.close()
+    primary.close()
   })
 
   it('handles malformed, unknown, and revoked tokens without throwing', () => {
@@ -420,6 +469,35 @@ describe('settings, tokens, export, backup, and seed', () => {
       expect.objectContaining({ code: 'IMPORT_INVALID' }),
     )
     expect(service.exportJson().projects[0]?.name).toBe('Atlas')
+    database.close()
+  })
+
+  it('rejects a second owner membership before changing data', () => {
+    const database = openDatabase(join(temporaryDirectory, 'owners.sqlite'))
+    const service = new ExportService(database)
+    service.importJson(fixtureDocument())
+    const before = service.exportJson()
+    const invalid = structuredClone(before)
+    const extraOwner: ExportDocument['actors'][number] = {
+      ...invalid.actors[0]!,
+      id: 'actor_extra_owner',
+      name: 'Extra Owner',
+    }
+    invalid.actors.push(extraOwner)
+    invalid.projectMembers.push({
+      projectId: invalid.projects[0]!.id,
+      actorId: extraOwner.id,
+      membershipRole: 'owner',
+      joinedAt: timestamp,
+    })
+
+    expect(() => service.importJson(invalid)).toThrowError(
+      expect.objectContaining({ code: 'IMPORT_INVALID' }),
+    )
+    expect({
+      ...service.exportJson(),
+      exportedAt: before.exportedAt,
+    }).toEqual(before)
     database.close()
   })
 
@@ -808,6 +886,35 @@ describe('settings, tokens, export, backup, and seed', () => {
     lifecycle.database.close()
   })
 
+  it('closes every unaccepted handle when rollback handoff also fails', async () => {
+    const databasePath = join(temporaryDirectory, 'active.sqlite')
+    const lifecycle = createLifecycle(databasePath)
+    const backups = new BackupService(
+      lifecycle,
+      join(temporaryDirectory, 'backups'),
+    )
+    new ExportService(lifecycle.database).importJson(fixtureDocument('Before'))
+    const candidate = await backups.create('snapshot.sqlite')
+    new ExportService(lifecycle.database).importJson(fixtureDocument('After'))
+    const unaccepted: DatabaseSync[] = []
+    lifecycle.replaceDatabase = (database) => {
+      unaccepted.push(database)
+      throw new Error('reject handoff')
+    }
+
+    expect(() => backups.restore(candidate)).toThrowError(
+      expect.objectContaining({ code: 'BACKUP_RESTORE_FAILED' }),
+    )
+    expect(unaccepted).toHaveLength(2)
+    for (const handle of unaccepted) {
+      expect(() => handle.prepare('SELECT 1').get()).toThrow()
+    }
+    const reopened = openDatabase(databasePath)
+    expect(new ExportService(reopened).exportJson().projects[0]?.name)
+      .toBe('After')
+    reopened.close()
+  })
+
   it('prevents backup traversal, active overwrite, and accidental overwrite', async () => {
     const databasePath = join(temporaryDirectory, 'active.sqlite')
     const lifecycle = createLifecycle(databasePath)
@@ -826,6 +933,24 @@ describe('settings, tokens, export, backup, and seed', () => {
     await expect(backups.create('once.sqlite')).rejects.toMatchObject({
       code: 'BACKUP_PATH_INVALID',
     })
+    lifecycle.database.close()
+  })
+
+  it('never overwrites a destination claimed before atomic publish', async () => {
+    const databasePath = join(temporaryDirectory, 'active.sqlite')
+    const backupRoot = join(temporaryDirectory, 'backups')
+    const lifecycle = createLifecycle(databasePath)
+    const sentinel = Buffer.from('claimed-by-another-writer')
+    const backups = new BackupService(lifecycle, backupRoot, {
+      beforePublish: (destination) => {
+        writeFileSync(destination, sentinel)
+      },
+    })
+
+    await expect(backups.create('claimed.sqlite')).rejects.toMatchObject({
+      code: 'BACKUP_PATH_INVALID',
+    })
+    expect(readFileSync(join(backupRoot, 'claimed.sqlite'))).toEqual(sentinel)
     lifecycle.database.close()
   })
 

@@ -268,11 +268,13 @@ export function validateExportDocument(input: unknown): ExportDocument {
     }
   }
   for (const project of projects) {
-    const ownerMembership = projectMembers.find((member) =>
-      member.projectId === project.id && member.actorId === project.ownerId)
+    const ownerMemberships = projectMembers.filter((member) =>
+      member.projectId === project.id
+      && member.membershipRole === 'owner')
     if (
       !actorById.has(project.ownerId)
-      || ownerMembership?.membershipRole !== 'owner'
+      || ownerMemberships.length !== 1
+      || ownerMemberships[0]?.actorId !== project.ownerId
       || (
         project.startDate !== null
         && project.dueDate !== null

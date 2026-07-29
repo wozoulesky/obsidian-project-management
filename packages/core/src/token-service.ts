@@ -1,6 +1,5 @@
 import {
   randomBytes,
-  randomUUID,
   scryptSync,
   timingSafeEqual,
 } from 'node:crypto'
@@ -20,7 +19,12 @@ const scryptCost = 16_384
 const scryptBlockSize = 8
 const scryptParallelization = 1
 const digestLength = 32
-const bearerPattern = /^pos_[A-Za-z0-9_-]{43}$/
+const selectorLength = 24
+const secretLength = 43
+const bearerPattern = new RegExp(
+  `^pos_([A-Za-z0-9_-]{${selectorLength}})_`
+    + `([A-Za-z0-9_-]{${secretLength}})$`,
+)
 
 type TokenRow = {
   id: string
@@ -43,6 +47,11 @@ export type AccessToken = {
 
 export type IssuedAccessToken = AccessToken & {
   token: string
+}
+
+export type TokenServiceOptions = {
+  onScrypt?: () => void
+  beforeVerifyFinalize?: (tokenId: string) => void
 }
 
 type ParsedDigest = {
@@ -123,7 +132,15 @@ function parseDigest(serialized: string): ParsedDigest | null {
 }
 
 export class TokenService {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(
+    private readonly database: DatabaseSync,
+    private readonly options: TokenServiceOptions = {},
+  ) {}
+
+  private derive(token: string, salt: Buffer): Buffer {
+    this.options.onScrypt?.()
+    return deriveDigest(token, salt)
+  }
 
   issue(
     name: string,
@@ -138,10 +155,12 @@ export class TokenService {
       throw tokenInvalid()
     }
 
-    const token = `pos_${randomBytes(32).toString('base64url')}`
+    const selector = randomBytes(18).toString('base64url')
+    const secret = randomBytes(32).toString('base64url')
+    const token = `pos_${selector}_${secret}`
     const salt = randomBytes(16)
-    const digest = deriveDigest(token, salt)
-    const id = `token_${randomUUID()}`
+    const digest = this.derive(token, salt)
+    const id = `token_${selector}`
     const createdAt = new Date().toISOString()
 
     let persisted: AccessToken
@@ -201,40 +220,40 @@ export class TokenService {
   }
 
   verify(token: unknown): boolean {
-    if (typeof token !== 'string' || !bearerPattern.test(token)) {
+    if (typeof token !== 'string') {
       return false
     }
+    const match = bearerPattern.exec(token)
+    if (match === null) {
+      return false
+    }
+    const selector = match[1]!
 
-    const rows = this.database.prepare(`
+    const row = this.database.prepare(`
       SELECT
         id, name, token_hash, created_at, last_used_at, revoked_at, version
       FROM access_tokens
-      WHERE revoked_at IS NULL
-      ORDER BY id
-    `).all() as unknown as TokenRow[]
-    let matched: TokenRow | undefined
-
-    for (const row of rows) {
-      const parsed = parseDigest(row.token_hash)
-      if (parsed === null) {
-        continue
-      }
-      const candidate = deriveDigest(token, parsed.salt)
-      if (timingSafeEqual(candidate, parsed.digest)) {
-        matched = row
-      }
+      WHERE id = ?
+    `).get(`token_${selector}`) as TokenRow | undefined
+    if (row === undefined || row.revoked_at !== null) {
+      return false
     }
-
-    if (matched === undefined) {
+    const parsed = parseDigest(row.token_hash)
+    if (parsed === null) {
+      return false
+    }
+    const candidate = this.derive(token, parsed.salt)
+    if (!timingSafeEqual(candidate, parsed.digest)) {
       return false
     }
 
-    this.database.prepare(`
+    this.options.beforeVerifyFinalize?.(row.id)
+    const result = this.database.prepare(`
       UPDATE access_tokens
       SET last_used_at = ?
       WHERE id = ? AND revoked_at IS NULL
-    `).run(new Date().toISOString(), matched.id)
-    return true
+    `).run(new Date().toISOString(), row.id)
+    return Number(result.changes) === 1
   }
 
   revoke(

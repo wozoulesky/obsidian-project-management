@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import {
-  closeSync,
   copyFileSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
-  openSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -46,6 +45,10 @@ export type DatabaseLifecycle = {
   getDatabase(): DatabaseSync
   closeDatabase(): void
   replaceDatabase(database: DatabaseSync): void
+}
+
+export type BackupServiceOptions = {
+  beforePublish?: (destination: string) => void
 }
 
 function backupInvalid(): DomainError {
@@ -241,6 +244,7 @@ export class BackupService {
   constructor(
     private readonly lifecycle: DatabaseLifecycle,
     backupDirectory: string,
+    private readonly options: BackupServiceOptions = {},
   ) {
     this.activePath = resolve(lifecycle.databasePath)
     const requestedRoot = resolve(backupDirectory)
@@ -280,24 +284,47 @@ export class BackupService {
     }
     ensureSafeDirectory(this.root, dirname(destination))
     assertNoLinkComponents(dirname(destination))
-    let descriptor: number
+    let staging: string | undefined
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const candidate = resolve(
+        dirname(destination),
+        `.project-os-backup-${randomUUID()}.sqlite`,
+      )
+      if (!pathExistsWithoutFollowing(candidate)) {
+        staging = candidate
+        break
+      }
+    }
+    if (staging === undefined) {
+      throw new DomainError(
+        'BACKUP_CREATE_FAILED',
+        'Backup could not be created',
+      )
+    }
+
+    let published = false
     try {
-      descriptor = openSync(destination, 'wx')
-      closeSync(descriptor)
-      assertNoLinkComponents(destination)
+      await backup(this.lifecycle.getDatabase(), staging)
+      assertNoLinkComponents(dirname(destination))
+      assertNoLinkComponents(staging)
       if (
-        !lstatSync(destination).isFile()
+        !lstatSync(staging).isFile()
         || !samePath(realpathSync(dirname(destination)), dirname(destination))
       ) {
         throw pathInvalid()
       }
-    } catch {
-      removeGenerated(destination)
-      throw pathInvalid()
-    }
-
-    try {
-      await backup(this.lifecycle.getDatabase(), destination)
+      this.options.beforePublish?.(destination)
+      assertNoLinkComponents(dirname(destination))
+      assertNoLinkComponents(staging)
+      if (
+        !lstatSync(staging).isFile()
+        || !samePath(realpathSync(dirname(destination)), dirname(destination))
+      ) {
+        throw pathInvalid()
+      }
+      linkSync(staging, destination)
+      published = true
+      removeGenerated(staging)
       if (actorId !== undefined) {
         withImmediateTransaction(this.lifecycle.getDatabase(), () => {
           recordActivity(this.lifecycle.getDatabase(), {
@@ -311,8 +338,22 @@ export class BackupService {
         })
       }
       return destination
-    } catch {
-      removeGenerated(destination)
+    } catch (error) {
+      removeGenerated(staging)
+      if (published) {
+        removeGenerated(destination)
+      }
+      if (error instanceof DomainError) {
+        throw error
+      }
+      if (
+        typeof error === 'object'
+        && error !== null
+        && 'code' in error
+        && error.code === 'EEXIST'
+      ) {
+        throw pathInvalid()
+      }
       throw new DomainError(
         'BACKUP_CREATE_FAILED',
         'Backup could not be created',
@@ -387,6 +428,7 @@ export class BackupService {
     }
 
     let replacement: DatabaseSync | undefined
+    let replacementAccepted = false
     try {
       this.lifecycle.getDatabase()
         .prepare('PRAGMA wal_checkpoint(TRUNCATE)')
@@ -400,6 +442,7 @@ export class BackupService {
 
       replacement = openDatabase(this.activePath)
       this.lifecycle.replaceDatabase(replacement)
+      replacementAccepted = true
       if (actorId !== undefined) {
         withImmediateTransaction(replacement, () => {
           recordActivity(replacement!, {
@@ -418,12 +461,28 @@ export class BackupService {
       removeGenerated(`${rollback}-shm`)
       return replacement
     } catch {
-      try {
-        replacement?.close()
-      } catch {
-        // Continue with restoring the original file.
+      if (replacement !== undefined) {
+        if (replacementAccepted) {
+          try {
+            this.lifecycle.closeDatabase()
+          } catch {
+            try {
+              replacement.close()
+            } catch {
+              // Continue with restoring the original file.
+            }
+          }
+        } else {
+          try {
+            replacement.close()
+          } catch {
+            // Continue with restoring the original file.
+          }
+        }
       }
 
+      let original: DatabaseSync | undefined
+      let originalAccepted = false
       try {
         if (existsSync(rollback)) {
           if (existsSync(this.activePath)) {
@@ -435,9 +494,17 @@ export class BackupService {
           moveIfExists(`${rollback}-wal`, `${this.activePath}-wal`)
           moveIfExists(`${rollback}-shm`, `${this.activePath}-shm`)
         }
-        const original = openDatabase(this.activePath)
+        original = openDatabase(this.activePath)
         this.lifecycle.replaceDatabase(original)
+        originalAccepted = true
       } catch {
+        if (original !== undefined && !originalAccepted) {
+          try {
+            original.close()
+          } catch {
+            // Preserve the stable restore failure.
+          }
+        }
         throw restoreFailed()
       } finally {
         for (const path of generatedPaths) {

@@ -41,7 +41,10 @@ export type {
   WorkOperation,
 } from './permissions.js'
 export { BackupService } from './backup-service.js'
-export type { DatabaseLifecycle } from './backup-service.js'
+export type {
+  BackupServiceOptions,
+  DatabaseLifecycle,
+} from './backup-service.js'
 export { ExportService, validateExportDocument } from './export-service.js'
 export type { ExportDocument } from './export-service.js'
 export { ProjectService } from './project-service.js'
@@ -81,4 +84,5 @@ export { TokenService } from './token-service.js'
 export type {
   AccessToken,
   IssuedAccessToken,
+  TokenServiceOptions,
 } from './token-service.js'
