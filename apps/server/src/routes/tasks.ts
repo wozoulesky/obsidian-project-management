@@ -15,7 +15,9 @@ import type {
 import { z } from 'zod'
 import type { AppRouteModule } from '../app.js'
 import {
+  callService,
   cursorError,
+  internalOperation,
   paginate,
   parseResponse,
   readCursorPosition,
@@ -119,9 +121,9 @@ function listTasks(
     }
     let anchor
     try {
-      anchor = parseResponse(
+      anchor = callService(
         persistedTaskSchema,
-        context.services.tasks.get(position[2]!),
+        () => context.services.tasks.get(position[2]!),
       )
     } catch (error) {
       if (error instanceof DomainError && error.code === 'TASK_NOT_FOUND') {
@@ -155,11 +157,13 @@ function listTasks(
     }
   }
   const fetchLimit = options.limit + 1
-  const rawTasks = context.services.tasks.list({
-    ...filter,
-    ...(after === undefined ? {} : { after }),
-    limit: fetchLimit,
-  } as TaskListFilter)
+  const rawTasks = internalOperation(
+    () => context.services.tasks.list({
+      ...filter,
+      ...(after === undefined ? {} : { after }),
+      limit: fetchLimit,
+    } as TaskListFilter),
+  )
   const tasks = rawTasks.slice(0, fetchLimit).map(
     (task) => parseResponse(persistedTaskSchema, task),
   )
@@ -177,21 +181,24 @@ export const taskRoutes: AppRouteModule = {
       const { projectId } = projectTaskParamsSchema.parse(request.params)
       const input = createTaskBodySchema.parse(request.body)
       const context = getContext()
-      const task = context.services.tasks.create(
-        { ...input, projectId } as CreateTaskInput,
-        requestActorId(context),
-        'web',
+      const task = callService(
+        persistedTaskSchema,
+        () => context.services.tasks.create(
+          { ...input, projectId } as CreateTaskInput,
+          requestActorId(context),
+          'web',
+        ),
       )
-      sendSuccess(response, parseResponse(persistedTaskSchema, task), 201)
+      sendSuccess(response, task, 201)
     })
 
     router.get('/projects/:projectId/tasks', (request, response) => {
       const { projectId } = projectTaskParamsSchema.parse(request.params)
       const query = projectTaskListQuerySchema.parse(request.query)
       const context = getContext()
-      parseResponse(
+      callService(
         persistedProjectSchema,
-        context.services.projects.get(projectId),
+        () => context.services.projects.get(projectId),
       )
       const page = listTasks(
         'project-tasks',
@@ -224,34 +231,44 @@ export const taskRoutes: AppRouteModule = {
 
     router.get('/tasks/:id', (request, response) => {
       const { id } = taskIdParamsSchema.parse(request.params)
-      const task = getContext().services.tasks.get(id)
-      sendSuccess(response, parseResponse(persistedTaskSchema, task))
+      const context = getContext()
+      const task = callService(
+        persistedTaskSchema,
+        () => context.services.tasks.get(id),
+      )
+      sendSuccess(response, task)
     })
 
     router.patch('/tasks/:id', (request, response) => {
       const { id } = taskIdParamsSchema.parse(request.params)
       const input = updateTaskBodySchema.parse(request.body)
       const context = getContext()
-      const task = context.services.tasks.update(
-        id,
-        input as UpdateTaskInput,
-        requestActorId(context),
-        'web',
+      const task = callService(
+        persistedTaskSchema,
+        () => context.services.tasks.update(
+          id,
+          input as UpdateTaskInput,
+          requestActorId(context),
+          'web',
+        ),
       )
-      sendSuccess(response, parseResponse(persistedTaskSchema, task))
+      sendSuccess(response, task)
     })
 
     router.post('/tasks/:id/progress', (request, response) => {
       const { id } = taskIdParamsSchema.parse(request.params)
       const input = progressBodySchema.parse(request.body)
       const context = getContext()
-      const task = context.services.tasks.submitProgress(
-        id,
-        input,
-        requestActorId(context),
-        'web',
+      const task = callService(
+        persistedTaskSchema,
+        () => context.services.tasks.submitProgress(
+          id,
+          input,
+          requestActorId(context),
+          'web',
+        ),
       )
-      sendSuccess(response, parseResponse(persistedTaskSchema, task))
+      sendSuccess(response, task)
     })
   },
 }

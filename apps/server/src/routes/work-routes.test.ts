@@ -14,7 +14,9 @@ import {
 } from '@project-os/contracts'
 import {
   ActorService,
+  ProjectService,
   seedDatabase,
+  TaskService,
 } from '@project-os/core'
 import request from 'supertest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -575,6 +577,101 @@ describe('task routes', () => {
 })
 
 describe('strict request boundaries and live context', () => {
+  it.each([
+    [
+      'actor list',
+      () => vi.spyOn(ActorService.prototype, 'list'),
+      (api: ReturnType<typeof request>) => api.get('/api/v1/actors'),
+    ],
+    [
+      'actor get',
+      () => vi.spyOn(ActorService.prototype, 'get'),
+      (api: ReturnType<typeof request>) =>
+        api.get('/api/v1/actors/actor_broken'),
+    ],
+    [
+      'actor write',
+      () => vi.spyOn(ActorService.prototype, 'createHuman'),
+      (api: ReturnType<typeof request>) => api.post('/api/v1/actors').send({
+        name: 'Broken actor',
+        role: 'member',
+      }),
+    ],
+    [
+      'project list',
+      () => vi.spyOn(ProjectService.prototype, 'list'),
+      (api: ReturnType<typeof request>) => api.get('/api/v1/projects'),
+    ],
+    [
+      'project get',
+      () => vi.spyOn(ProjectService.prototype, 'get'),
+      (api: ReturnType<typeof request>) =>
+        api.get('/api/v1/projects/project_broken'),
+    ],
+    [
+      'project write',
+      () => vi.spyOn(ProjectService.prototype, 'create'),
+      (api: ReturnType<typeof request>) => api.post('/api/v1/projects').send({
+        name: 'Broken project',
+        ownerId: defaultSeedDocument.actors[0]!.id,
+      }),
+    ],
+    [
+      'task list',
+      () => vi.spyOn(TaskService.prototype, 'list'),
+      (api: ReturnType<typeof request>) => api.get('/api/v1/tasks'),
+    ],
+    [
+      'task get',
+      () => vi.spyOn(TaskService.prototype, 'get'),
+      (api: ReturnType<typeof request>) =>
+        api.get('/api/v1/tasks/task_broken'),
+    ],
+    [
+      'task write',
+      () => vi.spyOn(TaskService.prototype, 'create'),
+      (api: ReturnType<typeof request>) => api
+        .post(`/api/v1/projects/${defaultSeedDocument.projects[0]!.id}/tasks`)
+        .send({
+          title: 'Broken task',
+          assigneeId: defaultSeedDocument.actors[0]!.id,
+          startDate: '2026-07-29',
+          dueDate: '2026-08-01',
+          priority: 'P1',
+        }),
+    ],
+  ])('maps a direct %s service ZodError to a sanitized 500', async (
+    _name,
+    installSpy,
+    makeRequest,
+  ) => {
+    const { api } = createApi()
+    installSpy().mockImplementation((() => {
+      z.object({ secret_field: z.string() }).parse({ secret_field: 42 })
+    }) as never)
+
+    const response = await makeRequest(api).expect(500)
+
+    expect(response.body.error).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: {},
+    })
+    expect(JSON.stringify(response.body))
+      .not.toMatch(/issues|path|secret_field/i)
+  })
+
+  it('still maps request body ZodError to a detailed 400', async () => {
+    const { api } = createApi()
+
+    const response = await api.post('/api/v1/actors')
+      .send({ name: null, role: 'member' })
+      .expect(400)
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    expect(response.body.error.details.issues).toBeInstanceOf(Array)
+  })
+
   it('maps a malformed percent-encoded path to a sanitized client error', async () => {
     const { api } = createApi()
 

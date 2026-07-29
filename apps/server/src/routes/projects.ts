@@ -14,7 +14,9 @@ import type {
 import { z } from 'zod'
 import type { AppRouteModule } from '../app.js'
 import {
+  callService,
   cursorError,
+  internalOperation,
   paginate,
   parseResponse,
   readCursorPosition,
@@ -102,9 +104,9 @@ export const projectRoutes: AppRouteModule = {
         }
         let anchor
         try {
-          anchor = parseResponse(
+          anchor = callService(
             persistedProjectSchema,
-            context.services.projects.get(position[1]!),
+            () => context.services.projects.get(position[1]!),
           )
         } catch (error) {
           if (
@@ -132,11 +134,13 @@ export const projectRoutes: AppRouteModule = {
         after = { code: anchor.code, id: anchor.id }
       }
       const fetchLimit = query.limit + 1
-      const rawProjects = context.services.projects.list({
-        ...filters,
-        ...(after === undefined ? {} : { after }),
-        limit: fetchLimit,
-      } as ProjectListFilter)
+      const rawProjects = internalOperation(
+        () => context.services.projects.list({
+          ...filters,
+          ...(after === undefined ? {} : { after }),
+          limit: fetchLimit,
+        } as ProjectListFilter),
+      )
       const projects = rawProjects.slice(0, fetchLimit).map(
         (project) => parseResponse(persistedProjectSchema, project),
       )
@@ -152,46 +156,58 @@ export const projectRoutes: AppRouteModule = {
     router.post('/projects', (request, response) => {
       const input = createProjectBodySchema.parse(request.body)
       const context = getContext()
-      const project = context.services.projects.create(
-        input as CreateProjectServiceInput,
-        requestActorId(context),
-        'web',
+      const project = callService(
+        persistedProjectSchema,
+        () => context.services.projects.create(
+          input as CreateProjectServiceInput,
+          requestActorId(context),
+          'web',
+        ),
       )
-      sendSuccess(response, parseResponse(persistedProjectSchema, project), 201)
+      sendSuccess(response, project, 201)
     })
 
     router.get('/projects/:id', (request, response) => {
       const { id } = projectIdParamsSchema.parse(request.params)
-      const project = getContext().services.projects.get(id)
-      sendSuccess(response, parseResponse(persistedProjectSchema, project))
+      const context = getContext()
+      const project = callService(
+        persistedProjectSchema,
+        () => context.services.projects.get(id),
+      )
+      sendSuccess(response, project)
     })
 
     router.patch('/projects/:id', (request, response) => {
       const { id } = projectIdParamsSchema.parse(request.params)
       const input = updateProjectBodySchema.parse(request.body)
       const context = getContext()
-      const project = context.services.projects.update(
-        id,
-        input as UpdateProjectInput,
-        requestActorId(context),
-        'web',
+      const project = callService(
+        persistedProjectSchema,
+        () => context.services.projects.update(
+          id,
+          input as UpdateProjectInput,
+          requestActorId(context),
+          'web',
+        ),
       )
-      sendSuccess(response, parseResponse(persistedProjectSchema, project))
+      sendSuccess(response, project)
     })
 
     router.get('/projects/:projectId/members', (request, response) => {
       const { projectId } = memberProjectParamsSchema.parse(request.params)
       const context = getContext()
-      parseResponse(
+      callService(
         persistedProjectSchema,
-        context.services.projects.get(projectId),
+        () => context.services.projects.get(projectId),
       )
-      const rows = context.database.prepare(`
-        SELECT project_id, actor_id, membership_role, joined_at
-        FROM project_members
-        WHERE project_id = ?
-        ORDER BY membership_role, joined_at, actor_id
-      `).all(projectId) as unknown as MemberRow[]
+      const rows = internalOperation(
+        () => context.database.prepare(`
+          SELECT project_id, actor_id, membership_role, joined_at
+          FROM project_members
+          WHERE project_id = ?
+          ORDER BY membership_role, joined_at, actor_id
+        `).all(projectId) as unknown as MemberRow[],
+      )
       const items = rows.map((row) => parseResponse(
         persistedProjectMemberSchema,
         {
@@ -208,15 +224,18 @@ export const projectRoutes: AppRouteModule = {
       const { projectId } = memberProjectParamsSchema.parse(request.params)
       const { actorId } = addMemberBodySchema.parse(request.body)
       const context = getContext()
-      const member = context.services.projects.addMember(
-        projectId,
-        actorId,
-        requestActorId(context),
-        'web',
+      const member = callService(
+        persistedProjectMemberSchema,
+        () => context.services.projects.addMember(
+          projectId,
+          actorId,
+          requestActorId(context),
+          'web',
+        ),
       )
       sendSuccess(
         response,
-        parseResponse(persistedProjectMemberSchema, member),
+        member,
         201,
       )
     })

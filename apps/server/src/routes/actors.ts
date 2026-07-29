@@ -84,6 +84,26 @@ export function parseResponse<Output>(
   return parsed.data
 }
 
+export function internalOperation<Result>(
+  operation: () => Result,
+): Result {
+  try {
+    return operation()
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new ResponseContractError()
+    }
+    throw error
+  }
+}
+
+export function callService<Output>(
+  schema: z.ZodType<Output>,
+  operation: () => unknown,
+): Output {
+  return parseResponse(schema, internalOperation(operation))
+}
+
 export function cursorError(cursor: string): DomainError {
   return new DomainError(
     'PAGINATION_CURSOR_INVALID',
@@ -161,9 +181,9 @@ export function paginate<Item>(
 }
 
 export function requestActorId(context: AppContext): string {
-  const actor = parseResponse(
+  const actor = callService(
     persistedActorSchema,
-    context.services.actors.get(context.localActorId),
+    () => context.services.actors.get(context.localActorId),
   )
   if (actor.status !== 'active') {
     throw new DomainError(
@@ -214,9 +234,9 @@ export const actorRoutes: AppRouteModule = {
         }
         let anchor
         try {
-          anchor = parseResponse(
+          anchor = callService(
             persistedActorSchema,
-            context.services.actors.get(position[1]!),
+            () => context.services.actors.get(position[1]!),
           )
         } catch (error) {
           if (
@@ -238,11 +258,13 @@ export const actorRoutes: AppRouteModule = {
         after = { name: anchor.name, id: anchor.id }
       }
       const fetchLimit = query.limit + 1
-      const rawActors = context.services.actors.list({
-        ...filters,
-        ...(after === undefined ? {} : { after }),
-        limit: fetchLimit,
-      } as ActorListFilter)
+      const rawActors = internalOperation(
+        () => context.services.actors.list({
+          ...filters,
+          ...(after === undefined ? {} : { after }),
+          limit: fetchLimit,
+        } as ActorListFilter),
+      )
       const actors = rawActors.slice(0, fetchLimit).map(
         (actor) => parseResponse(persistedActorSchema, actor),
       )
@@ -258,31 +280,41 @@ export const actorRoutes: AppRouteModule = {
     router.post('/actors', (request, response) => {
       const input = createActorBodySchema.parse(request.body)
       const context = getContext()
-      const actor = context.services.actors.createHuman(
-        input as CreateHumanInput,
-        requestActorId(context),
-        'web',
+      const actor = callService(
+        persistedActorSchema,
+        () => context.services.actors.createHuman(
+          input as CreateHumanInput,
+          requestActorId(context),
+          'web',
+        ),
       )
-      sendSuccess(response, parseResponse(persistedActorSchema, actor), 201)
+      sendSuccess(response, actor, 201)
     })
 
     router.get('/actors/:id', (request, response) => {
       const { id } = actorIdParamsSchema.parse(request.params)
-      const actor = getContext().services.actors.get(id)
-      sendSuccess(response, parseResponse(persistedActorSchema, actor))
+      const context = getContext()
+      const actor = callService(
+        persistedActorSchema,
+        () => context.services.actors.get(id),
+      )
+      sendSuccess(response, actor)
     })
 
     router.patch('/actors/:id', (request, response) => {
       const { id } = actorIdParamsSchema.parse(request.params)
       const input = updateActorBodySchema.parse(request.body)
       const context = getContext()
-      const actor = context.services.actors.update(
-        id,
-        input as UpdateActorInput,
-        requestActorId(context),
-        'web',
+      const actor = callService(
+        persistedActorSchema,
+        () => context.services.actors.update(
+          id,
+          input as UpdateActorInput,
+          requestActorId(context),
+          'web',
+        ),
       )
-      sendSuccess(response, parseResponse(persistedActorSchema, actor))
+      sendSuccess(response, actor)
     })
 
     router.post('/actors/:id/deactivate', (request, response) => {
@@ -290,9 +322,9 @@ export const actorRoutes: AppRouteModule = {
       const { version } = deactivateActorBodySchema.parse(request.body)
       const context = getContext()
       const actorId = requestActorId(context)
-      const current = parseResponse(
+      const current = callService(
         persistedActorSchema,
-        context.services.actors.get(id),
+        () => context.services.actors.get(id),
       )
       if (current.version !== version) {
         throw new DomainError(
@@ -305,8 +337,11 @@ export const actorRoutes: AppRouteModule = {
           },
         )
       }
-      const actor = context.services.actors.deactivate(id, actorId, 'web')
-      sendSuccess(response, parseResponse(persistedActorSchema, actor))
+      const actor = callService(
+        persistedActorSchema,
+        () => context.services.actors.deactivate(id, actorId, 'web'),
+      )
+      sendSuccess(response, actor)
     })
   },
 }
