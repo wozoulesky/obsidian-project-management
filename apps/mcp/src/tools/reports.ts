@@ -19,6 +19,7 @@ import {
   handleToolCall,
   successResult,
 } from '../tool-result.js'
+import { bestEffortTouch } from '../tool-execution.js'
 import { requireAgent } from './identity.js'
 
 type ReportToolServices = {
@@ -87,7 +88,7 @@ export function registerReportTools(
       ...(today === undefined ? {} : { today }),
       ...(activityLimit === undefined ? {} : { activityLimit }),
     })
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(
       `Dashboard: ${snapshot.metrics.totalTasks} task(s), `
       + `${snapshot.metrics.activeDefects} active defect(s).`,
@@ -116,7 +117,7 @@ export function registerReportTools(
       ...(projectId === undefined ? {} : { projectId }),
       ...(today === undefined ? {} : { today }),
     })
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(`Found ${items.length} overdue task(s).`, { items })
   }))
 
@@ -150,7 +151,7 @@ export function registerReportTools(
       ...(after === undefined ? {} : { after }),
       ...(limit === undefined ? {} : { limit }),
     })
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(`Found ${items.length} activity item(s).`, { items })
   }))
 }

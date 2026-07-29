@@ -14,6 +14,7 @@ import { registerProjectTools } from './tools/projects.js'
 import { registerReportTools } from './tools/reports.js'
 import { registerRequirementTools } from './tools/requirements.js'
 import { registerTaskTools } from './tools/tasks.js'
+import { inputInvalidResult } from './tool-result.js'
 
 export type ProjectOsMcpServices = {
   activities: ActivityService
@@ -25,6 +26,22 @@ export type ProjectOsMcpServices = {
   tasks: TaskService
 }
 
+function installStructuredInputErrors(server: McpServer): void {
+  const internals = server as unknown as {
+    createToolError: (message: string) => unknown
+  }
+  const createToolError = internals.createToolError.bind(server)
+
+  // SDK 1.29 formats pre-handler validation failures as unstructured tool
+  // errors. This compatibility seam changes only that error result while
+  // preserving the strict advertised schema and the SDK validation path.
+  internals.createToolError = (message) => {
+    return message.includes('Input validation error:')
+      ? inputInvalidResult()
+      : createToolError(message)
+  }
+}
+
 export function createProjectOsMcpServer(
   services: ProjectOsMcpServices,
 ): McpServer {
@@ -33,6 +50,7 @@ export function createProjectOsMcpServer(
     version: '0.1.0',
   })
 
+  installStructuredInputErrors(server)
   registerIdentityTools(server, services.actors)
   registerProjectTools(server, services)
   registerTaskTools(server, services)

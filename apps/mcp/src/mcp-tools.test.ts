@@ -19,6 +19,7 @@ import {
   it,
 } from 'vitest'
 import { createProjectOsMcpServer } from './create-server.js'
+import type { ProjectOsMcpServices } from './create-server.js'
 
 type Harness = {
   call(
@@ -26,13 +27,14 @@ type Harness = {
     arguments_: Record<string, unknown>,
   ): ReturnType<Client['callTool']>
   client: Client
+  services: ProjectOsMcpServices
   close(): Promise<void>
 }
 
 async function createInMemoryMcpClient(
   database: DatabaseSync,
 ): Promise<Harness> {
-  const server = createProjectOsMcpServer({
+  const services = {
     activities: new ActivityService(database),
     actors: new ActorService(database),
     dashboard: new DashboardService(database),
@@ -40,7 +42,8 @@ async function createInMemoryMcpClient(
     projects: new ProjectService(database),
     requirements: new RequirementService(database),
     tasks: new TaskService(database),
-  })
+  }
+  const server = createProjectOsMcpServer(services)
   const client = new Client({
     name: 'project-os-mcp-test',
     version: '0.0.0',
@@ -53,6 +56,7 @@ async function createInMemoryMcpClient(
 
   return {
     client,
+    services,
     call(name, arguments_) {
       return client.callTool({
         name,
@@ -96,37 +100,39 @@ describe('Project OS MCP identity and project tools', () => {
     return structured(result)
   }
 
-  it('discovers identity and project tools', async () => {
+  it('advertises exactly the approved strict MCP tool contract', async () => {
     const tools = await harness.client.listTools()
 
-    expect(tools.tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining([
-        'agent_register',
-        'agent_whoami',
-        'agent_list',
-        'project_create',
-        'project_get',
-        'project_list',
-        'project_update',
-        'task_create',
-        'task_get',
-        'task_list',
-        'task_update',
-        'progress_submit',
-        'requirement_create',
-        'requirement_get',
-        'requirement_list',
-        'requirement_update',
-        'defect_create',
-        'defect_get',
-        'defect_list',
-        'defect_update',
-        'defect_to_task',
-        'dashboard_snapshot',
-        'list_overdue',
-        'activity_log',
-      ]),
-    )
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual([
+      'activity_log',
+      'agent_list',
+      'agent_register',
+      'agent_whoami',
+      'dashboard_snapshot',
+      'defect_create',
+      'defect_list',
+      'defect_to_task',
+      'defect_update',
+      'list_overdue',
+      'progress_submit',
+      'project_create',
+      'project_get',
+      'project_list',
+      'project_update',
+      'requirement_create',
+      'requirement_list',
+      'requirement_update',
+      'task_create',
+      'task_get',
+      'task_list',
+      'task_update',
+    ])
+    expect(
+      tools.tools.find(({ name }) => name === 'project_update')?.inputSchema,
+    ).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+    })
   })
 
   it('registers idempotently and returns structured content', async () => {
@@ -247,6 +253,11 @@ describe('Project OS MCP identity and project tools', () => {
     })
 
     expect(invalid.isError).toBe(true)
+    expect(structured(invalid)).toMatchObject({
+      code: 'INPUT_INVALID',
+      message: 'Tool input failed validation',
+      details: {},
+    })
     expect(new ActorService(database).list({ kind: 'agent' })).toEqual([])
   })
 
@@ -270,6 +281,11 @@ describe('Project OS MCP identity and project tools', () => {
     })
 
     expect(invalid.isError).toBe(true)
+    expect(structured(invalid)).toMatchObject({
+      code: 'INPUT_INVALID',
+      message: 'Tool input failed validation',
+      details: {},
+    })
     expect(new ProjectService(database).get(projectId)).toMatchObject({
       status: 'not_started',
       version: 1,
@@ -290,6 +306,11 @@ describe('Project OS MCP identity and project tools', () => {
     })
 
     expect(invalid.isError).toBe(true)
+    expect(structured(invalid)).toMatchObject({
+      code: 'INPUT_INVALID',
+      message: 'Tool input failed validation',
+      details: {},
+    })
     expect(new ActorService(database).get(agentId).version).toBe(
       actorBefore.version,
     )
@@ -470,7 +491,17 @@ describe('Project OS MCP identity and project tools', () => {
       expect.objectContaining({ title: 'Second task' }),
     ])
     expect(partialCursor.isError).toBe(true)
+    expect(structured(partialCursor)).toMatchObject({
+      code: 'INPUT_INVALID',
+      message: 'Tool input failed validation',
+      details: {},
+    })
     expect(typo.isError).toBe(true)
+    expect(structured(typo)).toMatchObject({
+      code: 'INPUT_INVALID',
+      message: 'Tool input failed validation',
+      details: {},
+    })
     expect(structured(updated).task).toMatchObject({
       title: 'Updated first task',
       version: 2,
@@ -505,10 +536,6 @@ describe('Project OS MCP identity and project tools', () => {
     })
     const requirement = structured(createdRequirement)
       .requirement as Record<string, unknown>
-    const fetchedRequirement = await harness.call('requirement_get', {
-      agent_id: pmId,
-      requirement_id: requirement.id,
-    })
     const listedRequirements = await harness.call('requirement_list', {
       agent_id: pmId,
       project_id: projectId,
@@ -534,10 +561,6 @@ describe('Project OS MCP identity and project tools', () => {
       string,
       unknown
     >
-    const fetchedDefect = await harness.call('defect_get', {
-      agent_id: qaId,
-      defect_id: defect.id,
-    })
     const listedDefects = await harness.call('defect_list', {
       agent_id: qaId,
       project_id: projectId,
@@ -569,15 +592,11 @@ describe('Project OS MCP identity and project tools', () => {
       today: '2026-07-29',
     })
 
-    expect(structured(fetchedRequirement).requirement).toMatchObject({
-      id: requirement.id,
-    })
     expect(structured(listedRequirements).items).toHaveLength(1)
     expect(structured(updatedRequirement).requirement).toMatchObject({
       status: 'reviewed',
       version: 2,
     })
-    expect(structured(fetchedDefect).defect).toMatchObject({ id: defect.id })
     expect(structured(listedDefects).items).toHaveLength(1)
     expect(structured(updatedDefect).defect).toMatchObject({
       description: 'Confirmed by QA',
@@ -600,5 +619,33 @@ describe('Project OS MCP identity and project tools', () => {
         status: 'overdue',
       }),
     ])
+  })
+
+  it('rolls back an MCP business write when the atomic actor touch fails', async () => {
+    const pm = await register()
+    const pmId = pm.agent_id as string
+    const actorBefore = new ActorService(database).get(pmId)
+    database.exec(`
+      CREATE TRIGGER fail_actor_touch
+      BEFORE UPDATE OF last_active_at ON actors
+      BEGIN
+        SELECT RAISE(ABORT, 'forced actor touch failure');
+      END
+    `)
+
+    const failed = await harness.call('project_create', {
+      agent_id: pmId,
+      name: 'Must roll back',
+      owner_id: pmId,
+    })
+
+    expect(failed.isError).toBe(true)
+    expect(new ProjectService(database).list()).toEqual([])
+    expect(new ActorService(database).get(pmId)).toEqual(actorBefore)
+    expect(database.prepare(`
+      SELECT operation
+      FROM activities
+      WHERE operation = 'project.create'
+    `).all()).toEqual([])
   })
 })

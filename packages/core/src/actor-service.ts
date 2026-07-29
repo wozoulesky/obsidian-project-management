@@ -161,6 +161,10 @@ export class ActorService {
     `)
   }
 
+  runAtomic<T>(work: () => T): T {
+    return withImmediateTransaction(this.database, work)
+  }
+
   createHuman(
     input: CreateHumanInput,
     actorId?: string,

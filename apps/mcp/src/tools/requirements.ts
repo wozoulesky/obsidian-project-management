@@ -16,6 +16,10 @@ import {
   handleToolCall,
   successResult,
 } from '../tool-result.js'
+import {
+  bestEffortTouch,
+  runAtomicWrite,
+} from '../tool-execution.js'
 import { requireAgent } from './identity.js'
 
 type RequirementToolServices = {
@@ -39,10 +43,6 @@ const requirementCreateInputSchema = z.strictObject({
   acceptance_criteria:
     persistedRequirementSchema.shape.acceptanceCriteria.optional(),
   linked_task_ids: persistedRequirementSchema.shape.linkedTaskIds.optional(),
-})
-const requirementGetInputSchema = z.strictObject({
-  agent_id: agentIdSchema,
-  requirement_id: requirementIdSchema,
 })
 const requirementListInputSchema = z.strictObject({
   agent_id: agentIdSchema,
@@ -115,44 +115,20 @@ export function registerRequirementTools(
     linked_task_ids: linkedTaskIds,
   }) => handleToolCall(() => {
     requireAgent(services.actors, agentId)
-    const requirement = services.requirements.create({
-      projectId,
-      title,
-      priority,
-      ...(description === undefined ? {} : { description }),
-      ...(status === undefined ? {} : { status }),
-      ...(acceptanceCriteria === undefined
-        ? {}
-        : { acceptanceCriteria }),
-      ...(linkedTaskIds === undefined ? {} : { linkedTaskIds }),
-    }, agentId, 'mcp')
-    services.actors.touch(agentId)
+    const requirement = runAtomicWrite(services.actors, agentId, () =>
+      services.requirements.create({
+        projectId,
+        title,
+        priority,
+        ...(description === undefined ? {} : { description }),
+        ...(status === undefined ? {} : { status }),
+        ...(acceptanceCriteria === undefined
+          ? {}
+          : { acceptanceCriteria }),
+        ...(linkedTaskIds === undefined ? {} : { linkedTaskIds }),
+      }, agentId, 'mcp'))
     return successResult(
       `Created requirement ${requirement.code}: ${requirement.title}.`,
-      { requirement },
-    )
-  }))
-
-  server.registerTool('requirement_get', {
-    description:
-      'Get one Project OS requirement. Requires agent_id with '
-      + 'requirement.read permission and updates caller activity.',
-    inputSchema: requirementGetInputSchema,
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  }, ({
-    agent_id: agentId,
-    requirement_id: requirementId,
-  }) => handleToolCall(() => {
-    authorizeRead(services, agentId)
-    const requirement = services.requirements.get(requirementId)
-    services.actors.touch(agentId)
-    return successResult(
-      `Requirement ${requirement.code}: ${requirement.title}.`,
       { requirement },
     )
   }))
@@ -195,7 +171,7 @@ export function registerRequirementTools(
           }),
       ...(limit === undefined ? {} : { limit }),
     })
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(
       `Found ${items.length} requirement(s).`,
       { items },
@@ -237,13 +213,13 @@ export function registerRequirementTools(
         : { acceptanceCriteria }),
       ...(linkedTaskIds === undefined ? {} : { linkedTaskIds }),
     }
-    const requirement = services.requirements.update(
-      requirementId,
-      input,
-      agentId,
-      'mcp',
-    )
-    services.actors.touch(agentId)
+    const requirement = runAtomicWrite(services.actors, agentId, () =>
+      services.requirements.update(
+        requirementId,
+        input,
+        agentId,
+        'mcp',
+      ))
     return successResult(
       `Updated requirement ${requirement.code}: ${requirement.title}.`,
       { requirement },

@@ -78,10 +78,30 @@ type ActivityInsert = {
   createdAt?: string
 }
 
+let nestedTransactionSequence = 0
+
 export function withImmediateTransaction<T>(
   database: DatabaseSync,
   work: () => T,
 ): T {
+  if (database.isTransaction) {
+    const savepoint = `project_os_nested_${++nestedTransactionSequence}`
+    database.exec(`SAVEPOINT ${savepoint}`)
+    try {
+      const result = work()
+      database.exec(`RELEASE SAVEPOINT ${savepoint}`)
+      return result
+    } catch (error) {
+      try {
+        database.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`)
+        database.exec(`RELEASE SAVEPOINT ${savepoint}`)
+      } catch {
+        // Preserve the mutation error if SQLite already ended the savepoint.
+      }
+      throw error
+    }
+  }
+
   database.exec('BEGIN IMMEDIATE')
 
   try {
@@ -89,10 +109,12 @@ export function withImmediateTransaction<T>(
     database.exec('COMMIT')
     return result
   } catch (error) {
-    try {
-      database.exec('ROLLBACK')
-    } catch {
-      // Preserve the mutation error if SQLite already ended the transaction.
+    if (database.isTransaction) {
+      try {
+        database.exec('ROLLBACK')
+      } catch {
+        // Preserve the mutation error if SQLite already ended the transaction.
+      }
     }
     throw error
   }

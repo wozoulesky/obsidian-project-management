@@ -17,6 +17,10 @@ import {
   handleToolCall,
   successResult,
 } from '../tool-result.js'
+import {
+  bestEffortTouch,
+  runAtomicWrite,
+} from '../tool-execution.js'
 import { requireAgent } from './identity.js'
 
 type DefectToolServices = {
@@ -41,10 +45,6 @@ const defectCreateInputSchema = z.strictObject({
   linked_requirement_id:
     persistedDefectSchema.shape.linkedRequirementId,
   linked_task_id: persistedDefectSchema.shape.linkedTaskId,
-})
-const defectGetInputSchema = z.strictObject({
-  agent_id: agentIdSchema,
-  defect_id: defectIdSchema,
 })
 const defectListInputSchema = z.strictObject({
   agent_id: agentIdSchema,
@@ -131,43 +131,22 @@ export function registerDefectTools(
     linked_task_id: linkedTaskId,
   }) => handleToolCall(() => {
     requireAgent(services.actors, agentId)
-    const defect = services.defects.create({
-      projectId,
-      title,
-      severity,
-      assigneeId,
-      ...(description === undefined ? {} : { description }),
-      ...(status === undefined ? {} : { status }),
-      ...(reproductionSteps === undefined ? {} : { reproductionSteps }),
-      ...(linkedRequirementId === undefined
-        ? {}
-        : { linkedRequirementId }),
-      ...(linkedTaskId === undefined ? {} : { linkedTaskId }),
-    }, agentId, 'mcp')
-    services.actors.touch(agentId)
+    const defect = runAtomicWrite(services.actors, agentId, () =>
+      services.defects.create({
+        projectId,
+        title,
+        severity,
+        assigneeId,
+        ...(description === undefined ? {} : { description }),
+        ...(status === undefined ? {} : { status }),
+        ...(reproductionSteps === undefined ? {} : { reproductionSteps }),
+        ...(linkedRequirementId === undefined
+          ? {}
+          : { linkedRequirementId }),
+        ...(linkedTaskId === undefined ? {} : { linkedTaskId }),
+      }, agentId, 'mcp'))
     return successResult(
       `Created defect ${defect.code}: ${defect.title}.`,
-      { defect },
-    )
-  }))
-
-  server.registerTool('defect_get', {
-    description:
-      'Get one Project OS defect. Requires agent_id with defect.read '
-      + 'permission and updates caller activity.',
-    inputSchema: defectGetInputSchema,
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  }, ({ agent_id: agentId, defect_id: defectId }) => handleToolCall(() => {
-    authorizeRead(services, agentId)
-    const defect = services.defects.get(defectId)
-    services.actors.touch(agentId)
-    return successResult(
-      `Defect ${defect.code}: ${defect.title}.`,
       { defect },
     )
   }))
@@ -212,7 +191,7 @@ export function registerDefectTools(
           }),
       ...(limit === undefined ? {} : { limit }),
     })
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(`Found ${items.length} defect(s).`, { items })
   }))
 
@@ -255,13 +234,13 @@ export function registerDefectTools(
         : { linkedRequirementId }),
       ...(linkedTaskId === undefined ? {} : { linkedTaskId }),
     }
-    const defect = services.defects.update(
-      defectId,
-      input,
-      agentId,
-      'mcp',
-    )
-    services.actors.touch(agentId)
+    const defect = runAtomicWrite(services.actors, agentId, () =>
+      services.defects.update(
+        defectId,
+        input,
+        agentId,
+        'mcp',
+      ))
     return successResult(
       `Updated defect ${defect.code}: ${defect.title}.`,
       { defect },
@@ -289,18 +268,18 @@ export function registerDefectTools(
     version,
   }) => handleToolCall(() => {
     requireAgent(services.actors, agentId)
-    const task = services.defects.toTask(
-      defectId,
-      {
-        startDate,
-        dueDate,
-        version,
-        ...(priority === undefined ? {} : { priority }),
-      },
-      agentId,
-      'mcp',
-    )
-    services.actors.touch(agentId)
+    const task = runAtomicWrite(services.actors, agentId, () =>
+      services.defects.toTask(
+        defectId,
+        {
+          startDate,
+          dueDate,
+          version,
+          ...(priority === undefined ? {} : { priority }),
+        },
+        agentId,
+        'mcp',
+      ))
     return successResult(
       `Converted defect to task ${task.code}: ${task.title}.`,
       { task },

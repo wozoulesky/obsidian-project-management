@@ -17,6 +17,10 @@ import {
   handleToolCall,
   successResult,
 } from '../tool-result.js'
+import {
+  bestEffortTouch,
+  runAtomicWrite,
+} from '../tool-execution.js'
 import { requireAgent } from './identity.js'
 
 type TaskToolServices = {
@@ -132,19 +136,19 @@ export function registerTaskTools(
     dependency_ids: dependencyIds,
   }) => handleToolCall(() => {
     requireAgent(services.actors, agentId)
-    const task = services.tasks.create({
-      projectId,
-      title,
-      assigneeId,
-      startDate,
-      dueDate,
-      priority,
-      ...(description === undefined ? {} : { description }),
-      ...(milestoneId === undefined ? {} : { milestoneId }),
-      ...(parentId === undefined ? {} : { parentId }),
-      ...(dependencyIds === undefined ? {} : { dependencyIds }),
-    }, agentId, 'mcp')
-    services.actors.touch(agentId)
+    const task = runAtomicWrite(services.actors, agentId, () =>
+      services.tasks.create({
+        projectId,
+        title,
+        assigneeId,
+        startDate,
+        dueDate,
+        priority,
+        ...(description === undefined ? {} : { description }),
+        ...(milestoneId === undefined ? {} : { milestoneId }),
+        ...(parentId === undefined ? {} : { parentId }),
+        ...(dependencyIds === undefined ? {} : { dependencyIds }),
+      }, agentId, 'mcp'))
     return successResult(
       `Created task ${task.code}: ${task.title}.`,
       { task },
@@ -165,7 +169,7 @@ export function registerTaskTools(
   }, ({ agent_id: agentId, task_id: taskId }) => handleToolCall(() => {
     authorizeRead(services, agentId)
     const task = services.tasks.get(taskId)
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(`Task ${task.code}: ${task.title}.`, { task })
   }))
 
@@ -209,7 +213,7 @@ export function registerTaskTools(
           }),
       ...(limit === undefined ? {} : { limit }),
     })
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(`Found ${items.length} task(s).`, { items })
   }))
 
@@ -255,8 +259,8 @@ export function registerTaskTools(
       ...(parentId === undefined ? {} : { parentId }),
       ...(dependencyIds === undefined ? {} : { dependencyIds }),
     }
-    const task = services.tasks.update(taskId, input, agentId, 'mcp')
-    services.actors.touch(agentId)
+    const task = runAtomicWrite(services.actors, agentId, () =>
+      services.tasks.update(taskId, input, agentId, 'mcp'))
     return successResult(
       `Updated task ${task.code}: ${task.title}.`,
       { task },
@@ -284,13 +288,13 @@ export function registerTaskTools(
     version,
   }) => handleToolCall(() => {
     requireAgent(services.actors, agentId)
-    const task = services.tasks.submitProgress(
-      taskId,
-      { progress, status, note, version },
-      agentId,
-      'mcp',
-    )
-    services.actors.touch(agentId)
+    const task = runAtomicWrite(services.actors, agentId, () =>
+      services.tasks.submitProgress(
+        taskId,
+        { progress, status, note, version },
+        agentId,
+        'mcp',
+      ))
     return successResult(
       `Updated ${task.code} to ${task.progress}% (${task.status}).`,
       { task },

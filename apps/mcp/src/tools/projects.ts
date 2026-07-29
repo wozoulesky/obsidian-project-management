@@ -18,6 +18,10 @@ import {
   handleToolCall,
   successResult,
 } from '../tool-result.js'
+import {
+  bestEffortTouch,
+  runAtomicWrite,
+} from '../tool-execution.js'
 import { requireAgent } from './identity.js'
 
 const agentIdSchema = projectMemberSchema.shape.actorId.describe(
@@ -111,14 +115,14 @@ export function registerProjectTools(
     due_date: dueDate,
   }) => handleToolCall(() => {
     authorize(services, agentId, 'project.write')
-    const project = services.projects.create({
-      name,
-      ownerId,
-      ...(description === undefined ? {} : { description }),
-      ...(startDate === undefined ? {} : { startDate }),
-      ...(dueDate === undefined ? {} : { dueDate }),
-    }, agentId, 'mcp')
-    services.actors.touch(agentId)
+    const project = runAtomicWrite(services.actors, agentId, () =>
+      services.projects.create({
+        name,
+        ownerId,
+        ...(description === undefined ? {} : { description }),
+        ...(startDate === undefined ? {} : { startDate }),
+        ...(dueDate === undefined ? {} : { dueDate }),
+      }, agentId, 'mcp'))
     return successResult(
       `Created project ${project.code}: ${project.name}.`,
       { project },
@@ -142,7 +146,7 @@ export function registerProjectTools(
   }) => handleToolCall(() => {
     authorize(services, agentId, 'project.read')
     const project = services.projects.get(projectId)
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(
       `Project ${project.code}: ${project.name}.`,
       { project },
@@ -177,7 +181,7 @@ export function registerProjectTools(
         : { after: { code: afterCode, id: afterId } }),
       ...(limit === undefined ? {} : { limit }),
     })
-    services.actors.touch(agentId)
+    bestEffortTouch(services.actors, agentId)
     return successResult(
       `Found ${projects.length} Project OS project(s).`,
       { projects },
@@ -219,13 +223,13 @@ export function registerProjectTools(
       ...(status === undefined ? {} : { status }),
       ...(progress === undefined ? {} : { progress }),
     }
-    const project = services.projects.update(
-      projectId,
-      input,
-      agentId,
-      'mcp',
-    )
-    services.actors.touch(agentId)
+    const project = runAtomicWrite(services.actors, agentId, () =>
+      services.projects.update(
+        projectId,
+        input,
+        agentId,
+        'mcp',
+      ))
     return successResult(
       `Updated project ${project.code}: ${project.name}.`,
       { project },

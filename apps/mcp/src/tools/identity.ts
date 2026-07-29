@@ -14,6 +14,7 @@ import {
   handleToolCall,
   successResult,
 } from '../tool-result.js'
+import { bestEffortTouch } from '../tool-execution.js'
 
 const agentIdSchema = projectMemberSchema.shape.actorId.describe(
   'Persisted Agent ID returned by agent_register',
@@ -92,13 +93,15 @@ export function registerIdentityTools(
       openWorldHint: false,
     },
   }, ({ name, role, client, capabilities }) => handleToolCall(() => {
-    const registered = actors.registerAgent({
-      name,
-      role,
-      client,
-      ...(capabilities === undefined ? {} : { capabilities }),
+    const actor = actors.runAtomic(() => {
+      const registered = actors.registerAgent({
+        name,
+        role,
+        client,
+        ...(capabilities === undefined ? {} : { capabilities }),
+      })
+      return actors.touch(registered.id)
     })
-    const actor = actors.touch(registered.id)
     return successResult(
       `Registered Project OS Agent ${actor.name} (${actor.id}).`,
       presentAgent(actor),
@@ -117,8 +120,8 @@ export function registerIdentityTools(
       openWorldHint: false,
     },
   }, ({ agent_id: agentId }) => handleToolCall(() => {
-    requireAgent(actors, agentId)
-    const actor = actors.touch(agentId)
+    const actor = requireAgent(actors, agentId)
+    bestEffortTouch(actors, agentId)
     return successResult(
       `Active Project OS Agent: ${actor.name} (${actor.role}).`,
       presentAgent(actor),
@@ -138,12 +141,12 @@ export function registerIdentityTools(
     },
   }, ({ agent_id: agentId, status, limit }) => handleToolCall(() => {
     requireAgent(actors, agentId)
-    actors.touch(agentId)
     const agents = actors.list({
       kind: 'agent',
       ...(status === undefined ? {} : { status }),
       ...(limit === undefined ? {} : { limit }),
     })
+    bestEffortTouch(actors, agentId)
     return successResult(
       `Found ${agents.length} Project OS Agent(s).`,
       { agents: agents.map(presentAgent) },

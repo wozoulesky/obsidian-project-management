@@ -12,6 +12,7 @@ import * as publicApi from './index.js'
 import { ActivityService } from './activity-service.js'
 import { ActorService } from './actor-service.js'
 import { createTestDatabase, openDatabase } from './database.js'
+import { DomainError } from './errors.js'
 import { ProjectService } from './project-service.js'
 
 describe('actor and project services', () => {
@@ -751,6 +752,86 @@ describe('actor and project services', () => {
     expect(() => projects.get('project_missing')).toThrowError(
       expect.objectContaining({ code: 'PROJECT_NOT_FOUND' }),
     )
+  })
+})
+
+describe('atomic actor-coordinated mutations', () => {
+  let database: DatabaseSync
+  let actors: ActorService
+  let projects: ProjectService
+
+  beforeEach(() => {
+    database = createTestDatabase()
+    actors = new ActorService(database)
+    projects = new ProjectService(database)
+  })
+
+  afterEach(() => {
+    database.close()
+  })
+
+  it('commits a nested service write and actor touch once', () => {
+    const pm = actors.registerAgent({
+      name: 'atomic-pm',
+      role: 'pm-agent',
+      client: 'codex',
+    })
+
+    const project = actors.runAtomic(() => {
+      const created = projects.create({
+        name: 'Atomic project',
+        ownerId: pm.id,
+      }, pm.id, 'mcp')
+      actors.touch(pm.id)
+      return created
+    })
+
+    expect(projects.get(project.id)).toEqual(project)
+    expect(actors.get(pm.id).version).toBe(pm.version + 1)
+    expect(database.isTransaction).toBe(false)
+    expect(database.prepare(`
+      SELECT operation, COUNT(*) AS count
+      FROM activities
+      WHERE operation IN ('project.create', 'actor.update')
+      GROUP BY operation
+      ORDER BY operation
+    `).all()).toEqual([
+      { operation: 'actor.update', count: 1 },
+      { operation: 'project.create', count: 1 },
+    ])
+  })
+
+  it('rolls back the business write if the actor is deactivated before touch', () => {
+    const pm = actors.registerAgent({
+      name: 'racing-pm',
+      role: 'pm-agent',
+      client: 'codex',
+    })
+
+    expect(() => actors.runAtomic(() => {
+      projects.create({
+        name: 'Rolled back project',
+        ownerId: pm.id,
+      }, pm.id, 'mcp')
+      actors.deactivate(pm.id, pm.version, pm.id, 'mcp')
+      actors.touch(pm.id)
+    })).toThrow(new DomainError(
+      'ACTOR_INACTIVE',
+      'Actor is inactive',
+      { actorId: pm.id },
+    ))
+
+    expect(projects.list()).toEqual([])
+    expect(actors.get(pm.id)).toMatchObject({
+      status: 'active',
+      version: pm.version,
+    })
+    expect(database.isTransaction).toBe(false)
+    expect(database.prepare(`
+      SELECT operation
+      FROM activities
+      WHERE operation <> 'actor.register'
+    `).all()).toEqual([])
   })
 })
 

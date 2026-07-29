@@ -36,6 +36,23 @@ export function domainErrorResult(error: DomainError): CallToolResult {
   }
 }
 
+export function inputInvalidResult(): CallToolResult {
+  const structuredContent = {
+    code: 'INPUT_INVALID',
+    message: 'Tool input failed validation',
+    details: {},
+  }
+
+  return {
+    isError: true,
+    content: [{
+      type: 'text',
+      text: JSON.stringify(structuredContent),
+    }],
+    structuredContent,
+  }
+}
+
 export function handleToolCall(
   operation: () => CallToolResult,
 ): CallToolResult {
