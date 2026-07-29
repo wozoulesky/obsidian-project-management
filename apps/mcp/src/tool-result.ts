@@ -17,8 +17,11 @@ export function successResult(
 }
 
 export function domainErrorResult(error: DomainError): CallToolResult {
+  const code = error.code === 'PERMISSION_DENIED'
+    ? 'AGENT_PERMISSION_DENIED'
+    : error.code
   const structuredContent = {
-    code: error.code,
+    code,
     message: error.message,
     details: error.details,
   }
