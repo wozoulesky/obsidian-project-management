@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project OS"
+  short_description: "Coordinate projects and Agent work safely"
+  default_prompt: "Use $project-os to inspect my assigned Project OS work and report the next action."
