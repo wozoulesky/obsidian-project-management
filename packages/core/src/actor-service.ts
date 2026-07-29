@@ -109,6 +109,14 @@ function validateActorData(input: {
   })
 }
 
+function sameCapabilities(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return left.length === right.length
+    && left.every((capability, index) => capability === right[index])
+}
+
 export class ActorService {
   private readonly selectById: StatementSync
 
@@ -346,6 +354,14 @@ export class ActorService {
         client: current.client ?? null,
         capabilities,
       })
+
+      if (
+        name === current.name
+        && role === current.role
+        && sameCapabilities(capabilities, current.capabilities)
+      ) {
+        return current
+      }
 
       if (current.kind === 'agent') {
         const client = current.client

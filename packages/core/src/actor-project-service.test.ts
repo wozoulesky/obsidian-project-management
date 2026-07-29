@@ -1,4 +1,9 @@
+import { spawn } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 // @ts-expect-error Activity writes are not part of the package API.
 import type { ActivityInsert } from './index.js'
@@ -6,7 +11,7 @@ import type { ActivityService as PublicActivityService } from './index.js'
 import * as publicApi from './index.js'
 import { ActivityService } from './activity-service.js'
 import { ActorService } from './actor-service.js'
-import { createTestDatabase } from './database.js'
+import { createTestDatabase, openDatabase } from './database.js'
 import { ProjectService } from './project-service.js'
 
 describe('actor and project services', () => {
@@ -123,6 +128,50 @@ describe('actor and project services', () => {
         'web',
       )
     }).toThrow()
+  })
+
+  it('treats an actor version-only update as a semantic no-op', () => {
+    const owner = actors.createHuman({
+      name: 'Lin',
+      role: 'owner',
+      capabilities: ['planning'],
+    })
+    const activityCount = activities.list({ entityId: owner.id }).length
+
+    const result = actors.update(
+      owner.id,
+      { version: owner.version },
+      owner.id,
+      'web',
+    )
+
+    expect(result).toEqual(owner)
+    expect(actors.get(owner.id)).toEqual(owner)
+    expect(activities.list({ entityId: owner.id })).toHaveLength(activityCount)
+  })
+
+  it('treats an actor update with identical fields as a semantic no-op', () => {
+    const owner = actors.createHuman({
+      name: 'Lin',
+      role: 'owner',
+      capabilities: ['planning'],
+    })
+    const activityCount = activities.list({ entityId: owner.id }).length
+
+    const result = actors.update(
+      owner.id,
+      {
+        name: owner.name,
+        role: owner.role,
+        capabilities: [...owner.capabilities],
+        version: owner.version,
+      },
+      owner.id,
+      'web',
+    )
+
+    expect(result).toEqual(owner)
+    expect(activities.list({ entityId: owner.id })).toHaveLength(activityCount)
   })
 
   it('rejects agent identity conflicts with a stable domain error', () => {
@@ -372,6 +421,93 @@ describe('actor and project services', () => {
     }).toThrow()
   })
 
+  it('treats a project version-only update as a semantic no-op', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const project = projects.create(
+      {
+        name: 'Atlas',
+        ownerId: owner.id,
+        startDate: '2026-08-01',
+        dueDate: '2026-08-31',
+        description: '',
+      },
+      owner.id,
+      'web',
+    )
+    const activityCount = activities.list({ entityId: project.id }).length
+
+    const result = projects.update(
+      project.id,
+      { version: project.version },
+      owner.id,
+      'web',
+    )
+
+    expect(result).toEqual(project)
+    expect(projects.get(project.id)).toEqual(project)
+    expect(activities.list({ entityId: project.id }))
+      .toHaveLength(activityCount)
+  })
+
+  it('treats a project update with identical fields as a semantic no-op', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const project = projects.create(
+      {
+        name: 'Atlas',
+        ownerId: owner.id,
+        startDate: '2026-08-01',
+        dueDate: '2026-08-31',
+        description: 'Delivery',
+      },
+      owner.id,
+      'web',
+    )
+    const activityCount = activities.list({ entityId: project.id }).length
+
+    const result = projects.update(
+      project.id,
+      {
+        name: project.name,
+        description: project.description,
+        ownerId: project.ownerId,
+        startDate: project.startDate,
+        dueDate: project.dueDate,
+        status: project.status,
+        progress: project.progress,
+        version: project.version,
+      },
+      owner.id,
+      'web',
+    )
+
+    expect(result).toEqual(project)
+    expect(activities.list({ entityId: project.id }))
+      .toHaveLength(activityCount)
+  })
+
+  it('rejects project updates while the final owner is inactive', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const project = projects.create(
+      { name: 'Atlas', ownerId: owner.id, description: '' },
+      owner.id,
+      'web',
+    )
+    actors.deactivate(owner.id, owner.id, 'web')
+    const activityCount = activities.list({ entityId: project.id }).length
+
+    expect(() => {
+      projects.update(
+        project.id,
+        { description: 'Blocked', version: project.version },
+        owner.id,
+        'web',
+      )
+    }).toThrowError(expect.objectContaining({ code: 'ACTOR_INACTIVE' }))
+    expect(projects.get(project.id)).toEqual(project)
+    expect(activities.list({ entityId: project.id }))
+      .toHaveLength(activityCount)
+  })
+
   it('records every successful mutation with actor, source, entity, and operation', () => {
     const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
     const agent = actors.registerAgent(
@@ -506,4 +642,151 @@ describe('actor and project services', () => {
       expect.objectContaining({ code: 'PROJECT_NOT_FOUND' }),
     )
   })
+})
+
+const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url))
+const vitestEntry = join(
+  repositoryRoot,
+  'node_modules',
+  'vitest',
+  'vitest.mjs',
+)
+const concurrencyClient = join(
+  repositoryRoot,
+  'packages',
+  'core',
+  'src',
+  'service-concurrency-client.test.ts',
+)
+
+function runConcurrencyClient(
+  environment: Record<string, string>,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [vitestEntry, 'run', concurrencyClient],
+      {
+        cwd: repositoryRoot,
+        env: {
+          ...process.env,
+          ...environment,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
+    let stdout = ''
+    let stderr = ''
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk
+    })
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk
+    })
+    child.on('error', reject)
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve()
+      } else {
+        reject(new Error(
+          `Concurrency client exited ${code}\n${stdout}\n${stderr}`,
+        ))
+      }
+    })
+  })
+}
+
+describe('file database service concurrency', () => {
+  const temporaryDirectories: string[] = []
+
+  afterEach(() => {
+    temporaryDirectories.splice(0).forEach((directory) => {
+      rmSync(directory, { recursive: true, force: true })
+    })
+  })
+
+  function createDatabasePath(): string {
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-service-'))
+    temporaryDirectories.push(directory)
+    const path = join(directory, 'project-os.db')
+    const database = openDatabase(path)
+    database.close()
+    return path
+  }
+
+  it('serializes duplicate agent registration across processes', async () => {
+    const path = createDatabasePath()
+    const barrier = `${path}.agent-barrier`
+    mkdirSync(barrier)
+    const environment = {
+      PROJECT_OS_CONCURRENCY_BARRIER: barrier,
+      PROJECT_OS_CONCURRENCY_DATABASE: path,
+      PROJECT_OS_CONCURRENCY_MODE: 'agent',
+    }
+
+    await Promise.all([
+      runConcurrencyClient(environment),
+      runConcurrencyClient(environment),
+    ])
+
+    const database = openDatabase(path)
+    try {
+      expect(database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM actors
+        WHERE kind = 'agent' AND client = 'codex' AND name = 'builder'
+      `).get()).toEqual({ count: 1 })
+      expect(database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM activities
+        WHERE operation = 'actor.register'
+      `).get()).toEqual({ count: 1 })
+    } finally {
+      database.close()
+    }
+  }, 20_000)
+
+  it('allocates unique consecutive project codes across processes', async () => {
+    const path = createDatabasePath()
+    const setup = openDatabase(path)
+    const owner = new ActorService(setup).createHuman({
+      name: 'Lin',
+      role: 'owner',
+    })
+    setup.close()
+    const barrier = `${path}.project-barrier`
+    mkdirSync(barrier)
+    const environment = {
+      PROJECT_OS_CONCURRENCY_BARRIER: barrier,
+      PROJECT_OS_CONCURRENCY_DATABASE: path,
+      PROJECT_OS_CONCURRENCY_MODE: 'project',
+      PROJECT_OS_CONCURRENCY_OWNER: owner.id,
+    }
+
+    await Promise.all([
+      runConcurrencyClient(environment),
+      runConcurrencyClient(environment),
+    ])
+
+    const database = openDatabase(path)
+    try {
+      expect(database.prepare(`
+        SELECT code
+        FROM projects
+        ORDER BY code
+      `).all()).toEqual([
+        { code: 'PRJ-0001' },
+        { code: 'PRJ-0002' },
+      ])
+      expect(database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM activities
+        WHERE operation = 'project.create'
+      `).get()).toEqual({ count: 2 })
+    } finally {
+      database.close()
+    }
+  }, 20_000)
 })

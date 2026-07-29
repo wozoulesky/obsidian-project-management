@@ -121,6 +121,19 @@ function assertDateOrder(
   }
 }
 
+function hasSameProjectValues(
+  left: PersistedProject,
+  right: PersistedProject,
+): boolean {
+  return left.name === right.name
+    && left.description === right.description
+    && left.ownerId === right.ownerId
+    && left.startDate === right.startDate
+    && left.dueDate === right.dueDate
+    && left.status === right.status
+    && left.progress === right.progress
+}
+
 export class ProjectService {
   private readonly selectById: StatementSync
 
@@ -297,16 +310,24 @@ export class ProjectService {
         )
       }
 
-      const next = projectSchema.parse({
+      const candidate = projectSchema.parse({
         ...current,
         ...input,
+        version: current.version,
+        updatedAt: current.updatedAt,
+      })
+      assertDateOrder(candidate.startDate, candidate.dueDate)
+      this.assertActiveActor(candidate.ownerId)
+
+      if (hasSameProjectValues(candidate, current)) {
+        return current
+      }
+
+      const next = projectSchema.parse({
+        ...candidate,
         version: current.version + 1,
         updatedAt: new Date().toISOString(),
       })
-      assertDateOrder(next.startDate, next.dueDate)
-      if (next.ownerId !== current.ownerId) {
-        this.assertActiveActor(next.ownerId)
-      }
 
       this.database.prepare(`
         UPDATE projects
