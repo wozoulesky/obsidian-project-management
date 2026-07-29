@@ -198,6 +198,13 @@ function priorityForSeverity(severity: Severity): Priority {
   }
 }
 
+const verificationStatuses = new Set<DefectStatus>([
+  'verifying',
+  'closed',
+  'rejected',
+  'not_a_defect',
+])
+
 export class DefectService {
   constructor(private readonly database: DatabaseSync) {}
 
@@ -369,6 +376,17 @@ export class DefectService {
           'Developer agents may retain only their own defect assignments',
           { actorId, defectId: id, assigneeId: candidate.assigneeId },
         )
+      }
+      const verificationTransition = current.status !== candidate.status
+        && (
+          verificationStatuses.has(current.status)
+          || verificationStatuses.has(candidate.status)
+        )
+      if (
+        verificationTransition
+        && !canPerform(actor.role, 'defect.verify')
+      ) {
+        assertPermission(actor.role, 'defect.verify')
       }
       this.assertActiveActor(candidate.assigneeId)
       this.assertLinks(

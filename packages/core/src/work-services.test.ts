@@ -322,6 +322,40 @@ describe('TaskService', () => {
     }))
   })
 
+  it.each([
+    ['missing', {}],
+    ['null', { version: null }],
+    ['zero', { version: 0 }],
+  ])(
+    'rejects %s progress version before no-op or persistence',
+    (_name, versionPatch) => {
+      const context = setup()
+      const task = context.tasks.create(
+        taskInput(context.project.id, context.dev.id),
+        context.pm.id,
+        'mcp',
+      )
+      const activityCount = context.activities.list({
+        entityId: task.id,
+      }).length
+
+      expect(() => context.tasks.submitProgress(
+        task.id,
+        {
+          progress: task.progress,
+          status: task.status,
+          note: 'must not be accepted',
+          ...versionPatch,
+        } as never,
+        context.dev.id,
+        'mcp',
+      )).toThrowError(expect.objectContaining({ name: 'ZodError' }))
+      expect(context.tasks.get(task.id)).toEqual(task)
+      expect(context.activities.list({ entityId: task.id }))
+        .toHaveLength(activityCount)
+    },
+  )
+
   it('enforces active actors and assigned-only dev progress and defect work', () => {
     const context = setup()
     const task = context.tasks.create(
@@ -950,6 +984,110 @@ describe('DefectService', () => {
       'mcp',
     )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
     expect(context.defects.get(defect.id)).toEqual(byDoc)
+  })
+
+  it.each([
+    'verifying',
+    'closed',
+    'rejected',
+    'not_a_defect',
+  ] as const)(
+    'denies assigned dev transition from open to %s',
+    (status) => {
+      const context = setup()
+      const defect = context.defects.create(
+        {
+          projectId: context.project.id,
+          title: 'Verification guarded',
+          severity: 'normal',
+          assigneeId: context.dev.id,
+        },
+        context.qa.id,
+        'mcp',
+      )
+      const activityCount = context.activities.list({
+        entityId: defect.id,
+      }).length
+
+      expect(() => context.defects.update(
+        defect.id,
+        { status, version: defect.version },
+        context.dev.id,
+        'mcp',
+      )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+      expect(context.defects.get(defect.id)).toEqual(defect)
+      expect(context.activities.list({ entityId: defect.id }))
+        .toHaveLength(activityCount)
+    },
+  )
+
+  it('denies assigned dev exit from verifying but allows development state work', () => {
+    const context = setup()
+    const defect = context.defects.create(
+      {
+        projectId: context.project.id,
+        title: 'Verification guarded',
+        severity: 'normal',
+        assigneeId: context.dev.id,
+      },
+      context.qa.id,
+      'mcp',
+    )
+    const fixing = context.defects.update(
+      defect.id,
+      { status: 'fixing', version: defect.version },
+      context.dev.id,
+      'mcp',
+    )
+    expect(fixing.status).toBe('fixing')
+    const verifying = context.defects.update(
+      defect.id,
+      { status: 'verifying', version: fixing.version },
+      context.qa.id,
+      'mcp',
+    )
+
+    expect(() => context.defects.update(
+      defect.id,
+      { status: 'fixing', version: verifying.version },
+      context.dev.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+    expect(context.defects.get(defect.id)).toEqual(verifying)
+  })
+
+  it('allows QA and human actors to perform verification transitions', () => {
+    const context = setup()
+    const defect = context.defects.create(
+      {
+        projectId: context.project.id,
+        title: 'Verification permitted',
+        severity: 'normal',
+        assigneeId: context.dev.id,
+      },
+      context.qa.id,
+      'mcp',
+    )
+    const verifying = context.defects.update(
+      defect.id,
+      { status: 'verifying', version: defect.version },
+      context.qa.id,
+      'mcp',
+    )
+    const closed = context.defects.update(
+      defect.id,
+      { status: 'closed', version: verifying.version },
+      context.owner.id,
+      'web',
+    )
+    const reopened = context.defects.update(
+      defect.id,
+      { status: 'fixing', version: closed.version },
+      context.member.id,
+      'web',
+    )
+
+    expect(reopened.status).toBe('fixing')
   })
 
   it.each([

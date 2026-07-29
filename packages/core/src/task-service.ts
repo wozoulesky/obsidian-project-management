@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto'
 import {
   activitySourceSchema,
   persistedActorSchema,
+  persistedTaskProgressInputSchema,
   persistedTaskSchema,
-  taskProgressInputSchema,
   taskSchema,
   taskStatusSchema,
 } from '@project-os/contracts'
@@ -13,8 +13,8 @@ import type {
   ActorRole,
   PersistedActor,
   PersistedTask,
+  PersistedTaskProgressInput,
   Priority,
-  TaskProgressInput,
   TaskStatus,
 } from '@project-os/contracts'
 import {
@@ -370,12 +370,12 @@ export class TaskService {
 
   submitProgress(
     id: string,
-    input: TaskProgressInput,
+    input: PersistedTaskProgressInput,
     actorId: string,
     source: ActivitySource,
   ): PersistedTask {
     const validatedSource = activitySourceSchema.parse(source)
-    const validated = taskProgressInputSchema.parse(input)
+    const validated = persistedTaskProgressInputSchema.parse(input)
 
     return withImmediateTransaction(this.database, () => {
       const actor = this.assertActiveActor(actorId)
@@ -388,9 +388,7 @@ export class TaskService {
           { actorId, taskId: id },
         )
       }
-      if (validated.version !== undefined) {
-        this.assertVersion(id, validated.version, current.version)
-      }
+      this.assertVersion(id, validated.version, current.version)
       if (
         current.progress === validated.progress
         && current.status === validated.status
