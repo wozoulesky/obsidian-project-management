@@ -78,6 +78,13 @@ function parseOptions(arguments_) {
     }
   }
 
+  if (options.agentId !== undefined && !options.writeSmoke) {
+    throw new Error(
+      '--agent-id requires --write-smoke because authenticated MCP calls '
+      + 'update Agent activity',
+    )
+  }
+
   options.root = resolve(options.root)
   options.entry = resolve(
     options.entry ?? resolve(options.root, 'apps/mcp/dist/stdio.js'),
@@ -96,9 +103,12 @@ function usage() {
     '  --root <path>       Project OS root (or PROJECT_OS_ROOT)',
     '  --entry <path>      stdio entry (or PROJECT_OS_MCP_ENTRY)',
     '  --database <path>   SQLite path (or PROJECT_OS_DB)',
-    '  --agent-id <id>     Existing Agent ID for authenticated reads',
-    '  --write-smoke       Register/resume a dedicated smoke-test Agent',
+    '  --agent-id <id>     Existing Agent ID; requires --write-smoke',
+    '  --write-smoke       WRITE: register/resume or touch a smoke-test Agent',
     '  --help              Show this help',
+    '',
+    'Without --write-smoke, verification only discovers the exact tool',
+    'contract and does not call authenticated Project OS tools.',
   ].join('\n')
 }
 
@@ -155,19 +165,20 @@ async function verify(options) {
       )
     }
 
-    let agentId = options.agentId
-    if (options.writeSmoke) {
-      const identity = await call(client, 'agent_register', {
-        name: 'project-os-connection-verifier',
-        role: 'doc-agent',
-        client: 'skill-verifier',
-        capabilities: ['connection-smoke'],
-      })
-      agentId = identity.agent_id
-    }
-
     const checks = ['listTools']
-    if (agentId !== undefined) {
+    let agentId
+    if (options.writeSmoke) {
+      if (options.agentId === undefined) {
+        const identity = await call(client, 'agent_register', {
+          name: 'project-os-connection-verifier',
+          role: 'doc-agent',
+          client: 'skill-verifier',
+          capabilities: ['connection-smoke'],
+        })
+        agentId = identity.agent_id
+      } else {
+        agentId = options.agentId
+      }
       await call(client, 'agent_whoami', { agent_id: agentId })
       await call(client, 'project_list', {
         agent_id: agentId,
@@ -188,12 +199,21 @@ async function verify(options) {
 
     return {
       ok: true,
+      mode: options.writeSmoke ? 'write-smoke' : 'contract-only',
       transport: 'stdio',
       entry: options.entry,
       database: options.database,
       toolCount: discovered.length,
       checks,
       writeSmoke: options.writeSmoke,
+      sideEffects: options.writeSmoke
+        ? [
+            ...(options.agentId === undefined
+              ? ['registers or resumes the dedicated smoke-test Agent']
+              : []),
+            'updates Agent last-active state',
+          ]
+        : [],
       ...(agentId === undefined ? {} : { agentId }),
     }
   } finally {

@@ -54,6 +54,8 @@ Read the matching setup reference when connecting a client:
 - [Kimi Code](references/kimi-code-config.md)
 
 Run `node scripts/verify-connection.mjs` from this skill directory to verify
-tool discovery without creating records. Supply `--agent-id <id>` to include
-identity and report reads. Use `--write-smoke` only when registration of a
-dedicated smoke-test Agent is explicitly acceptable.
+only discovery of the exact tool contract. Default verification does not call
+authenticated tools because those calls update Agent activity. Use
+`--write-smoke` only when registering or touching a smoke-test Agent is
+explicitly acceptable. An optional `--agent-id <id>` is accepted only together
+with that write flag.

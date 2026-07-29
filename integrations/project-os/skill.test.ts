@@ -1,10 +1,36 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { execFileSync } from 'node:child_process'
+import {
+  execFileSync,
+  spawnSync,
+} from 'node:child_process'
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import {
+  join,
+  resolve,
+} from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import {
+  afterAll,
+  describe,
+  expect,
+  it,
+} from 'vitest'
 
 const skillDirectory = fileURLToPath(new URL('.', import.meta.url))
+const verifierPath = join(
+  skillDirectory,
+  'scripts/verify-connection.mjs',
+)
+const builtMcpEntry = resolve(
+  skillDirectory,
+  '../../apps/mcp/dist/stdio.js',
+)
+const temporaryDirectories: string[] = []
 
 function read(relativePath: string): string {
   return readFileSync(join(skillDirectory, relativePath), 'utf8')
@@ -21,6 +47,49 @@ function allText(): string {
     'scripts/verify-connection.mjs',
   ].map(read).join('\n')
 }
+
+function runVerifier(...arguments_: string[]): string {
+  const environment = { ...process.env }
+  delete environment.PROJECT_OS_AGENT_ID
+  return execFileSync(
+    process.execPath,
+    [
+      verifierPath,
+      '--entry',
+      builtMcpEntry,
+      ...arguments_,
+    ],
+    {
+      encoding: 'utf8',
+      env: environment,
+    },
+  )
+}
+
+function databaseSnapshot(databasePath: string, agentId: string) {
+  const database = new DatabaseSync(databasePath, { readOnly: true })
+  try {
+    return {
+      actor: database.prepare(`
+        SELECT version, last_active_at
+        FROM actors
+        WHERE id = ?
+      `).get(agentId),
+      activityCount: database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM activities
+      `).get()?.count,
+    }
+  } finally {
+    database.close()
+  }
+}
+
+afterAll(() => {
+  for (const directory of temporaryDirectories) {
+    rmSync(directory, { force: true, recursive: true })
+  }
+})
 
 describe('Project OS Agent Skill package', () => {
   it('contains current configs and no legacy SSE', () => {
@@ -93,9 +162,74 @@ describe('Project OS Agent Skill package', () => {
 
     const help = execFileSync(
       process.execPath,
-      [join(skillDirectory, 'scripts/verify-connection.mjs'), '--help'],
+      [verifierPath, '--help'],
       { encoding: 'utf8' },
     )
     expect(help).toContain('--write-smoke')
+  })
+
+  it('does not touch Agent or activity state without write-smoke', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-skill-'))
+    temporaryDirectories.push(directory)
+    const databasePath = join(directory, 'verify.db')
+    const seeded = JSON.parse(runVerifier(
+      '--database',
+      databasePath,
+      '--write-smoke',
+    )) as {
+      agentId: string
+      mode: string
+      sideEffects: string[]
+    }
+    expect(seeded).toMatchObject({
+      mode: 'write-smoke',
+      sideEffects: [
+        'registers or resumes the dedicated smoke-test Agent',
+        'updates Agent last-active state',
+      ],
+    })
+    const before = databaseSnapshot(databasePath, seeded.agentId)
+
+    const ordinary = JSON.parse(runVerifier(
+      '--database',
+      databasePath,
+    )) as {
+      checks: string[]
+      mode: string
+      sideEffects: string[]
+      toolCount: number
+      writeSmoke: boolean
+    }
+    expect(ordinary).toMatchObject({
+      checks: ['listTools'],
+      mode: 'contract-only',
+      sideEffects: [],
+      toolCount: 22,
+      writeSmoke: false,
+    })
+
+    const environment = { ...process.env }
+    delete environment.PROJECT_OS_AGENT_ID
+    const rejected = spawnSync(
+      process.execPath,
+      [
+        verifierPath,
+        '--entry',
+        builtMcpEntry,
+        '--database',
+        databasePath,
+        '--agent-id',
+        seeded.agentId,
+      ],
+      {
+        encoding: 'utf8',
+        env: environment,
+      },
+    )
+    expect(rejected.status).toBe(1)
+    expect(rejected.stderr).toContain(
+      '--agent-id requires --write-smoke',
+    )
+    expect(databaseSnapshot(databasePath, seeded.agentId)).toEqual(before)
   })
 })
