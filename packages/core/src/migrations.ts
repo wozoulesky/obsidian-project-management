@@ -5,6 +5,47 @@ type Migration = {
   sql: string
 }
 
+const datePattern =
+  '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+const timestampSecondsPattern =
+  `${datePattern}T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z`
+const timestampMillisecondsPattern =
+  `${datePattern}T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z`
+
+function canonicalDate(column: string): string {
+  return `(
+    length(${column}) = 10
+    AND ${column} GLOB '${datePattern}'
+    AND date(${column}) IS NOT NULL
+    AND strftime('%Y-%m-%d', ${column}) = ${column}
+  )`
+}
+
+function optionalCanonicalDate(column: string): string {
+  return `(${column} IS NULL OR ${canonicalDate(column)})`
+}
+
+function canonicalUtcTimestamp(column: string): string {
+  return `(
+    (
+      length(${column}) = 20
+      AND ${column} GLOB '${timestampSecondsPattern}'
+      AND datetime(${column}) IS NOT NULL
+      AND strftime('%Y-%m-%dT%H:%M:%SZ', ${column}) = ${column}
+    )
+    OR (
+      length(${column}) = 24
+      AND ${column} GLOB '${timestampMillisecondsPattern}'
+      AND datetime(${column}) IS NOT NULL
+      AND strftime('%Y-%m-%dT%H:%M:%fZ', ${column}) = ${column}
+    )
+  )`
+}
+
+function optionalCanonicalUtcTimestamp(column: string): string {
+  return `(${column} IS NULL OR ${canonicalUtcTimestamp(column)})`
+}
+
 const migrations: readonly Migration[] = [
   {
     version: 1,
@@ -28,9 +69,10 @@ const migrations: readonly Migration[] = [
         client TEXT,
         capabilities_json TEXT NOT NULL DEFAULT '[]'
           CHECK (json_valid(capabilities_json)),
-        registered_at TEXT NOT NULL CHECK (substr(registered_at, -1) = 'Z'),
+        registered_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('registered_at')}),
         last_active_at TEXT
-          CHECK (last_active_at IS NULL OR substr(last_active_at, -1) = 'Z'),
+          CHECK (${optionalCanonicalUtcTimestamp('last_active_at')}),
         version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
         CHECK (
           (
@@ -72,12 +114,14 @@ const migrations: readonly Migration[] = [
           ),
         progress INTEGER NOT NULL DEFAULT 0
           CHECK (progress BETWEEN 0 AND 100),
-        created_at TEXT NOT NULL CHECK (substr(created_at, -1) = 'Z'),
-        updated_at TEXT NOT NULL CHECK (substr(updated_at, -1) = 'Z'),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        updated_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('updated_at')}),
         version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
         FOREIGN KEY (owner_id) REFERENCES actors (id) ON DELETE RESTRICT,
-        CHECK (start_date IS NULL OR date(start_date) = start_date),
-        CHECK (due_date IS NULL OR date(due_date) = due_date)
+        CHECK (${optionalCanonicalDate('start_date')}),
+        CHECK (${optionalCanonicalDate('due_date')})
       ) STRICT;
 
       CREATE INDEX projects_owner_id_idx ON projects (owner_id);
@@ -88,7 +132,8 @@ const migrations: readonly Migration[] = [
         actor_id TEXT NOT NULL,
         membership_role TEXT NOT NULL
           CHECK (membership_role IN ('owner', 'member')),
-        joined_at TEXT NOT NULL CHECK (substr(joined_at, -1) = 'Z'),
+        joined_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('joined_at')}),
         PRIMARY KEY (project_id, actor_id),
         FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
         FOREIGN KEY (actor_id) REFERENCES actors (id) ON DELETE RESTRICT
@@ -104,8 +149,8 @@ const migrations: readonly Migration[] = [
         title TEXT NOT NULL CHECK (length(title) > 0),
         description TEXT NOT NULL DEFAULT '',
         assignee_id TEXT NOT NULL,
-        start_date TEXT NOT NULL CHECK (date(start_date) = start_date),
-        due_date TEXT NOT NULL CHECK (date(due_date) = due_date),
+        start_date TEXT NOT NULL CHECK (${canonicalDate('start_date')}),
+        due_date TEXT NOT NULL CHECK (${canonicalDate('due_date')}),
         priority TEXT NOT NULL CHECK (priority IN ('P0', 'P1', 'P2', 'P3')),
         status TEXT NOT NULL DEFAULT 'not_started'
           CHECK (status IN ('not_started', 'in_progress', 'done', 'overdue')),
@@ -115,8 +160,10 @@ const migrations: readonly Migration[] = [
         parent_id TEXT,
         dependency_ids_json TEXT NOT NULL DEFAULT '[]'
           CHECK (json_valid(dependency_ids_json)),
-        created_at TEXT NOT NULL CHECK (substr(created_at, -1) = 'Z'),
-        updated_at TEXT NOT NULL CHECK (substr(updated_at, -1) = 'Z'),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        updated_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('updated_at')}),
         version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
         UNIQUE (project_id, code),
         FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
@@ -150,8 +197,10 @@ const migrations: readonly Migration[] = [
           ),
         acceptance_criteria_json TEXT NOT NULL DEFAULT '[]'
           CHECK (json_valid(acceptance_criteria_json)),
-        created_at TEXT NOT NULL CHECK (substr(created_at, -1) = 'Z'),
-        updated_at TEXT NOT NULL CHECK (substr(updated_at, -1) = 'Z'),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        updated_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('updated_at')}),
         version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
         UNIQUE (project_id, code),
         FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
@@ -199,8 +248,10 @@ const migrations: readonly Migration[] = [
           CHECK (json_valid(reproduction_steps_json)),
         linked_requirement_id TEXT,
         linked_task_id TEXT,
-        created_at TEXT NOT NULL CHECK (substr(created_at, -1) = 'Z'),
-        updated_at TEXT NOT NULL CHECK (substr(updated_at, -1) = 'Z'),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        updated_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('updated_at')}),
         version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
         UNIQUE (project_id, code),
         FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
@@ -252,7 +303,8 @@ const migrations: readonly Migration[] = [
         note TEXT,
         details_json TEXT NOT NULL DEFAULT '{}'
           CHECK (json_valid(details_json)),
-        created_at TEXT NOT NULL CHECK (substr(created_at, -1) = 'Z'),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
         FOREIGN KEY (actor_id) REFERENCES actors (id) ON DELETE RESTRICT,
         FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
       ) STRICT;
@@ -266,7 +318,8 @@ const migrations: readonly Migration[] = [
       CREATE TABLE settings (
         key TEXT PRIMARY KEY CHECK (length(key) > 0),
         value_json TEXT NOT NULL CHECK (json_valid(value_json)),
-        updated_at TEXT NOT NULL CHECK (substr(updated_at, -1) = 'Z'),
+        updated_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('updated_at')}),
         version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)
       ) STRICT;
 
@@ -274,11 +327,12 @@ const migrations: readonly Migration[] = [
         id TEXT PRIMARY KEY CHECK (length(id) > 0),
         name TEXT NOT NULL CHECK (length(name) > 0),
         token_hash TEXT NOT NULL CHECK (length(token_hash) > 0),
-        created_at TEXT NOT NULL CHECK (substr(created_at, -1) = 'Z'),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
         last_used_at TEXT
-          CHECK (last_used_at IS NULL OR substr(last_used_at, -1) = 'Z'),
+          CHECK (${optionalCanonicalUtcTimestamp('last_used_at')}),
         revoked_at TEXT
-          CHECK (revoked_at IS NULL OR substr(revoked_at, -1) = 'Z'),
+          CHECK (${optionalCanonicalUtcTimestamp('revoked_at')}),
         version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)
       ) STRICT;
 
@@ -295,7 +349,8 @@ export function runMigrations(database: DatabaseSync): void {
     database.exec(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version INTEGER PRIMARY KEY CHECK (version >= 1),
-        applied_at TEXT NOT NULL CHECK (substr(applied_at, -1) = 'Z')
+        applied_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('applied_at')})
       ) STRICT;
     `)
 
