@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { DomainError } from './errors.js'
 
 type Migration = {
   version: number
@@ -7,10 +8,8 @@ type Migration = {
 
 const datePattern =
   '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-const timestampSecondsPattern =
-  `${datePattern}T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z`
-const timestampMillisecondsPattern =
-  `${datePattern}T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z`
+const timestampBasePattern =
+  `${datePattern}T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]`
 
 function canonicalDate(column: string): string {
   return `(
@@ -26,24 +25,68 @@ function optionalCanonicalDate(column: string): string {
 }
 
 function canonicalUtcTimestamp(column: string): string {
+  const baseTimestamp = `substr(${column}, 1, 19)`
+  const utcBaseTimestamp = `(${baseTimestamp} || 'Z')`
+  const fraction = `substr(${column}, 21, length(${column}) - 21)`
+
   return `(
     (
       length(${column}) = 20
-      AND ${column} GLOB '${timestampSecondsPattern}'
+      AND ${column} GLOB '${timestampBasePattern}Z'
       AND datetime(${column}) IS NOT NULL
       AND strftime('%Y-%m-%dT%H:%M:%SZ', ${column}) = ${column}
     )
     OR (
-      length(${column}) = 24
-      AND ${column} GLOB '${timestampMillisecondsPattern}'
+      length(${column}) >= 22
+      AND ${baseTimestamp} GLOB '${timestampBasePattern}'
+      AND substr(${column}, 20, 1) = '.'
+      AND substr(${column}, -1) = 'Z'
+      AND length(${fraction}) >= 1
+      AND ${fraction} NOT GLOB '*[^0-9]*'
       AND datetime(${column}) IS NOT NULL
-      AND strftime('%Y-%m-%dT%H:%M:%fZ', ${column}) = ${column}
+      AND datetime(${utcBaseTimestamp}) IS NOT NULL
+      AND strftime('%Y-%m-%dT%H:%M:%SZ', ${utcBaseTimestamp})
+        = ${utcBaseTimestamp}
     )
   )`
 }
 
 function optionalCanonicalUtcTimestamp(column: string): string {
   return `(${column} IS NULL OR ${canonicalUtcTimestamp(column)})`
+}
+
+function jsonTextArray(column: string): string {
+  return `(
+    json_valid(${column})
+    AND json_type(${column}) = 'array'
+  )`
+}
+
+function jsonTextArrayTriggers(table: string, column: string): string {
+  const triggerPrefix = `${table}_${column}_text_array`
+  const invalidElement = `
+    EXISTS (
+      SELECT 1
+      FROM json_each(NEW.${column})
+      WHERE type <> 'text'
+    )
+  `
+
+  return `
+    CREATE TRIGGER ${triggerPrefix}_insert
+    BEFORE INSERT ON ${table}
+    WHEN ${invalidElement}
+    BEGIN
+      SELECT RAISE(ABORT, '${column} must contain only text values');
+    END;
+
+    CREATE TRIGGER ${triggerPrefix}_update
+    BEFORE UPDATE OF ${column} ON ${table}
+    WHEN ${invalidElement}
+    BEGIN
+      SELECT RAISE(ABORT, '${column} must contain only text values');
+    END;
+  `
 }
 
 const migrations: readonly Migration[] = [
@@ -68,7 +111,7 @@ const migrations: readonly Migration[] = [
           CHECK (status IN ('active', 'inactive')),
         client TEXT,
         capabilities_json TEXT NOT NULL DEFAULT '[]'
-          CHECK (json_valid(capabilities_json)),
+          CHECK (${jsonTextArray('capabilities_json')}),
         registered_at TEXT NOT NULL
           CHECK (${canonicalUtcTimestamp('registered_at')}),
         last_active_at TEXT
@@ -88,6 +131,8 @@ const migrations: readonly Migration[] = [
           )
         )
       ) STRICT;
+
+      ${jsonTextArrayTriggers('actors', 'capabilities_json')}
 
       CREATE UNIQUE INDEX actors_agent_identity_idx
         ON actors (client, name)
@@ -159,7 +204,7 @@ const migrations: readonly Migration[] = [
         milestone_id TEXT NOT NULL DEFAULT '',
         parent_id TEXT,
         dependency_ids_json TEXT NOT NULL DEFAULT '[]'
-          CHECK (json_valid(dependency_ids_json)),
+          CHECK (${jsonTextArray('dependency_ids_json')}),
         created_at TEXT NOT NULL
           CHECK (${canonicalUtcTimestamp('created_at')}),
         updated_at TEXT NOT NULL
@@ -170,6 +215,8 @@ const migrations: readonly Migration[] = [
         FOREIGN KEY (assignee_id) REFERENCES actors (id) ON DELETE RESTRICT,
         FOREIGN KEY (parent_id) REFERENCES tasks (id) ON DELETE SET NULL
       ) STRICT;
+
+      ${jsonTextArrayTriggers('tasks', 'dependency_ids_json')}
 
       CREATE INDEX tasks_project_id_idx ON tasks (project_id);
       CREATE INDEX tasks_assignee_id_idx ON tasks (assignee_id);
@@ -196,7 +243,7 @@ const migrations: readonly Migration[] = [
             )
           ),
         acceptance_criteria_json TEXT NOT NULL DEFAULT '[]'
-          CHECK (json_valid(acceptance_criteria_json)),
+          CHECK (${jsonTextArray('acceptance_criteria_json')}),
         created_at TEXT NOT NULL
           CHECK (${canonicalUtcTimestamp('created_at')}),
         updated_at TEXT NOT NULL
@@ -205,6 +252,8 @@ const migrations: readonly Migration[] = [
         UNIQUE (project_id, code),
         FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
       ) STRICT;
+
+      ${jsonTextArrayTriggers('requirements', 'acceptance_criteria_json')}
 
       CREATE INDEX requirements_project_id_idx
         ON requirements (project_id);
@@ -245,7 +294,7 @@ const migrations: readonly Migration[] = [
           ),
         assignee_id TEXT NOT NULL,
         reproduction_steps_json TEXT NOT NULL DEFAULT '[]'
-          CHECK (json_valid(reproduction_steps_json)),
+          CHECK (${jsonTextArray('reproduction_steps_json')}),
         linked_requirement_id TEXT,
         linked_task_id TEXT,
         created_at TEXT NOT NULL
@@ -260,6 +309,8 @@ const migrations: readonly Migration[] = [
           REFERENCES requirements (id) ON DELETE SET NULL,
         FOREIGN KEY (linked_task_id) REFERENCES tasks (id) ON DELETE SET NULL
       ) STRICT;
+
+      ${jsonTextArrayTriggers('defects', 'reproduction_steps_json')}
 
       CREATE INDEX defects_project_id_idx ON defects (project_id);
       CREATE INDEX defects_assignee_id_idx ON defects (assignee_id);
@@ -353,6 +404,22 @@ export function runMigrations(database: DatabaseSync): void {
           CHECK (${canonicalUtcTimestamp('applied_at')})
       ) STRICT;
     `)
+
+    const latestKnownVersion = migrations.at(-1)?.version ?? 0
+    const databaseVersion = database
+      .prepare('SELECT MAX(version) AS version FROM schema_migrations')
+      .get()?.version
+
+    if (
+      typeof databaseVersion === 'number'
+      && databaseVersion > latestKnownVersion
+    ) {
+      throw new DomainError(
+        'DATABASE_SCHEMA_NEWER',
+        'Database schema is newer than this Project OS runtime',
+        { databaseVersion, latestKnownVersion },
+      )
+    }
 
     const hasMigration = database.prepare(
       'SELECT 1 FROM schema_migrations WHERE version = ?',
