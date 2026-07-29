@@ -1,6 +1,10 @@
 import type {
+  ActivityEvent,
+  Actor,
+  AppSettings,
   DashboardSnapshot,
   Defect,
+  Project,
   Requirement,
   RequirementStatus,
   Task,
@@ -8,7 +12,19 @@ import type {
   TaskProgressInput,
 } from './domain'
 
+export type ActivityListInput = {
+  after?: string
+  projectId?: string
+}
+
+export type ActivityPage = {
+  items: ActivityEvent[]
+  nextCursor: string | null
+}
+
 export interface ProjectRepository {
+  listActors(): Promise<Actor[]>
+  listProjects(): Promise<Project[]>
   getDashboard(
     projectId: string,
     days?: 7 | 30 | 90,
@@ -24,4 +40,6 @@ export interface ProjectRepository {
   listDefects(projectId: string): Promise<Defect[]>
   createTaskFromDefect(defectId: string): Promise<Task>
   listGanttTasks(projectId: string): Promise<Task[]>
+  listActivities(input?: ActivityListInput): Promise<ActivityPage>
+  getSettings(): Promise<AppSettings>
 }

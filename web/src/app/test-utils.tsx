@@ -6,7 +6,11 @@ import type { ReactElement, ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, vi } from 'vitest'
 
-import { resetProjectRepositoryForTests } from '../data/query-hooks'
+import {
+  ProjectRepositoryProvider,
+  projectRepository,
+  resetProjectRepositoryForTests,
+} from '../data/query-hooks'
 
 vi.mock('echarts/core', () => ({
   init: vi.fn(() => ({
@@ -53,7 +57,12 @@ export function renderApp(
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>{children}</BrowserRouter>
+        <ProjectRepositoryProvider
+          repository={projectRepository}
+          projectId="atlas"
+        >
+          <BrowserRouter>{children}</BrowserRouter>
+        </ProjectRepositoryProvider>
       </QueryClientProvider>
     )
   }

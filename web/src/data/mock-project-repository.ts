@@ -34,6 +34,14 @@ export function createMockProjectRepository(): ProjectRepository {
   const requirementState = seed.requirements
   const defectState = seed.defects
   const activityState = seed.activities
+  const settingsState = {
+    theme: 'system' as const,
+    background: 'soft' as const,
+    accent: 'blue' as const,
+    density: 'comfortable' as const,
+    updatedAt: '2026-07-28T04:00:00.000Z',
+    version: 1,
+  }
   let activitySequence = activityState.length
 
   const nextActivityId = () => {
@@ -58,6 +66,27 @@ export function createMockProjectRepository(): ProjectRepository {
   })
 
   return {
+    async listActors() {
+      return clone(Object.values(seed.actors))
+    },
+
+    async listProjects() {
+      return clone([{
+        id: 'atlas',
+        code: 'ATLAS',
+        name: 'Atlas',
+        description: '',
+        ownerId: seed.actors.lin?.id ?? Object.values(seed.actors)[0]!.id,
+        startDate: '2026-07-01',
+        dueDate: '2026-08-31',
+        status: 'in_progress' as const,
+        progress: 62,
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-28T04:00:00.000Z',
+        version: 1,
+      }])
+    },
+
     async getDashboard(projectId, days = 30): Promise<DashboardSnapshot> {
       void projectId
       const activeDefects = defectState.filter(
@@ -221,6 +250,25 @@ export function createMockProjectRepository(): ProjectRepository {
     async listGanttTasks(projectId) {
       void projectId
       return clone(taskState)
+    },
+
+    async listActivities({ after } = {}) {
+      const cursorIndex = after === undefined
+        ? -1
+        : activityState.findIndex((activity) => activity.id === after)
+      const items = after === undefined
+        ? clone(activityState)
+        : cursorIndex <= 0
+          ? []
+          : clone(activityState.slice(0, cursorIndex))
+      return {
+        items,
+        nextCursor: activityState[0]?.id ?? after ?? null,
+      }
+    },
+
+    async getSettings() {
+      return clone(settingsState)
     },
   }
 }
