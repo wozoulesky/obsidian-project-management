@@ -6,3 +6,5 @@ web/playwright-report/
 web/test-results/
 web/coverage/
 *.log
+artifacts/mcp-smoke/*
+!artifacts/mcp-smoke/.gitkeep
