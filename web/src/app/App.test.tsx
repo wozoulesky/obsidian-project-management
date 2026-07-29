@@ -7,9 +7,13 @@ import { selectAppRepository } from './app-repository'
 import { renderApp } from './test-utils'
 
 describe('App', () => {
-  it('uses deterministic fixtures only for the explicit E2E build', () => {
-    expect(selectAppRepository(false)).toBe(httpProjectRepository)
-    expect(selectAppRepository(true)).not.toBe(httpProjectRepository)
+  it('fails closed to HTTP unless both E2E mode and fixtures are explicit', () => {
+    expect(selectAppRepository('production', 'true'))
+      .toBe(httpProjectRepository)
+    expect(selectAppRepository('e2e', 'false')).toBe(httpProjectRepository)
+    expect(selectAppRepository('e2e', undefined)).toBe(httpProjectRepository)
+    expect(selectAppRepository('e2e', 'true'))
+      .not.toBe(httpProjectRepository)
   })
 
   it('uses the shared loading skeleton while a lazy page resolves', () => {

@@ -3,9 +3,10 @@ import { createMockProjectRepository } from '../data/mock-project-repository'
 import type { ProjectRepository } from '../data/project-repository'
 
 export function selectAppRepository(
-  useE2eFixtures: boolean,
+  mode: string,
+  fixtureFlag: string | boolean | undefined,
 ): ProjectRepository {
-  return useE2eFixtures
+  return mode === 'e2e' && (fixtureFlag === 'true' || fixtureFlag === true)
     ? createMockProjectRepository()
     : httpProjectRepository
 }

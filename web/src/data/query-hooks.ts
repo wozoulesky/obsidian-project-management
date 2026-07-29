@@ -18,7 +18,6 @@ import type {
   TaskDateInput,
   TaskProgressInput,
 } from './domain'
-import { createMockProjectRepository } from './mock-project-repository'
 import type {
   CreateHumanActorInput,
   CreateProjectTaskInput,
@@ -26,9 +25,17 @@ import type {
   ProjectRepository,
   UpdateActorInput,
 } from './project-repository'
+import {
+  projectId,
+  projectRepository,
+  resetProjectRepositoryForTests,
+} from '#repository-default'
 
-export const projectRepository = createMockProjectRepository()
-export const projectId = 'atlas'
+export {
+  projectId,
+  projectRepository,
+  resetProjectRepositoryForTests,
+}
 
 type ProjectRepositoryContextValue = {
   repository: ProjectRepository
@@ -57,10 +64,6 @@ export function useProjectRepository() {
     repository: projectRepository,
     projectId,
   }
-}
-
-export function resetProjectRepositoryForTests() {
-  Object.assign(projectRepository, createMockProjectRepository())
 }
 
 export const projectQueryKeys = {
@@ -100,7 +103,11 @@ const createTaskQueryOptions = (
   repository: ProjectRepository,
   selectedProjectId: string,
 ) =>
-  import.meta.env.DEV || import.meta.env.VITE_E2E_FIXTURES === 'true'
+  import.meta.env.DEV
+  || (
+    import.meta.env.MODE === 'e2e'
+    && import.meta.env.VITE_E2E_FIXTURES === 'true'
+  )
     ? () => {
         let shouldFail = false
 

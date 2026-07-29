@@ -17,7 +17,11 @@ test('quick submit writes to SQLite and remains visible after reload', async ({
   await dialog.getByLabel('状态').selectOption('in_progress')
   await dialog.getByLabel('进度备注').fill('真实 E2E 持久化验证')
   await dialog.getByRole('button', { name: '提交进度' }).click()
-  await expect(page.getByRole('status')).toContainText('已更新至 80%')
+  const successStatus = page.getByRole('status').filter({
+    hasText: '已更新至 80%',
+  })
+  await expect(successStatus).toHaveCount(1)
+  await expect(successStatus).toContainText('已更新至 80%')
 
   await page.reload()
   await page.goto(new URL('/tasks', runtime.baseURL).href)

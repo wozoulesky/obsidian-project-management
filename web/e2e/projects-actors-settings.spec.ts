@@ -128,6 +128,14 @@ test('keeps settings populated and persists saved appearance after reload', asyn
   page,
   runtime,
 }) => {
+  const initialSettingsResponse = await fetch(
+    `${runtime.apiURL}/api/v1/settings`,
+  )
+  expect(initialSettingsResponse.ok).toBe(true)
+  const initialSettings = await initialSettingsResponse.json() as {
+    data: { version: number }
+  }
+
   await page.goto(new URL('/settings', runtime.baseURL).href)
   await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible()
   for (const heading of ['外观', '常规', '数据', 'MCP', 'Agent Skills']) {
@@ -146,6 +154,32 @@ test('keeps settings populated and persists saved appearance after reload', asyn
   await page.getByRole('button', { name: '保存外观设置' }).click()
   await expect(page.getByRole('status')).toContainText('外观设置已保存')
 
+  const savedSettingsResponse = await fetch(
+    `${runtime.apiURL}/api/v1/settings`,
+  )
+  expect(savedSettingsResponse.ok).toBe(true)
+  const savedSettings = await savedSettingsResponse.json() as {
+    data: {
+      theme: string
+      background: string
+      accent: string
+      density: string
+      version: number
+    }
+  }
+  expect(savedSettings.data).toMatchObject({
+    theme: 'dark',
+    background: 'gradient',
+    accent: 'purple',
+    density: 'compact',
+  })
+  expect(savedSettings.data.version).toBeGreaterThan(
+    initialSettings.data.version,
+  )
+
+  await page.evaluate(() => {
+    localStorage.removeItem('project-os:appearance')
+  })
   await page.reload()
   await expect(page.getByLabel('深色')).toBeChecked()
   await expect(page.getByLabel('渐变')).toBeChecked()

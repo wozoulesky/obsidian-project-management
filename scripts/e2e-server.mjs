@@ -128,6 +128,28 @@ try {
     },
   )
   control.checkpoint()
+  await execFileAsync(
+    npmCommand[0],
+    [
+      ...npmCommand[1],
+      'run',
+      'build',
+      '--workspace',
+      'web',
+      '--',
+      '--mode',
+      'e2e',
+    ],
+    {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        VITE_E2E_FIXTURES: 'true',
+      },
+      timeout: 120_000,
+    },
+  )
+  control.checkpoint()
 
   const apiPort = await availablePort()
   control.checkpoint()
