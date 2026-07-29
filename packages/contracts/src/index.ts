@@ -430,26 +430,34 @@ export type Paginated<T> = {
   pagination: PaginationMeta
 }
 
+export const apiEnvelopeMetaSchema = z.object({
+  request_id: z.string().min(1),
+})
+export type ApiEnvelopeMeta = z.infer<typeof apiEnvelopeMetaSchema>
+
 export function apiSuccessEnvelopeSchema<DataSchema extends z.ZodType>(
   dataSchema: DataSchema,
 ) {
   return z.object({
     data: dataSchema,
-    requestId: z.string().min(1),
+    error: z.null(),
+    meta: apiEnvelopeMetaSchema,
   })
 }
 
 export type ApiSuccessEnvelope<T> = {
   data: T
-  requestId: string
+  error: null
+  meta: ApiEnvelopeMeta
 }
 
 export const apiErrorEnvelopeSchema = z.object({
+  data: z.null(),
   error: z.object({
     code: z.string().min(1),
     message: z.string().min(1),
-    details: z.unknown().optional(),
+    details: z.record(z.string(), z.unknown()),
   }),
-  requestId: z.string().min(1),
+  meta: apiEnvelopeMetaSchema,
 })
 export type ApiErrorEnvelope = z.infer<typeof apiErrorEnvelopeSchema>

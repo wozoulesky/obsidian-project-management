@@ -180,33 +180,55 @@ describe('API envelopes', () => {
     expect(
       successSchema.parse({
         data: { id: 'task-1' },
-        requestId: 'request-1',
+        error: null,
+        meta: { request_id: 'request-1' },
       }),
     ).toEqual({
       data: { id: 'task-1' },
-      requestId: 'request-1',
+      error: null,
+      meta: { request_id: 'request-1' },
     })
     expect(
       contracts.apiErrorEnvelopeSchema.parse({
-        error: { code: 'NOT_FOUND', message: 'Task not found' },
-        requestId: 'request-2',
+        data: null,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Task not found',
+          details: { taskId: 'task-1' },
+        },
+        meta: { request_id: 'request-2' },
       }),
     ).toEqual({
-      error: { code: 'NOT_FOUND', message: 'Task not found' },
-      requestId: 'request-2',
+      data: null,
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Task not found',
+        details: { taskId: 'task-1' },
+      },
+      meta: { request_id: 'request-2' },
     })
   })
 
-  it('rejects malformed success and error envelopes', () => {
+  it('rejects malformed and legacy envelopes', () => {
     const successSchema = contracts.apiSuccessEnvelopeSchema(z.string())
 
     expect(
-      successSchema.safeParse({ requestId: 'request-1' }).success,
+      successSchema.safeParse({
+        data: 'ok',
+        requestId: 'request-1',
+      }).success,
     ).toBe(false)
     expect(
       contracts.apiErrorEnvelopeSchema.safeParse({
         error: { code: '', message: 'Task not found' },
         requestId: 'request-2',
+      }).success,
+    ).toBe(false)
+    expect(
+      successSchema.safeParse({
+        data: 'ok',
+        error: { code: 'NOPE' },
+        meta: { request_id: 'request-1' },
       }).success,
     ).toBe(false)
   })
