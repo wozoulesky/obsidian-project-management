@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -33,9 +34,14 @@ export function CreateProjectDialog({
   onClose: () => void
 }) {
   const dialogRef = useRef<HTMLDivElement>(null)
+  const submitErrorRef = useRef<HTMLParagraphElement>(null)
   const createProject = useCreateProject()
   const [values, setValues] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (errors.submit) submitErrorRef.current?.focus()
+  }, [errors.submit])
 
   const setValue = (key: keyof FormValues, value: string) => {
     setValues((current) => ({ ...current, [key]: value }))
@@ -182,7 +188,11 @@ export function CreateProjectDialog({
             ) : null}
           </label>
         </div>
-        {errors.submit ? <p role="alert">{errors.submit}</p> : null}
+        {errors.submit ? (
+          <p ref={submitErrorRef} role="alert" tabIndex={-1}>
+            {errors.submit}
+          </p>
+        ) : null}
         <footer>
           <Button onClick={onClose}>取消</Button>
           <Button disabled={createProject.isPending} type="submit" variant="primary">

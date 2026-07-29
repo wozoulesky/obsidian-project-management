@@ -112,7 +112,7 @@ export function SkillSettings() {
         {clients.map((client) => (
           <article key={client}>
             <h3>{clientLabels[client]}</h3>
-            <pre><code>
+            <pre tabIndex={0}><code>
               {snippets[client]?.snippet ?? '正在读取服务端配置…'}
             </code></pre>
             <button

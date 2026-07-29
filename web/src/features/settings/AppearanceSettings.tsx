@@ -4,6 +4,7 @@ import type {
   Density,
   Theme,
 } from '../../data/domain'
+import { useEffect, useRef } from 'react'
 import {
   useAppearance,
   type Appearance,
@@ -61,6 +62,11 @@ export function AppearanceSettings() {
     saveMessage,
     saveError,
   } = useAppearance()
+  const saveErrorRef = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    if (saveError) saveErrorRef.current?.focus()
+  }, [saveError])
 
   return (
     <section
@@ -107,7 +113,11 @@ export function AppearanceSettings() {
           {isSaving ? '正在保存…' : '保存外观设置'}
         </button>
         {saveMessage && <p role="status">{saveMessage}</p>}
-        {saveError && <p role="alert">{saveError}</p>}
+        {saveError && (
+          <p ref={saveErrorRef} role="alert" tabIndex={-1}>
+            {saveError}
+          </p>
+        )}
       </div>
     </section>
   )

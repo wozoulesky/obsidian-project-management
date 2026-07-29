@@ -158,7 +158,9 @@ describe('QuickSubmitDialog', () => {
     await user.type(screen.getByLabelText('进度备注'), '保持这条备注')
     await user.click(screen.getByRole('button', { name: '提交进度' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('任务版本冲突')
+    const errorSummary = await screen.findByRole('alert')
+    expect(errorSummary).toHaveTextContent('任务版本冲突')
+    expect(errorSummary).toHaveFocus()
     expect(screen.getByLabelText('进度')).toHaveValue(80)
     expect(screen.getByLabelText('进度备注')).toHaveValue('保持这条备注')
     expect(screen.getByRole('dialog', { name: '快速提交' })).toBeVisible()

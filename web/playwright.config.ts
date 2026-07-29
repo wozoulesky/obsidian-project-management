@@ -21,6 +21,7 @@ export default defineConfig({
     {
       name: 'desktop',
       testIgnore: [
+        'failure-recovery.spec.ts',
         'projects-actors-settings.spec.ts',
         'quick-submit-real.spec.ts',
       ],
@@ -32,6 +33,7 @@ export default defineConfig({
     {
       name: 'compact',
       testIgnore: [
+        'failure-recovery.spec.ts',
         'projects-actors-settings.spec.ts',
         'quick-submit-real.spec.ts',
       ],
@@ -43,6 +45,7 @@ export default defineConfig({
     {
       name: 'real-browser-journeys',
       testMatch: [
+        'failure-recovery.spec.ts',
         'projects-actors-settings.spec.ts',
         'quick-submit-real.spec.ts',
       ],

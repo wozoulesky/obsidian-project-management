@@ -24,13 +24,13 @@
 
 .button--primary {
   color: var(--on-primary);
-  background: color-mix(in srgb, var(--primary) 70%, var(--rail));
-  border-color: color-mix(in srgb, var(--primary) 70%, var(--rail));
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .button--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary) 62%, var(--rail));
-  border-color: color-mix(in srgb, var(--primary) 62%, var(--rail));
+  background: color-mix(in srgb, var(--primary) 88%, var(--rail));
+  border-color: color-mix(in srgb, var(--primary) 88%, var(--rail));
 }
 
 .button--secondary {
@@ -68,7 +68,7 @@
 }
 
 .badge--primary {
-  color: color-mix(in srgb, var(--primary) 65%, var(--rail));
+  color: color-mix(in srgb, var(--primary) 68%, var(--text-primary));
   background: var(--primary-soft);
   border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
 }
@@ -582,7 +582,7 @@
 
 .app-header__save-message {
   gap: var(--space-1);
-  color: color-mix(in srgb, var(--success) 58%, var(--rail));
+  color: color-mix(in srgb, var(--success) 72%, var(--text-primary));
   font-weight: 650;
 }
 
@@ -2513,7 +2513,7 @@
 }
 
 .project-page__owners button[aria-pressed="true"] {
-  color: var(--primary);
+  color: var(--text-primary);
   font-weight: 750;
   background: var(--primary-soft);
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
@@ -2567,7 +2567,7 @@
 
 .project-card__status--in_progress,
 .project-card__status--completed {
-  color: color-mix(in srgb, var(--success) 72%, var(--rail));
+  color: color-mix(in srgb, var(--success) 72%, var(--text-primary));
   background: color-mix(in srgb, var(--success) 10%, var(--surface));
 }
 
@@ -2852,7 +2852,7 @@
 }
 
 .actor-status--active {
-  color: color-mix(in srgb, var(--success) 72%, var(--rail));
+  color: color-mix(in srgb, var(--success) 72%, var(--text-primary));
   background: color-mix(in srgb, var(--success) 10%, var(--surface));
   border-color: color-mix(in srgb, var(--success) 32%, var(--border));
 }

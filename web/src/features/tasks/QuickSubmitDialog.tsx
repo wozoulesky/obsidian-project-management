@@ -40,6 +40,7 @@ export function QuickSubmitDialog({
   const progressRef = useRef<HTMLInputElement>(null)
   const statusRef = useRef<HTMLSelectElement>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
+  const submitErrorRef = useRef<HTMLParagraphElement>(null)
   const submissionRef = useRef(false)
   const [actorId, setActorId] = useState('')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -62,6 +63,9 @@ export function QuickSubmitDialog({
       actorRef.current?.focus()
     }
   }, [actorsQuery.isPending])
+  useEffect(() => {
+    if (errors.submit) submitErrorRef.current?.focus()
+  }, [errors.submit])
 
   const clearError = (field: FieldName) => {
     setErrors((current) => {
@@ -362,7 +366,11 @@ export function QuickSubmitDialog({
           ) : null}
         </label>
 
-        {errors.submit ? <p role="alert">{errors.submit}</p> : null}
+        {errors.submit ? (
+          <p ref={submitErrorRef} role="alert" tabIndex={-1}>
+            {errors.submit}
+          </p>
+        ) : null}
 
         <footer>
           <Button
