@@ -4,6 +4,8 @@ export {
 } from './activity-service.js'
 export type {
   ActivityCursorFilter,
+  ActivityInitialPage,
+  ActivityInitialPageFilter,
   ActivityListFilter,
   NewerActivityListFilter,
 } from './activity-service.js'

@@ -2,7 +2,6 @@ import {
   activitySourceSchema,
   persistedActivitySchema,
 } from '@project-os/contracts'
-import type { ActivityListFilter } from '@project-os/core'
 import type { Router } from 'express'
 import { z } from 'zod'
 import type { AppRouteModule } from '../app.js'
@@ -24,6 +23,11 @@ const querySchema = z.object({
     .pipe(z.number().int().min(1).max(200)).default(50),
 }).strict()
 
+const initialPageSchema = z.object({
+  items: z.array(persistedActivitySchema).max(200),
+  cursor: routeIdSchema.nullable(),
+}).strict()
+
 export const activityRoutes: AppRouteModule = {
   register(router: Router, getContext) {
     router.get('/activities', (request, response) => {
@@ -43,26 +47,29 @@ export const activityRoutes: AppRouteModule = {
         ...cursorFilters,
         limit: query.limit,
       }
-      const raw = internalOperation(() => query.after === undefined
-        ? context.services.activities.list(filters as ActivityListFilter)
-        : context.services.activities.listNewer({
+      if (query.after === undefined) {
+        const page = callService(
+          initialPageSchema,
+          () => context.services.activities.initialPage(filters),
+        )
+        sendSuccess(response, {
+          items: page.items,
+          next_cursor: page.cursor,
+        })
+        return
+      }
+      const raw = internalOperation(
+        () => context.services.activities.listNewer({
           ...filters,
           after: query.after!,
-        }))
+        }),
+      )
       const items = raw.slice(0, query.limit).map(
         (item) => parseResponse(persistedActivitySchema, item),
       )
-      const initialCursor = query.after === undefined
-        ? callService(
-          routeIdSchema.nullable(),
-          () => context.services.activities.latestCursor(cursorFilters),
-        )
-        : null
       sendSuccess(response, {
         items,
-        next_cursor: query.after === undefined
-          ? initialCursor
-          : items.at(-1)?.id ?? query.after,
+        next_cursor: items.at(-1)?.id ?? query.after,
       })
     })
   },

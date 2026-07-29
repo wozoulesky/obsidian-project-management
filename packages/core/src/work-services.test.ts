@@ -701,6 +701,98 @@ describe('REST pagination service primitives', () => {
       code: 'ACTIVITY_CURSOR_INVALID',
     }))
   })
+
+  it('takes initial items and watermark from one WAL read snapshot', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-activity-page-'))
+    const path = join(directory, 'activity.db')
+    const reader = openDatabase(path)
+    const writer = openDatabase(path)
+    try {
+      const actors = new ActorService(reader)
+      const projects = new ProjectService(reader)
+      const owner = actors.createHuman({ name: 'Owner', role: 'owner' })
+      const project = projects.create({
+        name: 'Snapshot',
+        ownerId: owner.id,
+        description: '',
+      }, owner.id, 'web')
+      const anchor = recordActivity(reader, {
+        actorId: owner.id,
+        projectId: project.id,
+        source: 'mcp',
+        operation: 'task.update',
+        entityType: 'task',
+        entityId: 'task_anchor',
+        action: 'Anchor',
+        createdAt: '2026-07-29T10:00:00.000Z',
+      })
+      let insertedId: string | undefined
+      const service = new ActivityService(reader, {
+        afterInitialRead() {
+          insertedId = recordActivity(writer, {
+            actorId: owner.id,
+            projectId: project.id,
+            source: 'mcp',
+            operation: 'task.update',
+            entityType: 'task',
+            entityId: 'task_concurrent',
+            action: 'Concurrent backdated insert',
+            createdAt: '2026-07-28T10:00:00.000Z',
+          }).id
+        },
+      })
+
+      const page = service.initialPage({
+        projectId: project.id,
+        source: 'mcp',
+        limit: 50,
+      })
+
+      expect(page.items.map((activity) => activity.id)).toEqual([anchor.id])
+      expect(page.cursor).toBe(anchor.id)
+      expect(insertedId).toBeDefined()
+      expect(service.listNewer({
+        after: anchor.id,
+        projectId: project.id,
+        source: 'mcp',
+      }).map((activity) => activity.id)).toEqual([insertedId])
+    } finally {
+      writer.close()
+      reader.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('returns an empty initial snapshot and rolls back failed reads', () => {
+    const database = createTestDatabase()
+    try {
+      expect(new ActivityService(database).initialPage()).toEqual({
+        items: [],
+        cursor: null,
+      })
+
+      database.exec('BEGIN')
+      expect(() => new ActivityService(database).initialPage())
+        .toThrowError(expect.objectContaining({
+          code: 'ACTIVITY_SNAPSHOT_TRANSACTION_ACTIVE',
+        }))
+      database.exec('ROLLBACK')
+
+      const failing = new ActivityService(database, {
+        afterInitialRead() {
+          throw new Error('forced snapshot failure')
+        },
+      })
+      expect(() => failing.initialPage()).toThrow('forced snapshot failure')
+      expect(database.isTransaction).toBe(false)
+      expect(new ActivityService(database).initialPage()).toEqual({
+        items: [],
+        cursor: null,
+      })
+    } finally {
+      database.close()
+    }
+  })
 })
 
 describe('RequirementService', () => {

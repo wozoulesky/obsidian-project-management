@@ -362,6 +362,25 @@ describe('activity routes', () => {
     expect(response.headers['cache-control']).toBe('no-store')
   })
 
+  it('uses only the atomic initial-page service for an initial request', async () => {
+    const { api } = createApi()
+    const initialPage = vi.spyOn(
+      ActivityService.prototype,
+      'initialPage',
+    )
+    const list = vi.spyOn(ActivityService.prototype, 'list')
+    const latestCursor = vi.spyOn(
+      ActivityService.prototype,
+      'latestCursor',
+    )
+
+    await api.get('/api/v1/activities?limit=10').expect(200)
+
+    expect(initialPage).toHaveBeenCalledOnce()
+    expect(list).not.toHaveBeenCalled()
+    expect(latestCursor).not.toHaveBeenCalled()
+  })
+
   it('advances a filtered initial cursor, then polls same-timestamp updates exactly once', async () => {
     const { api, context } = createApi()
     const owner = defaultSeedDocument.actors[0]!
@@ -519,7 +538,7 @@ describe('remaining route boundaries', () => {
     ],
     [
       'activity',
-      () => vi.spyOn(ActivityService.prototype, 'list'),
+      () => vi.spyOn(ActivityService.prototype, 'initialPage'),
       '/api/v1/activities',
     ],
     [

@@ -54,6 +54,17 @@ export type ActivityCursorFilter = Omit<
   'after' | 'limit'
 >
 
+export type ActivityInitialPageFilter = Omit<ActivityListFilter, 'after'>
+
+export type ActivityInitialPage = {
+  items: PersistedActivity[]
+  cursor: string | null
+}
+
+type ActivityServiceOptions = {
+  afterInitialRead?: () => void
+}
+
 type ActivityInsert = {
   actorId: string
   projectId?: string | null
@@ -146,7 +157,10 @@ const activitySelect = `
 `
 
 export class ActivityService {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(
+    private readonly database: DatabaseSync,
+    private readonly options: ActivityServiceOptions = {},
+  ) {}
 
   list(filter: ActivityListFilter = {}): PersistedActivity[] {
     const pagination = paginationSchema.parse({
@@ -296,6 +310,79 @@ export class ActivityService {
   }
 
   latestCursor(filter: ActivityCursorFilter = {}): string | null {
+    return this.readLatestCursor(filter)
+  }
+
+  initialPage(
+    filter: ActivityInitialPageFilter = {},
+  ): ActivityInitialPage {
+    if (this.database.isTransaction) {
+      throw new DomainError(
+        'ACTIVITY_SNAPSHOT_TRANSACTION_ACTIVE',
+        'Activity initial snapshot cannot run inside a transaction',
+      )
+    }
+    const pagination = paginationSchema.parse({ limit: filter.limit })
+    const source = filter.source === undefined
+      ? undefined
+      : activitySourceSchema.parse(filter.source)
+    const clauses: string[] = []
+    const values: SQLInputValue[] = []
+    if (filter.entityId !== undefined) {
+      clauses.push('activities.entity_id = ?')
+      values.push(filter.entityId)
+    }
+    if (filter.actorId !== undefined) {
+      clauses.push('activities.actor_id = ?')
+      values.push(filter.actorId)
+    }
+    if (filter.projectId !== undefined) {
+      clauses.push('activities.project_id = ?')
+      values.push(filter.projectId)
+    }
+    if (source !== undefined) {
+      clauses.push('activities.source = ?')
+      values.push(source)
+    }
+    const where = clauses.length === 0
+      ? ''
+      : `WHERE ${clauses.join(' AND ')}`
+
+    this.database.exec('BEGIN')
+    try {
+      const rows = this.database.prepare(`
+        ${activitySelect}
+        ${where}
+        ORDER BY activities.created_at DESC, activities.id DESC
+        LIMIT ?
+      `).all(...values, pagination.limit) as unknown as ActivityRow[]
+      const items = rows.map(mapActivity)
+      this.options.afterInitialRead?.()
+      const cursor = this.readLatestCursor({
+        ...(filter.entityId === undefined
+          ? {}
+          : { entityId: filter.entityId }),
+        ...(filter.actorId === undefined
+          ? {}
+          : { actorId: filter.actorId }),
+        ...(filter.projectId === undefined
+          ? {}
+          : { projectId: filter.projectId }),
+        ...(source === undefined ? {} : { source }),
+      })
+      this.database.exec('COMMIT')
+      return { items, cursor }
+    } catch (error) {
+      if (this.database.isTransaction) {
+        this.database.exec('ROLLBACK')
+      }
+      throw error
+    }
+  }
+
+  private readLatestCursor(
+    filter: ActivityCursorFilter,
+  ): string | null {
     const source = filter.source === undefined
       ? undefined
       : activitySourceSchema.parse(filter.source)
