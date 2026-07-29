@@ -237,13 +237,21 @@ export function useCreateTask(selectedProjectId: string) {
     mutationFn: (input: CreateProjectTaskInput) =>
       context.repository.createTask(selectedProjectId, input),
     onSuccess: async () => {
-      await invalidateKeys(queryClient, [
-        projectQueryKeys.projects,
-        projectQueryKeys.tasksFor(selectedProjectId),
-        projectQueryKeys.allTasks,
-        projectQueryKeys.ganttFor(selectedProjectId),
-        ['dashboard'],
-        projectQueryKeys.activities,
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.projectFor(selectedProjectId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.projects,
+          exact: true,
+        }),
+        ...[
+          projectQueryKeys.tasksFor(selectedProjectId),
+          projectQueryKeys.allTasks,
+          projectQueryKeys.ganttFor(selectedProjectId),
+          ['dashboard'] as const,
+          projectQueryKeys.activities,
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       ])
     },
   })

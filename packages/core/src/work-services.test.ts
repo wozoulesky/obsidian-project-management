@@ -75,6 +75,8 @@ function setup() {
     owner.id,
     'web',
   )
+  projects.addMember(project.id, dev.id, owner.id, 'web')
+  projects.addMember(otherProject.id, dev.id, owner.id, 'web')
   return {
     database,
     actors,
@@ -170,6 +172,40 @@ describe('work service permissions', () => {
 })
 
 describe('TaskService', () => {
+  it('requires an active assignee membership before creating a task', () => {
+    const context = setup()
+    const activityCount = context.activities.list().length
+
+    expect(() => context.tasks.create(
+      taskInput(context.project.id, context.member.id),
+      context.owner.id,
+      'web',
+    )).toThrowError(expect.objectContaining({
+      code: 'TASK_ASSIGNEE_MISMATCH',
+      details: {
+        projectId: context.project.id,
+        assigneeId: context.member.id,
+      },
+    }))
+    expect(context.tasks.list({ projectId: context.project.id })).toEqual([])
+    expect(context.activities.list()).toHaveLength(activityCount)
+
+    context.projects.addMember(
+      context.project.id,
+      context.member.id,
+      context.owner.id,
+      'web',
+    )
+    expect(context.tasks.create(
+      taskInput(context.project.id, context.member.id),
+      context.owner.id,
+      'web',
+    )).toMatchObject({
+      projectId: context.project.id,
+      assigneeId: context.member.id,
+    })
+  })
+
   it.each([
     ['description', { description: null }],
     ['milestoneId', { milestoneId: null }],
@@ -1783,11 +1819,13 @@ parentConcurrencyDescribe('work service file concurrency', () => {
       owner.id,
       'mcp',
     )
-    const project = new ProjectService(setupDatabase).create(
+    const projects = new ProjectService(setupDatabase)
+    const project = projects.create(
       { name: 'Concurrent', ownerId: owner.id, description: '' },
       owner.id,
       'web',
     )
+    projects.addMember(project.id, dev.id, owner.id, 'web')
     setupDatabase.close()
     const barrier = `${path}.task-barrier`
     mkdirSync(barrier)

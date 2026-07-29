@@ -212,6 +212,10 @@ export class TaskService {
       assertPermission(actor.role, 'task.write')
       this.assertProject(validated.projectId)
       this.assertActiveActor(validated.assigneeId)
+      this.assertProjectMember(
+        validated.projectId,
+        validated.assigneeId,
+      )
       this.assertTaskReferences(
         validated.projectId,
         validated.parentId,
@@ -520,6 +524,24 @@ export class TaskService {
       )
     }
     return row
+  }
+
+  private assertProjectMember(
+    projectId: string,
+    assigneeId: string,
+  ): void {
+    const membership = this.database.prepare(`
+      SELECT 1
+      FROM project_members
+      WHERE project_id = ? AND actor_id = ?
+    `).get(projectId, assigneeId)
+    if (membership === undefined) {
+      throw new DomainError(
+        'TASK_ASSIGNEE_MISMATCH',
+        'Task assignee must be a project member',
+        { projectId, assigneeId },
+      )
+    }
   }
 
   private assertTaskReferences(

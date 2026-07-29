@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   projectQueryKeys,
@@ -64,6 +64,7 @@ describe('repository query invalidation', () => {
 
   it('invalidates project detail, counts, tasks, gantt, dashboard, and activity after task creation', async () => {
     const { queryClient, wrapper, isInvalidated } = createHarness()
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     queryClient.setQueryData(projectQueryKeys.projects, { seeded: true })
     queryClient.setQueryData(projectQueryKeys.projectFor('atlas'), {
       seeded: true,
@@ -85,6 +86,9 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.ganttFor('atlas'))).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
     expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.projectFor('atlas'),
+    })
   })
 
   it('invalidates all progress-dependent views', async () => {

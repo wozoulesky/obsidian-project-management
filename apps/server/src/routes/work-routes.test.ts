@@ -419,6 +419,48 @@ describe('project routes', () => {
 })
 
 describe('task routes', () => {
+  it('rejects active non-members until they join the target project', async () => {
+    const { api } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const assignee = await createHuman(api, 'Project outsider')
+    const project = await createProject(api, owner.id)
+    const input = {
+      title: 'Join before assignment',
+      assigneeId: assignee.id,
+      startDate: '2026-07-29',
+      dueDate: '2026-08-01',
+      priority: 'P1',
+    }
+
+    const rejected = await api
+      .post(`/api/v1/projects/${project.id}/tasks`)
+      .send(input)
+      .expect(400)
+    expect(rejected.body.error).toMatchObject({
+      code: 'TASK_ASSIGNEE_MISMATCH',
+      details: {
+        projectId: project.id,
+        assigneeId: assignee.id,
+      },
+    })
+    const beforeMembership = await api
+      .get(`/api/v1/projects/${project.id}/tasks`)
+      .expect(200)
+    expect(beforeMembership.body.data.items).toEqual([])
+
+    await api.post(`/api/v1/projects/${project.id}/members`)
+      .send({ actorId: assignee.id })
+      .expect(201)
+    const created = await api
+      .post(`/api/v1/projects/${project.id}/tasks`)
+      .send(input)
+      .expect(201)
+    expect(created.body.data).toMatchObject({
+      projectId: project.id,
+      assigneeId: assignee.id,
+    })
+  })
+
   it('creates tasks from the project path and returns unique task codes', async () => {
     const { api } = createApi()
     const owner = defaultSeedDocument.actors[0]!
