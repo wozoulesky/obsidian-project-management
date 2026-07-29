@@ -1,219 +1,158 @@
-# Project Manage — Local Project Management Data War Room
+# Project OS — Local Project and Agent Coordination
 
 [中文](README.md) | [English](README_EN.md)
 
-A local project-management frontend prototype for individual developers, small teams, and AI agents. Its “Data War Room” interface brings project health, tasks, Gantt planning, requirements, defects, and agent activity into one dense but readable workspace.
+Project OS is a local-first project workspace. Its React Web application, REST
+API, SQLite database, MCP server, and installable Agent Skill share the same
+data and permission rules. The current release includes:
 
-> [!IMPORTANT]
-> This release is a runnable frontend prototype, not a production project-management service. Data comes from an in-browser, in-memory mock repository and returns to the initial demo state after a page refresh. There is currently no backend, database, login, authorization, or real-time multi-user collaboration. Do not enter real sensitive data or expose the application directly to a production network.
+- an all-project portfolio, owner filtering, project creation, and task
+  creation inside a selected project;
+- a unified human/Agent directory, quick progress submission, requirements,
+  defects, Gantt planning, and dashboards;
+- appearance, data, MCP token, and Agent Skills settings;
+- stdio setup for Codex, Claude Code, and Kimi Code, plus `/mcp` Streamable HTTP;
+- SQLite persistence, backups/restores, and JSON import/export.
 
-![Data War Room dashboard](web/e2e/dashboard.spec.ts-snapshots/dashboard-90-day-desktop-win32.png)
+> This project is intended for a local machine or a trusted-network,
+> single-instance deployment. It does not provide user login, tenant isolation,
+> or TLS termination. Configure tokens, host/origin allowlists, and an external
+> TLS reverse proxy before binding to a remote interface.
 
-## Features
+![Project OS dashboard](web/e2e/dashboard.spec.ts-snapshots/dashboard-90-day-desktop-win32.png)
 
-- Data War Room dashboard with project health, delivery trends, status distribution, a risk queue, and an activity feed.
-- Task workbench with status, assignee, and priority filters, plus a task inspector and progress updates.
-- Gantt view with a task tree, timeline, today marker, milestones, and dependencies.
-- Requirement lifecycle board with review, development, and delivered columns, including drag-and-drop and keyboard-accessible status updates.
-- Defect risk queue with severity/status views and defect-to-repair-task conversion.
-- Loading, empty, error, refresh-failure, and stale-data states.
-- Responsive and accessible layouts for 1440, 1280, 1024, and 768 widths, with keyboard workflows and automated WCAG A/AA checks.
-- A deterministic 10,000-task development mode backed by virtualized task-table and Gantt rendering.
-
-![Project Gantt view](web/e2e/key-pages.spec.ts-snapshots/gantt-desktop-win32.png)
-
-## Technology
-
-- React 19, TypeScript 6, and Vite 8
-- React Router
-- TanStack Query, TanStack Table, and TanStack Virtual
-- ECharts
-- dnd-kit
-- Vitest, Testing Library, Playwright, and axe-core
-
-## Requirements
+## Prerequisites
 
 - Node.js 24 or newer
 - npm
-- Git
+- Playwright Chromium for the first browser-test run
 
-Using the current Node.js LTS release is recommended. The repository includes a root `package-lock.json`, so prefer `npm ci` for reproducible installs.
-
-## Installation and local development
-
-### 1. Clone the repository
-
-With SSH:
-
-```bash
-git clone git@github.com:wozoulesky/project_manage.git
-cd project_manage
-```
-
-Or with HTTPS:
-
-```bash
-git clone https://github.com/wozoulesky/project_manage.git
-cd project_manage
-```
-
-### 2. Install dependencies
+Install the locked dependencies:
 
 ```bash
 npm ci
 ```
 
-### 3. Start the full development environment
+## Local development
 
 ```bash
 npm run dev
 ```
 
-This starts both the local API at `http://127.0.0.1:4310` and the Vite Web app, normally at `http://localhost:5173`. Pressing `Ctrl+C` stops both processes; if either process fails, the other is cleaned up as well.
+This starts:
 
-## Routes
+- the API and `/mcp` at `http://127.0.0.1:4310`;
+- the Vite Web application, normally at `http://localhost:5173`.
 
-| Path | Page |
-|---|---|
-| `/dashboard` | Dashboard |
-| `/tasks` | Task workbench |
-| `/gantt` | Gantt view |
-| `/requirements` | Requirement lifecycle |
-| `/defects` | Defect risk queue |
-| `/settings` | Settings placeholder |
+Vite proxies `/api` to the local API. `Ctrl+C` supervises and stops both
+processes. The default database is `data/project_manage.db`; startup runs
+migrations and applies the idempotent demo seed.
 
-The root path `/` redirects to the dashboard. Unknown paths render a 404 page with a recovery link.
+## Build and start
+
+```bash
+npm run build
+npm start
+```
+
+`npm run build` type-checks the workspaces and creates `web/dist/` and
+`apps/mcp/dist/stdio.js`. `npm start` starts **only the API and MCP HTTP
+service**; it does not serve `web/dist/`. To run the production Web build, host
+`web/dist/` with a static server, configure an `index.html` SPA fallback, and
+reverse-proxy `/api` to the API service.
+
+Server defaults:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PROJECT_OS_HOST` | `127.0.0.1` | API/MCP bind address |
+| `PROJECT_OS_PORT` | `4310` | API/MCP port |
+| `PROJECT_OS_DATABASE_PATH` | `data/project_manage.db` | REST service database |
+| `PROJECT_OS_BACKUP_ROOT` | `data/backups` | Backup directory |
+| `PROJECT_OS_ALLOWED_HOSTS` | empty | Required Host allowlist for a non-loopback bind |
+| `PROJECT_OS_ALLOWED_ORIGINS` | empty | Exact allowed HTTP/HTTPS origins |
+| `PROJECT_OS_LOCAL_ACTOR_ID` | `actor_local_owner` | Local Web actor |
+
+Relative paths resolve from the repository root. stdio also accepts
+`PROJECT_OS_DB`, which takes precedence over `PROJECT_OS_DATABASE_PATH`.
 
 ## Commands
 
-Run these commands from the repository root.
+Run commands from the repository root.
 
 | Command | Purpose |
 |---|---|
-| `npm run dev` | Start the API and Web development servers |
-| `npm start` | Start only the API server |
-| `npm run build` | Build all workspaces |
-| `npm test` | Run Vitest across all workspaces |
-| `npm run test:e2e` | Run Playwright end-to-end and visual tests |
-| `npm run check` | Run Web lint, all unit tests, and production builds |
+| `npm run dev` | Start the API and Web development environment |
+| `npm run build` | Build/type-check all workspaces |
+| `npm start` | Start only the API and MCP HTTP service |
+| `npm test` | Run all unit and integration tests |
+| `npm run test:e2e` | Run real-service, accessibility, and visual Playwright tests |
+| `npm run check:docs` | Validate documentation commands, links, clients, and safe examples |
+| `npm run check` | Run lint, tests, builds, and the documentation gate |
 
-## End-to-end and visual testing
-
-Install the required Chromium build before the first run:
+Before the first E2E run:
 
 ```bash
 npx playwright install chromium
-```
-
-Then run:
-
-```bash
 npm run test:e2e
 ```
 
-Playwright builds the Web app, starts the local API with an isolated temporary SQLite database, and starts a preview server at `http://127.0.0.1:4173`. It stops the service processes after the run. The suite covers desktop and compact layouts, keyboard workflows, accessibility scans, business workflows, and visual baselines.
+## MCP and the Agent Skill
 
-The committed baselines were generated with Chromium on Windows and therefore use a `win32` filename suffix. Other operating systems, fonts, or browser-rendering environments may produce pixel differences. Review every difference manually before updating a baseline:
+Project OS exposes 22 tools. Both transports use the same services and SQLite
+data:
 
-```bash
-npm run test:e2e -- --update-snapshots
-```
+- stdio at `apps/mcp/dist/stdio.js` for local Codex, Claude Code, and Kimi Code;
+- Streamable HTTP at `http://127.0.0.1:4310/mcp` for compatible clients.
 
-Do not accept bulk visual-baseline changes without inspecting the screenshots.
+The MCP settings panel issues and revokes access tokens. Plaintext is displayed
+once; the server stores only its digest. A loopback bind does not require a
+token. On a non-loopback bind, REST and MCP requests require a valid Bearer
+token except for `/api/v1/health`.
 
-## 10,000-task validation mode
+See the [Agent setup guide](docs/agent-setup.md) for all client configurations,
+Skill installation, side effects, verification, and troubleshooting.
 
-This mode is available only through the development server and is excluded from normal production builds.
+## Data and backups
 
-PowerShell:
+The settings page creates/restores SQLite backups and exports/imports JSON.
+Restore and import replace current data, so create a backup first. JSON exports
+do not include access tokens.
 
-```powershell
-$env:VITE_FIXTURE_MODE='large'
-npm run dev
-```
+See [Data and backups](docs/data-and-backups.md) for paths, formats, recovery,
+and operational checks.
 
-Bash or zsh:
+## Release status
 
-```bash
-VITE_FIXTURE_MODE=large npm run dev
-```
+See the [release checklist](docs/release-checklist.md) for automated and
+real-client evidence, known limitations, and retry commands. The release must
+not be described as “fully accepted by all three clients” unless every field in
+all three evidence files is `true`.
 
-Stop the server and clear the variable to return to the default demo dataset.
+The current candidate has **not** reached full three-client acceptance. In the
+isolated smoke run, Codex was blocked by `spawn EPERM`; Claude was not invoked
+because no credential source could be safely isolated; and Kimi Code discovered
+the MCP tools but required a fresh OAuth login inside its temporary HOME.
+Passing server, tool-contract, and browser automation does not prove a real
+model client completed a write.
 
-## Build and static deployment
+## More documentation
 
-```bash
-cd web
-npm ci
-npm run build
-```
+- [Web development](web/README.md)
+- [Agent setup](docs/agent-setup.md)
+- [Data and backups](docs/data-and-backups.md)
+- [Release checklist](docs/release-checklist.md)
+- [Full design specification](docs/superpowers/specs/2026-07-29-project-os-full-stack-mcp-design.md)
+- [Implementation plan index](docs/superpowers/plans/2026-07-29-project-os-full-stack-index.md)
 
-The build output is written to `web/dist/`. This is a `BrowserRouter` single-page application. When deploying to Nginx, Apache, object storage, or another static host, configure unknown frontend routes to fall back to `index.html`; otherwise, directly refreshing `/tasks`, `/gantt`, or another client route will return a server-side 404.
+## Security boundary
 
-The repository is not currently tied to a cloud platform and does not include automated deployment configuration.
-
-## Data and product boundaries
-
-- All project data comes from deterministic demo fixtures and an in-memory repository under `web/src/data/`.
-- Task progress, requirement status, and defect conversion can update related views during the current SPA session, but a refresh or new browser session resets them.
-- There is no SQLite integration, REST API, file synchronization, cloud synchronization, or persistent storage.
-- There are no user accounts, authentication, authorization, backend audit service, or tenant isolation.
-- Names, agents, tasks, requirements, and defects shown in the UI are demo data.
-- The settings page is currently a placeholder.
-
-Before using this project with a real team, add at least a persistent backend, migrations, authentication, an authorization model, input validation, audit logging, backups, recovery procedures, and a secure deployment design.
-
-## Security and dependency notes
-
-- Never commit tokens, passwords, SSH private keys, or real business data to source files, environment files, screenshots, Issues, or test fixtures.
-- `VITE_*` variables are included in client bundles and must never contain secrets.
-- E2E error fixtures are enabled only in test builds and are removed from ordinary production bundles.
-- The project uses only React Router's client-side SPA capabilities and does not use unstable RSC APIs.
-- `react-router-dom` is currently pinned to `7.18.1`. As of 2026-07-28, `npm audit` reports the high-severity [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2) advisory. The advisory states that applications are affected only when they use unstable RSC APIs, which this project does not currently use. The patched React Router release is `8.3.0`, a major-version upgrade that requires separate evaluation and regression testing.
-- Do not run `npm audit fix --force` blindly. npm currently proposes a `react-router-dom` version change that may introduce incompatibilities. Perform the upgrade on a dedicated branch and run the complete test suite.
-- Run `npm run check` and `npm run test:e2e` before and after dependency upgrades.
-- Run `npm audit` before releases and assess advisories against the actual code paths in use. Do not rely on automated fixes alone.
-
-## Repository layout
-
-```text
-project_manage/
-├── README.md
-├── README_EN.md
-├── PRD.md
-├── docs/
-│   └── superpowers/
-│       ├── plans/
-│       └── specs/
-└── web/
-    ├── e2e/
-    ├── public/
-    ├── src/
-    │   ├── app/
-    │   ├── components/
-    │   ├── data/
-    │   ├── features/
-    │   └── styles/
-    ├── package.json
-    └── playwright.config.ts
-```
-
-## Design and implementation documents
-
-- [Product requirements](PRD.md)
-- [Visual and interaction specification (Chinese)](docs/superpowers/specs/2026-07-28-project-management-ui-design.md)
-- [Frontend implementation plan (Chinese)](docs/superpowers/plans/2026-07-28-project-management-web-ui.md)
-
-## Contributing
-
-Reproducible bug reports and focused pull requests with verification notes are welcome. Before submitting code, run at least:
-
-```bash
-cd web
-npm run check
-npm run test:e2e
-```
-
-## License
-
-This repository does not currently include an open-source license. Public visibility does not automatically grant permission to copy, modify, or redistribute the code. The repository owner should add an explicit `LICENSE` file after choosing the intended terms.
+- Do not commit tokens, databases, backups, real exports, or private client
+  configuration.
+- `VITE_*` values are embedded in frontend output and cannot hold secrets.
+- A non-loopback bind requires `PROJECT_OS_ALLOWED_HOSTS`; cross-origin Web
+  clients also require `PROJECT_OS_ALLOWED_ORIGINS`.
+- External access requires a trusted reverse proxy for TLS, rate limiting, and
+  network access control.
+- This repository currently has no open-source license. Public visibility does
+  not automatically grant copying or redistribution rights.

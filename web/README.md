@@ -1,47 +1,66 @@
-# 本地项目管理系统 — Web 前端
+# Project OS Web
 
-[项目中文文档](../README.md) | [English documentation](../README_EN.md)
+[中文主文档](../README.md) | [English](../README_EN.md)
 
-React、TypeScript 与 Vite 构建的本地项目管理 Web 应用。
+React 19、TypeScript、Vite 构建的 Project OS Web 客户端。普通构建使用真实
+REST Repository；Mock Repository 只在单元测试和显式 E2E fixture 模式中启用。
 
-> 当前版本使用内存演示数据，刷新页面会重置，不包含后端、鉴权或持久化数据库。完整安装、使用、部署和安全说明请阅读项目根目录文档。
+## 开发
 
-## 环境要求
+从仓库根目录安装并启动完整环境：
 
-- Node.js 20.19+
-- npm
+```bash
+npm ci
+npm run dev
+```
 
-## 常用命令
+Web 通常运行在 `http://localhost:5173`，`/api` 被代理到
+`http://127.0.0.1:4310`。不要只启动 Web 后期待真实数据可用。
 
-- `npm run dev`：启动开发服务器
-- `npm run check`：运行代码检查、单元测试和生产构建
-- `npm run test:e2e`：运行 Playwright 端到端测试
+主要路由包括 `/projects`、`/projects/:id`、`/actors`、`/dashboard`、
+`/tasks`、`/gantt`、`/requirements`、`/defects` 和 `/settings`。
 
-首次运行端到端测试前安装仓库锁定版本的 Chromium：
+## 构建
 
-```powershell
+```bash
+npm run build
+```
+
+Web 产物位于 `web/dist/`。生产静态服务器必须：
+
+- 将未知前端路由回退到 `index.html`；
+- 把 `/api` 反向代理到 Project OS API；
+- 保留 API 返回的安全响应头；
+- 跨来源部署时，让 API 的 `PROJECT_OS_ALLOWED_ORIGINS` 包含 Web 的精确
+  Origin。
+
+根目录 `npm start` 只启动 API/MCP，不托管 Web 产物。
+
+## 测试
+
+```bash
 npx playwright install chromium
+npm test
+npm run test:e2e
 ```
 
-Playwright 配置显式使用 `channel: 'chromium'`，以启动上述由 Playwright
-管理的完整 Chromium，而不是误用系统中可能陈旧的浏览器。
+Playwright 使用隔离的临时 SQLite 数据库和独立服务端口，覆盖真实项目、负责人、
+快速提交、设置、错误恢复、键盘、无障碍与视觉基线。截图基线为 Windows
+Chromium；更新快照前必须人工检查差异。
 
-## 大数据本地验证
+完整门禁：
 
-仅在开发服务器中启用 10,000 条确定性任务数据：
-
-```powershell
-$env:VITE_FIXTURE_MODE='large'; npm run dev
+```bash
+npm run check
 ```
 
-未设置该变量时仍使用紧凑的默认数据；生产构建不会启用大数据 fixture。
+## 运行时约定
 
-## React Router 安全范围
+- API 前缀为 `/api/v1`；MCP Streamable HTTP 为 `/mcp`。
+- 外观会立即写入根元素属性和本地存储，再与 `/api/v1/settings` 协调。
+- 活动游标在页面可见时轮询，用于使 MCP/REST 写入后的查询失效。
+- 导入上限为 25 MiB、字段名为 `file`、媒体类型为 `application/json`。
+- 访问令牌明文只在创建响应中出现一次，不写入浏览器持久存储。
 
-本项目是仅使用 `BrowserRouter` 的客户端 SPA，不使用 React Router 的
-unstable RSC API。当前锁定 `react-router-dom@7.18.1`；截至 2026-07-28，
-`npm audit` 会报告
-[GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2)。
-公告说明只有使用 unstable RSC API 的应用会受影响，本项目当前不使用该调用路径。
-修复版本 `8.3.0` 是主版本升级，应在独立分支完成兼容性评估和完整回归；不要直接运行
-`npm audit fix --force`。
+Agent 配置见 [Agent 接入指南](../docs/agent-setup.md)，数据操作见
+[数据与备份指南](../docs/data-and-backups.md)。
