@@ -1,4 +1,9 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -27,7 +32,19 @@ function stringEnvironment(): Record<string, string> {
 }
 
 describe('stdio MCP transport', () => {
-  it('spawns the executable, lists tools and keeps stdout protocol-clean', async () => {
+  it('builds a production distribution without test files', () => {
+    const distribution = resolve('dist')
+
+    expect(existsSync(resolve(distribution, 'stdio.js'))).toBe(true)
+    expect(existsSync(resolve(distribution, 'index.js'))).toBe(true)
+    expect(
+      readdirSync(distribution, { recursive: true })
+        .map(String)
+        .filter((file) => /\.test\.[cm]?js$/.test(file)),
+    ).toEqual([])
+  })
+
+  it('spawns the built executable, lists tools and keeps stdout protocol-clean', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'project-os-mcp-stdio-'))
     createdDirectories.push(directory)
     const databasePath = join(directory, 'stdio.db')
@@ -35,11 +52,7 @@ describe('stdio MCP transport', () => {
     let stderr = ''
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: [
-        '--import',
-        'tsx',
-        resolve('src/stdio.ts'),
-      ],
+      args: [resolve('dist/stdio.js')],
       cwd: resolve('.'),
       env: {
         ...stringEnvironment(),

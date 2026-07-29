@@ -6,12 +6,21 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
+  "bin": {
+    "project-os-mcp": "./dist/stdio.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc --noEmit",
-    "start": "tsx src/stdio.ts",
+    "build": "npm run typecheck && node build.mjs",
+    "pretest": "npm run build",
+    "start": "node dist/stdio.js",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -22,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
+    "esbuild": "^0.28.1",
     "tsx": "^4.20.3",
     "typescript": "~6.0.2",
     "vitest": "^4.1.10"
