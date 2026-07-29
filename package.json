@@ -1,0 +1,23 @@
+{
+  "name": "project-os",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "web",
+    "packages/*",
+    "apps/*",
+    "integrations/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "check": "npm run lint --workspace web && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.10"
+  }
+}
