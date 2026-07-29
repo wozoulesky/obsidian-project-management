@@ -131,10 +131,12 @@ all three evidence files is `true`.
 
 The current candidate has **not** reached full three-client acceptance. In the
 isolated smoke run, Codex was blocked by `spawn EPERM`; Claude was not invoked
-because no credential source could be safely isolated; and Kimi Code discovered
-the MCP tools but required a fresh OAuth login inside its temporary HOME.
-Passing server, tool-contract, and browser automation does not prove a real
-model client completed a write.
+because no credential source could be safely isolated. Kimi Code completed tool
+discovery, identity registration, project read, progress write, and activity
+verification inside an isolated temporary HOME, with every field passing and
+the global client configuration unchanged. Passing server, tool-contract, and
+browser automation still does not prove that every real model client completed
+a write.
 
 ## More documentation
 

@@ -1,7 +1,8 @@
 # 发布检查清单
 
-本文件只记录实际执行的证据。修正后的隔离 harness 已完成重跑；三个客户端均
-未满足全部字段，因此本候选版本**不得**描述为三客户端完全验收。
+本文件只记录实际执行的证据。修正后的隔离 harness 已完成重跑；Kimi Code
+完整通过，Codex 和 Claude Code 仍未满足全部字段，因此本候选版本**不得**
+描述为三客户端完全验收。
 
 ## 发布判定规则
 
@@ -23,7 +24,7 @@
 | 检查 | 命令 | 结果 |
 |---|---|---|
 | 全量静态/单元/构建/文档 | `npm run check` | PASS：Web 232、contracts 12、core 173（另 3 skipped）、MCP 17、server 185、Skill 5、runtime 3；lint/build/docs PASS |
-| Playwright | `npm run test:e2e` | PASS：57 passed、10 intentional project skips |
+| Playwright | `npm run test:e2e` | PASS：最终源码包含 `825bf60`、`0ede881`、`c0e9890`，57 passed、10 intentional project skips |
 | 文档专项 | `npm run check:docs` | PASS：6 documents |
 | stdio 合约 | `node integrations/project-os/scripts/verify-connection.mjs` | PASS：contract-only、22 tools、无副作用 |
 | harness 自检 | `node scripts/smoke-clients.mjs --self-test` | PASS：audit/isolation/adapter/process-tree/redaction/evidence |
@@ -50,12 +51,12 @@
 PASS 已作废，不能作为最终验收证据；Codex 的进程启动阻塞仍需用修正后的
 harness 重试。保留这段记录是为了避免把历史输出误当成当前发布结论。
 
-### 修正后重跑：2026-07-30 00:18（Asia/Hong_Kong）
+### 修正后重跑：2026-07-30 00:38–00:39（Asia/Hong_Kong）
 
 | 客户端 | installed | authenticated | tools | identity | project | progress | activity | 判定 |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | Claude Code | true | false | false | false | false | false | false | INCOMPLETE |
-| Kimi Code | true | false | true | false | false | false | false | INCOMPLETE |
+| Kimi Code | true | true | true | true | true | true | true | PASS |
 | Codex | true | false | false | false | false | false | false | INCOMPLETE |
 
 精确阻塞：
@@ -65,10 +66,12 @@ harness 重试。保留这段记录是为了避免把历史输出误当成当前
 - **Claude Code**：客户端已安装，但当前凭据无法安全复制到隔离 HOME，也没有
   可隔离的环境令牌。harness 主动跳过模型调用，避免把宿主凭据或宿主 MCP 配置
   带入证据。
-- **Kimi Code**：隔离 HOME 中成功发现 Project OS 工具，但模型调用返回
-  `auth.login_required`；因此没有注册身份、读取项目、提交进度或核对活动。
+- **Kimi Code**：隔离临时 HOME 中完成工具发现、身份注册、项目读取、进度
+  写入和活动核对；七个布尔字段全部为 `true`，`error` 为 `null`，全局 Kimi
+  配置在前后审计中保持不变。
 
-真实 smoke 按设计返回非零，当前发布结论为 **INCOMPLETE**。
+真实 smoke 因 Codex 和 Claude Code 两个未完成项按设计返回非零，当前整体
+发布结论为 **INCOMPLETE**；Kimi Code 单客户端结论为 **PASS**。
 
 重试全部客户端：
 
@@ -90,7 +93,7 @@ node scripts/smoke-clients.mjs --clients kimi --write-smoke
 - Codex：在允许启动 `codex` 子进程的交互终端/安全策略中运行单客户端命令。
 - Claude Code：提供 harness 支持且可放入临时 HOME/环境的隔离凭据；不得直接
   继承宿主配置目录。
-- Kimi Code：在将用于 smoke 的隔离凭据环境中完成 OAuth 登录，再运行
+- Kimi Code：当前已通过；只有凭据、CLI 或 MCP 配置变化后才需重新运行
   单客户端命令。
 
 真实 smoke 会产生模型调用和隔离数据库写入。证据文件位于
