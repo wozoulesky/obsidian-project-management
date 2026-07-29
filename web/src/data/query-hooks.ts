@@ -71,6 +71,8 @@ export const projectQueryKeys = {
   projectMembersFor: (selectedProjectId: string) =>
     ['projects', selectedProjectId, 'members'] as const,
   settings: ['settings'] as const,
+  health: ['health'] as const,
+  tokens: ['tokens'] as const,
   dashboardPrefixFor: (selectedProjectId: string) =>
     ['dashboard', selectedProjectId] as const,
   dashboardFor: (selectedProjectId: string, days: 7 | 30 | 90) =>
@@ -452,5 +454,102 @@ export function useGanttTasks() {
   return useQuery({
     queryKey: projectQueryKeys.ganttFor(context.projectId),
     queryFn: () => context.repository.listGanttTasks(context.projectId),
+  })
+}
+
+export function useSettings() {
+  const { repository } = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.settings,
+    queryFn: () => repository.getSettings(),
+  })
+}
+
+export function useUpdateSettings() {
+  const queryClient = useQueryClient()
+  const { repository } = useProjectRepository()
+  return useMutation({
+    mutationFn: repository.updateSettings.bind(repository),
+    onSuccess: async (settings) => {
+      queryClient.setQueryData(projectQueryKeys.settings, settings)
+      await queryClient.invalidateQueries({
+        queryKey: projectQueryKeys.activities,
+      })
+    },
+  })
+}
+
+export function useHealth() {
+  const { repository } = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.health,
+    queryFn: () => repository.getHealth(),
+    refetchInterval: 30_000,
+  })
+}
+
+export function useTokens() {
+  const { repository } = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.tokens,
+    queryFn: () => repository.listTokens(),
+  })
+}
+
+export function useIssueToken() {
+  const queryClient = useQueryClient()
+  const { repository } = useProjectRepository()
+  return useMutation({
+    mutationFn: (name: string) => repository.issueToken(name),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: projectQueryKeys.tokens,
+      })
+    },
+  })
+}
+
+export function useRevokeToken() {
+  const queryClient = useQueryClient()
+  const { repository } = useProjectRepository()
+  return useMutation({
+    mutationFn: ({ tokenId, version }: {
+      tokenId: string
+      version: number
+    }) => repository.revokeToken(tokenId, version),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: projectQueryKeys.tokens,
+      })
+    },
+  })
+}
+
+export function useCreateBackup() {
+  const { repository } = useProjectRepository()
+  return useMutation({
+    mutationFn: (filename?: string) => repository.createBackup(filename),
+  })
+}
+
+export function useRestoreBackup() {
+  const queryClient = useQueryClient()
+  const { repository } = useProjectRepository()
+  return useMutation({
+    mutationFn: (filename: string) => repository.restoreBackup(filename),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries()
+    },
+  })
+}
+
+export function useImportData() {
+  const queryClient = useQueryClient()
+  const { repository } = useProjectRepository()
+  return useMutation({
+    mutationFn: (file: File) => repository.importData(file),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries()
+    },
   })
 }

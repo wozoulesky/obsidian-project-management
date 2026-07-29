@@ -58,6 +58,7 @@ export class ApiClient {
     headers.Accept = 'application/json'
     if (
       init.body !== undefined
+      && !(init.body instanceof FormData)
       && !Object.keys(headers).some(
         (name) => name.toLowerCase() === 'content-type',
       )
@@ -108,5 +109,40 @@ export class ApiClient {
       })
     }
     return parsed.data.data
+  }
+
+  async download(path: string, init: RequestInit = {}): Promise<Blob> {
+    const response = await fetch(
+      `${this.baseUrl}/${path.replace(/^\/+/, '')}`,
+      init,
+    )
+    if (response.ok) return response.blob()
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch {
+      throw new ApiError({
+        code: 'API_RESPONSE_INVALID',
+        message: 'API error response was not valid JSON',
+        status: response.status,
+      })
+    }
+    const parsedError = apiErrorEnvelopeSchema.safeParse(payload)
+    if (!parsedError.success) {
+      throw new ApiError({
+        code: 'API_RESPONSE_INVALID',
+        message: 'API error response did not match its contract',
+        status: response.status,
+        requestId: requestIdFrom(payload),
+      })
+    }
+    throw new ApiError({
+      code: parsedError.data.error.code,
+      message: parsedError.data.error.message,
+      status: response.status,
+      requestId: parsedError.data.meta.request_id,
+      details: parsedError.data.error.details,
+    })
   }
 }

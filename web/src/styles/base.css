@@ -20,6 +20,31 @@ body {
   background: var(--canvas);
 }
 
+:root[data-background="solid"] body {
+  background: var(--canvas);
+}
+
+:root[data-background="soft"] body {
+  background:
+    radial-gradient(
+      circle at 80% 0%,
+      color-mix(in srgb, var(--primary) 7%, transparent),
+      transparent 34rem
+    ),
+    var(--canvas);
+}
+
+:root[data-background="gradient"] body {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--primary) 9%, var(--canvas)),
+      var(--canvas) 42%,
+      color-mix(in srgb, var(--surface) 82%, var(--canvas))
+    );
+  background-attachment: fixed;
+}
+
 button,
 input,
 select,

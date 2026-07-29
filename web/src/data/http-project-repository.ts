@@ -9,6 +9,10 @@ import {
   persistedProjectSchema,
   persistedRequirementSchema,
   persistedTaskSchema,
+  themeSchema,
+  backgroundSchema,
+  accentSchema,
+  densitySchema,
 } from '@project-os/contracts'
 import { z } from 'zod'
 
@@ -29,6 +33,48 @@ const cursorPageSchema = <Output>(itemSchema: z.ZodType<Output>) =>
     items: z.array(itemSchema),
     next_cursor: z.string().min(1).nullable(),
   }).strict()
+
+const healthSchema = z.object({
+  status: z.literal('ok'),
+  database: z.literal('ok'),
+}).strict()
+const tokenSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  createdAt: z.iso.datetime({ offset: false }),
+  lastUsedAt: z.iso.datetime({ offset: false }).nullable(),
+  revokedAt: z.iso.datetime({ offset: false }).nullable(),
+  version: z.number().int().positive(),
+}).strict()
+const issuedTokenSchema = tokenSchema.extend({
+  token: z.string().min(1),
+}).strict()
+const backupSchema = z.object({
+  filename: z.string().regex(/^[A-Za-z0-9._-]+\.sqlite$/),
+  path: z.string().min(1),
+}).strict()
+const importCountsSchema = z.object({
+  ok: z.literal(true),
+  counts: z.object({
+    actors: z.number().int().nonnegative(),
+    projects: z.number().int().nonnegative(),
+    projectMembers: z.number().int().nonnegative(),
+    tasks: z.number().int().nonnegative(),
+    requirements: z.number().int().nonnegative(),
+    defects: z.number().int().nonnegative(),
+  }).strict(),
+}).strict()
+const settingsUpdateSchema = z.object({
+  theme: themeSchema,
+  background: backgroundSchema,
+  accent: accentSchema,
+  density: densitySchema,
+  version: z.number().int().positive(),
+}).strict()
+const safeBackupFilenameSchema = z.string()
+  .min(8)
+  .max(200)
+  .regex(/^[A-Za-z0-9._-]+\.sqlite$/)
 
 function appendSearch(
   path: string,
@@ -276,6 +322,65 @@ export function createHttpProjectRepository(
 
     getSettings() {
       return client.request('/settings', persistedAppSettingsSchema)
+    },
+    updateSettings(input) {
+      return client.request('/settings', persistedAppSettingsSchema, {
+        method: 'PATCH',
+        ...jsonBody(settingsUpdateSchema.parse(input)),
+      })
+    },
+    getHealth() {
+      return client.request('/health', healthSchema)
+    },
+    listTokens() {
+      return client.request('/tokens', z.array(tokenSchema))
+    },
+    issueToken(name) {
+      return client.request('/tokens', issuedTokenSchema, {
+        method: 'POST',
+        ...jsonBody(z.object({
+          name: z.string().trim().min(1).max(200),
+        }).parse({ name })),
+      })
+    },
+    revokeToken(tokenId, version) {
+      return client.request(
+        `/tokens/${encodeURIComponent(tokenId)}/revoke`,
+        tokenSchema,
+        {
+          method: 'POST',
+          ...jsonBody({ version: z.number().int().positive().parse(version) }),
+        },
+      )
+    },
+    createBackup(filename) {
+      const body = filename === undefined
+        ? {}
+        : { filename: safeBackupFilenameSchema.parse(filename) }
+      return client.request('/backups', backupSchema, {
+        method: 'POST',
+        ...jsonBody(body),
+      })
+    },
+    restoreBackup(filename) {
+      return client.request('/backups/restore', backupSchema, {
+        method: 'POST',
+        ...jsonBody({ filename: safeBackupFilenameSchema.parse(filename) }),
+      })
+    },
+    exportData() {
+      return client.request('/export', z.unknown())
+    },
+    importData(file) {
+      const form = new FormData()
+      form.append('file', file)
+      return client.request('/import', importCountsSchema, {
+        method: 'POST',
+        body: form,
+      })
+    },
+    downloadSkill() {
+      return client.download('/skills/project-os.zip')
     },
   }
 }

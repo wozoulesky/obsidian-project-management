@@ -8,7 +8,8 @@ import { z } from 'zod'
 import type {
   ActivityEvent,
   Actor,
-  AppSettings,
+  Accent,
+  Background,
   CreateProjectInput,
   DashboardSnapshot,
   Defect,
@@ -20,7 +21,10 @@ import type {
   Task,
   TaskDateInput,
   TaskProgressInput,
+  Theme,
+  Density,
 } from './domain'
+import type { PersistedAppSettings } from '@project-os/contracts'
 
 const routeIdSchema = z.string().min(1).max(256)
 const actorNameSchema = z.string().trim().min(1).max(200)
@@ -85,6 +89,49 @@ export type ActivityPage = {
   nextCursor: string | null
 }
 
+export type AppearanceSettingsInput = {
+  theme: Theme
+  background: Background
+  accent: Accent
+  density: Density
+  version: number
+}
+
+export type HealthStatus = {
+  status: 'ok'
+  database: 'ok'
+}
+
+export type AccessTokenMetadata = {
+  id: string
+  name: string
+  createdAt: string
+  lastUsedAt: string | null
+  revokedAt: string | null
+  version: number
+}
+
+export type IssuedAccessToken = AccessTokenMetadata & {
+  token: string
+}
+
+export type BackupRecord = {
+  filename: string
+  path: string
+}
+
+export type ImportCounts = {
+  ok: true
+  counts: {
+    actors: number
+    projects: number
+    projectMembers: number
+    tasks: number
+    requirements: number
+    defects: number
+  }
+}
+
 export interface ProjectRepository {
   listActors(): Promise<Actor[]>
   createHuman(input: CreateHumanActorInput): Promise<Actor>
@@ -115,5 +162,15 @@ export interface ProjectRepository {
   createTaskFromDefect(defectId: string): Promise<Task>
   listGanttTasks(projectId: string): Promise<Task[]>
   listActivities(input?: ActivityListInput): Promise<ActivityPage>
-  getSettings(): Promise<AppSettings>
+  getSettings(): Promise<PersistedAppSettings>
+  updateSettings(input: AppearanceSettingsInput): Promise<PersistedAppSettings>
+  getHealth(): Promise<HealthStatus>
+  listTokens(): Promise<AccessTokenMetadata[]>
+  issueToken(name: string): Promise<IssuedAccessToken>
+  revokeToken(tokenId: string, version: number): Promise<AccessTokenMetadata>
+  createBackup(filename?: string): Promise<BackupRecord>
+  restoreBackup(filename: string): Promise<BackupRecord>
+  exportData(): Promise<unknown>
+  importData(file: File): Promise<ImportCounts>
+  downloadSkill(): Promise<Blob>
 }

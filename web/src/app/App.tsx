@@ -3,6 +3,7 @@ import { ActivitySync } from '../data/ActivitySync'
 import { httpProjectRepository } from '../data/http-project-repository'
 import { ProjectRepositoryProvider } from '../data/query-hooks'
 import { AppRoutes } from './router'
+import { AppearanceProvider } from './AppearanceProvider'
 
 export function App() {
   return (
@@ -10,10 +11,12 @@ export function App() {
       repository={httpProjectRepository}
       projectId="project_default"
     >
-      <ActivitySync />
-      <AppShell>
-        <AppRoutes />
-      </AppShell>
+      <AppearanceProvider>
+        <ActivitySync />
+        <AppShell>
+          <AppRoutes />
+        </AppShell>
+      </AppearanceProvider>
     </ProjectRepositoryProvider>
   )
 }

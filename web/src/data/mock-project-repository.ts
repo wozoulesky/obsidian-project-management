@@ -1,3 +1,4 @@
+import type { PersistedAppSettings } from '@project-os/contracts'
 import type {
   ActivityEvent,
   Actor,
@@ -57,14 +58,23 @@ export function createMockProjectRepository(): ProjectRepository {
     updatedAt: '2026-07-28T04:00:00.000Z',
     version: 1,
   }]
-  const settingsState = {
-    theme: 'system' as const,
-    background: 'soft' as const,
-    accent: 'blue' as const,
-    density: 'comfortable' as const,
+  const settingsState: PersistedAppSettings = {
+    theme: 'system',
+    background: 'soft',
+    accent: 'blue',
+    density: 'comfortable',
     updatedAt: '2026-07-28T04:00:00.000Z',
     version: 1,
   }
+  const tokenState: Array<{
+    id: string
+    name: string
+    createdAt: string
+    lastUsedAt: string | null
+    revokedAt: string | null
+    version: number
+  }> = []
+  let backupSequence = 0
   const actorState: Actor[] = Object.values(seed.actors).map((actor) => ({
     ...actor,
     status: actor.status ?? 'active',
@@ -424,6 +434,89 @@ export function createMockProjectRepository(): ProjectRepository {
 
     async getSettings() {
       return clone(settingsState)
+    },
+    async updateSettings(input) {
+      if (settingsState.version !== input.version) {
+        throw new Error('Settings version is stale')
+      }
+      settingsState.theme = input.theme
+      settingsState.background = input.background
+      settingsState.accent = input.accent
+      settingsState.density = input.density
+      settingsState.updatedAt = new Date().toISOString()
+      settingsState.version += 1
+      return clone(settingsState)
+    },
+    async getHealth() {
+      return { status: 'ok', database: 'ok' }
+    },
+    async listTokens() {
+      return clone(tokenState)
+    },
+    async issueToken(name) {
+      const now = new Date().toISOString()
+      const metadata = {
+        id: `token-${tokenState.length + 1}`,
+        name: name.trim(),
+        createdAt: now,
+        lastUsedAt: null,
+        revokedAt: null,
+        version: 1,
+      }
+      tokenState.push(metadata)
+      return {
+        ...clone(metadata),
+        token: `pos_${'a'.repeat(24)}_${'b'.repeat(43)}`,
+      }
+    },
+    async revokeToken(tokenId, version) {
+      const token = tokenState.find(({ id }) => id === tokenId)
+      if (!token) throw new Error('Token not found')
+      if (token.version !== version) throw new Error('Token version is stale')
+      token.revokedAt = new Date().toISOString()
+      token.version += 1
+      return clone(token)
+    },
+    async createBackup(filename) {
+      backupSequence += 1
+      const safeFilename = filename
+        ?? `project-os-test-${backupSequence}.sqlite`
+      return {
+        filename: safeFilename,
+        path: `backups/${safeFilename}`,
+      }
+    },
+    async restoreBackup(filename) {
+      return { filename, path: `backups/${filename}` }
+    },
+    async exportData() {
+      return {
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        actors: clone(actorState),
+        projects: clone(projectState),
+        projectMembers: clone(memberState),
+        tasks: clone(taskState),
+        requirements: clone(requirementState),
+        defects: clone(defectState),
+        settings: clone(settingsState),
+      }
+    },
+    async importData() {
+      return {
+        ok: true,
+        counts: {
+          actors: actorState.length,
+          projects: projectState.length,
+          projectMembers: memberState.length,
+          tasks: taskState.length,
+          requirements: requirementState.length,
+          defects: defectState.length,
+        },
+      }
+    },
+    async downloadSkill() {
+      throw new Error('Agent Skill 尚未安装：服务端下载路由将在 Task 04.5 提供。')
     },
   }
 }

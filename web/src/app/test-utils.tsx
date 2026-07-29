@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, type RenderOptions } from '@testing-library/react'
+import { cleanup, render, type RenderOptions } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, vi } from 'vitest'
@@ -11,6 +11,7 @@ import {
   projectRepository,
   resetProjectRepositoryForTests,
 } from '../data/query-hooks'
+import { AppearanceProvider } from './AppearanceProvider'
 
 vi.mock('echarts/core', () => ({
   init: vi.fn(() => ({
@@ -33,6 +34,7 @@ globalThis.ResizeObserver =
   ResizeObserverStub as unknown as typeof ResizeObserver
 
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
   resetProjectRepositoryForTests()
 })
@@ -61,7 +63,9 @@ export function renderApp(
           repository={projectRepository}
           projectId="atlas"
         >
-          <BrowserRouter>{children}</BrowserRouter>
+          <AppearanceProvider>
+            <BrowserRouter>{children}</BrowserRouter>
+          </AppearanceProvider>
         </ProjectRepositoryProvider>
       </QueryClientProvider>
     )
