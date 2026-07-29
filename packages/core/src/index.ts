@@ -40,6 +40,10 @@ export {
 export type {
   WorkOperation,
 } from './permissions.js'
+export { BackupService } from './backup-service.js'
+export type { DatabaseLifecycle } from './backup-service.js'
+export { ExportService, validateExportDocument } from './export-service.js'
+export type { ExportDocument } from './export-service.js'
 export { ProjectService } from './project-service.js'
 export type {
   CreateProjectServiceInput,
@@ -58,3 +62,23 @@ export type {
   TaskListFilter,
   UpdateTaskInput,
 } from './task-service.js'
+export {
+  createLegacyFixtureSeedDocument,
+  seedDatabase,
+} from './seed.js'
+export type {
+  LegacyFixtureActor,
+  LegacyFixtureDefect,
+  LegacyFixtureRequirement,
+  LegacyFixtureSeed,
+  LegacyFixtureTask,
+} from './seed.js'
+export {
+  persistedAppSettingsSchema,
+  SettingsService,
+} from './settings-service.js'
+export { TokenService } from './token-service.js'
+export type {
+  AccessToken,
+  IssuedAccessToken,
+} from './token-service.js'
