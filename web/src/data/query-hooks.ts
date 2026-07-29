@@ -4,6 +4,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
+import type { PersistedAppSettings } from '@project-os/contracts'
 import {
   createContext,
   createElement,
@@ -473,7 +474,13 @@ export function useUpdateSettings() {
     mutationFn: (input: AppearanceSettingsInput) =>
       repository.updateSettings(input),
     onSuccess: async (settings) => {
-      queryClient.setQueryData(projectQueryKeys.settings, settings)
+      queryClient.setQueryData<PersistedAppSettings>(
+        projectQueryKeys.settings,
+        (cached) =>
+          cached === undefined || settings.version >= cached.version
+            ? settings
+            : cached,
+      )
       await queryClient.invalidateQueries({
         queryKey: projectQueryKeys.activities,
       })

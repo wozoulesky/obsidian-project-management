@@ -1,3 +1,5 @@
+import type { PersistedAppSettings } from '@project-os/contracts'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useEffect,
   useContext,
@@ -7,7 +9,11 @@ import {
   type ReactNode,
 } from 'react'
 
-import { useSettings, useUpdateSettings } from '../data/query-hooks'
+import {
+  projectQueryKeys,
+  useSettings,
+  useUpdateSettings,
+} from '../data/query-hooks'
 import { ApiError } from '../data/api-client'
 import {
   AppearanceContext,
@@ -38,6 +44,7 @@ function AppearanceProviderRoot({ children }: { children: ReactNode }) {
   const [saveError, setSaveError] = useState('')
   const settings = useSettings()
   const update = useUpdateSettings()
+  const queryClient = useQueryClient()
   const apiBaseline = useMemo(
     () => settings.data === undefined
       ? null
@@ -83,11 +90,20 @@ function AppearanceProviderRoot({ children }: { children: ReactNode }) {
     const submittedRevision = draftRevision.current
     try {
       const saved = await update.mutateAsync({ ...appearance, version })
+      const cachedSettings =
+        queryClient.getQueryData<PersistedAppSettings>(
+          projectQueryKeys.settings,
+        )
+      const effectiveSettings =
+        cachedSettings !== undefined
+        && cachedSettings.version >= saved.version
+          ? cachedSettings
+          : saved
       const savedAppearance = appearanceSchema.parse({
-        theme: saved.theme,
-        background: saved.background,
-        accent: saved.accent,
-        density: saved.density,
+        theme: effectiveSettings.theme,
+        background: effectiveSettings.background,
+        accent: effectiveSettings.accent,
+        density: effectiveSettings.density,
       })
       if (draftRevision.current === submittedRevision) {
         applyAppearance(savedAppearance)

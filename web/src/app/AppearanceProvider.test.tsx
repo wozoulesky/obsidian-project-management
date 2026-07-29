@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../data/api-client'
 import { createMockProjectRepository } from '../data/mock-project-repository'
 import {
+  projectQueryKeys,
   ProjectRepositoryProvider,
 } from '../data/query-hooks'
 import { AppearanceSettings } from '../features/settings/AppearanceSettings'
@@ -29,19 +30,21 @@ const remoteLight: PersistedAppSettings = {
 
 function Harness({
   children,
+  queryClient,
   repository = createMockProjectRepository(),
 }: {
   children: ReactNode
+  queryClient?: QueryClient
   repository?: ReturnType<typeof createMockProjectRepository>
 }) {
-  const queryClient = new QueryClient({
+  const client = queryClient ?? new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
   })
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={client}>
       <ProjectRepositoryProvider repository={repository} projectId="atlas">
         <AppearanceProvider>{children}</AppearanceProvider>
       </ProjectRepositoryProvider>
@@ -229,6 +232,81 @@ describe('AppearanceProvider reconciliation', () => {
     })
     expect(vi.mocked(repository.updateSettings).mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({ accent: 'purple', version: 2 }),
+    )
+  })
+
+  it('does not roll back a newer API baseline when an older save resolves', async () => {
+    let resolveStaleSave:
+      ((settings: PersistedAppSettings) => void) | undefined
+    const versionTwo = { ...remoteLight, version: 2 }
+    const versionThree = {
+      ...remoteLight,
+      theme: 'dark' as const,
+      accent: 'orange' as const,
+      updatedAt: '2026-07-29T12:03:00.000Z',
+      version: 3,
+    }
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    const repository = createMockProjectRepository()
+    repository.getSettings = vi.fn().mockResolvedValue(versionTwo)
+    repository.updateSettings = vi.fn()
+      .mockImplementationOnce(() =>
+        new Promise<PersistedAppSettings>((resolve) => {
+          resolveStaleSave = resolve
+        }),
+      )
+      .mockImplementationOnce(async (input) => ({
+        ...input,
+        updatedAt: '2026-07-29T12:04:00.000Z',
+        version: 4,
+      }))
+    const user = userEvent.setup()
+    render(
+      <Harness queryClient={queryClient} repository={repository}>
+        <Probe />
+      </Harness>,
+    )
+    await screen.findByText(/"blue"/)
+
+    await user.click(screen.getByRole('button', { name: '保存草稿' }))
+    await waitFor(() => {
+      expect(repository.updateSettings).toHaveBeenCalledTimes(1)
+    })
+
+    act(() => {
+      queryClient.setQueryData(projectQueryKeys.settings, versionThree)
+    })
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute('data-accent', 'orange')
+    })
+
+    await act(async () => resolveStaleSave?.({
+      ...versionTwo,
+      updatedAt: '2026-07-29T12:02:00.000Z',
+    }))
+
+    await waitFor(() => {
+      expect(
+        queryClient.getQueryData<PersistedAppSettings>(
+          projectQueryKeys.settings,
+        )?.version,
+      ).toBe(3)
+      expect(document.documentElement).toHaveAttribute('data-accent', 'orange')
+      expect(screen.getByLabelText('草稿状态')).toHaveTextContent('clean')
+    })
+
+    await user.click(screen.getByRole('button', { name: '编辑草稿' }))
+    await user.click(screen.getByRole('button', { name: '保存草稿' }))
+    await waitFor(() => {
+      expect(repository.updateSettings).toHaveBeenCalledTimes(2)
+    })
+    expect(vi.mocked(repository.updateSettings).mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ version: 3 }),
     )
   })
 
