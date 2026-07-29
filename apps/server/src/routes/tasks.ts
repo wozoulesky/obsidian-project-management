@@ -1,10 +1,12 @@
 import {
+  persistedProjectSchema,
   persistedTaskProgressInputSchema,
   persistedTaskSchema,
   prioritySchema,
   taskStatusSchema,
 } from '@project-os/contracts'
 import type { Router } from 'express'
+import { DomainError } from '@project-os/core'
 import type {
   CreateTaskInput,
   TaskListFilter,
@@ -13,7 +15,10 @@ import type {
 import { z } from 'zod'
 import type { AppRouteModule } from '../app.js'
 import {
+  cursorError,
   paginate,
+  parseResponse,
+  readCursorPosition,
   requestActorId,
   routeIdSchema,
   routeVersionSchema,
@@ -97,17 +102,71 @@ function listTasks(
     cursor: string | undefined
   },
 ) {
-  const tasks = context.services.tasks.list(filter as TaskListFilter)
-    .map((task) => persistedTaskSchema.parse(task))
+  const cursorFilters = {
+    project_id: filter.projectId,
+    assignee_id: filter.assigneeId,
+    status: filter.status,
+  }
+  const position = readCursorPosition({
+    scope: routerScope,
+    filters: cursorFilters,
+    cursor: options.cursor,
+  })
+  let after: TaskListFilter['after']
+  if (position !== undefined) {
+    if (position.length !== 3) {
+      throw cursorError(options.cursor!)
+    }
+    let anchor
+    try {
+      anchor = parseResponse(
+        persistedTaskSchema,
+        context.services.tasks.get(position[2]!),
+      )
+    } catch (error) {
+      if (error instanceof DomainError && error.code === 'TASK_NOT_FOUND') {
+        throw cursorError(options.cursor!)
+      }
+      throw error
+    }
+    if (
+      anchor.projectId !== position[0]
+      || anchor.code !== position[1]
+      || anchor.id !== position[2]
+      || (
+        filter.projectId !== undefined
+        && anchor.projectId !== filter.projectId
+      )
+      || (
+        filter.assigneeId !== undefined
+        && anchor.assigneeId !== filter.assigneeId
+      )
+      || (
+        filter.status !== undefined
+        && anchor.status !== filter.status
+      )
+    ) {
+      throw cursorError(options.cursor!)
+    }
+    after = {
+      projectId: anchor.projectId,
+      code: anchor.code,
+      id: anchor.id,
+    }
+  }
+  const fetchLimit = options.limit + 1
+  const rawTasks = context.services.tasks.list({
+    ...filter,
+    ...(after === undefined ? {} : { after }),
+    limit: fetchLimit,
+  } as TaskListFilter)
+  const tasks = rawTasks.slice(0, fetchLimit).map(
+    (task) => parseResponse(persistedTaskSchema, task),
+  )
   return paginate(tasks, {
     scope: routerScope,
-    filters: {
-      project_id: filter.projectId,
-      assignee_id: filter.assigneeId,
-      status: filter.status,
-    },
+    filters: cursorFilters,
     limit: options.limit,
-    cursor: options.cursor,
     position: taskPosition,
   })
 }
@@ -123,14 +182,17 @@ export const taskRoutes: AppRouteModule = {
         requestActorId(context),
         'web',
       )
-      sendSuccess(response, persistedTaskSchema.parse(task), 201)
+      sendSuccess(response, parseResponse(persistedTaskSchema, task), 201)
     })
 
     router.get('/projects/:projectId/tasks', (request, response) => {
       const { projectId } = projectTaskParamsSchema.parse(request.params)
       const query = projectTaskListQuerySchema.parse(request.query)
       const context = getContext()
-      context.services.projects.get(projectId)
+      parseResponse(
+        persistedProjectSchema,
+        context.services.projects.get(projectId),
+      )
       const page = listTasks(
         'project-tasks',
         context,
@@ -163,7 +225,7 @@ export const taskRoutes: AppRouteModule = {
     router.get('/tasks/:id', (request, response) => {
       const { id } = taskIdParamsSchema.parse(request.params)
       const task = getContext().services.tasks.get(id)
-      sendSuccess(response, persistedTaskSchema.parse(task))
+      sendSuccess(response, parseResponse(persistedTaskSchema, task))
     })
 
     router.patch('/tasks/:id', (request, response) => {
@@ -176,7 +238,7 @@ export const taskRoutes: AppRouteModule = {
         requestActorId(context),
         'web',
       )
-      sendSuccess(response, persistedTaskSchema.parse(task))
+      sendSuccess(response, parseResponse(persistedTaskSchema, task))
     })
 
     router.post('/tasks/:id/progress', (request, response) => {
@@ -189,7 +251,7 @@ export const taskRoutes: AppRouteModule = {
         requestActorId(context),
         'web',
       )
-      sendSuccess(response, persistedTaskSchema.parse(task))
+      sendSuccess(response, parseResponse(persistedTaskSchema, task))
     })
   },
 }

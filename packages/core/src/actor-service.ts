@@ -63,6 +63,11 @@ export type UpdateActorInput = {
 export type ActorListFilter = {
   kind?: PersistedActor['kind']
   status?: ActorStatus
+  after?: {
+    name: string
+    id: string
+  }
+  limit?: number
 }
 
 function mapActor(row: ActorRow): PersistedActor {
@@ -285,10 +290,34 @@ export class ActorService {
       clauses.push('status = ?')
       values.push(actorStatusSchema.parse(filter.status))
     }
+    if (filter.after !== undefined) {
+      if (filter.after.name.length === 0 || filter.after.id.length === 0) {
+        throw new DomainError(
+          'INPUT_INVALID',
+          'Actor list keyset is invalid',
+        )
+      }
+      clauses.push('(name > ? OR (name = ? AND id > ?))')
+      values.push(
+        filter.after.name,
+        filter.after.name,
+        filter.after.id,
+      )
+    }
+    if (
+      filter.limit !== undefined
+      && (!Number.isInteger(filter.limit) || filter.limit < 1)
+    ) {
+      throw new DomainError('INPUT_INVALID', 'Actor list limit is invalid')
+    }
 
     const where = clauses.length === 0
       ? ''
       : `WHERE ${clauses.join(' AND ')}`
+    const limit = filter.limit === undefined ? '' : 'LIMIT ?'
+    if (filter.limit !== undefined) {
+      values.push(filter.limit)
+    }
     const rows = this.database.prepare(`
       SELECT
         id,
@@ -304,6 +333,7 @@ export class ActorService {
       FROM actors
       ${where}
       ORDER BY name, id
+      ${limit}
     `).all(...values) as unknown as ActorRow[]
 
     return rows.map(mapActor)

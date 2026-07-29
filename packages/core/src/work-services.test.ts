@@ -228,6 +228,41 @@ describe('TaskService', () => {
     expect(persistedTaskSchema.parse(updated)).toEqual(updated)
   })
 
+  it('applies task composite keyset and limit across projects', () => {
+    const context = setup()
+    const tasks = [
+      context.tasks.create(
+        taskInput(context.project.id, context.dev.id, 'First'),
+        context.pm.id,
+        'mcp',
+      ),
+      context.tasks.create(
+        taskInput(context.project.id, context.dev.id, 'Second'),
+        context.pm.id,
+        'mcp',
+      ),
+      context.tasks.create(
+        taskInput(context.otherProject.id, context.dev.id, 'Third'),
+        context.pm.id,
+        'mcp',
+      ),
+    ].sort((left, right) =>
+      left.projectId.localeCompare(right.projectId)
+      || left.code.localeCompare(right.code)
+      || left.id.localeCompare(right.id))
+
+    const firstPage = context.tasks.list({ limit: 2 })
+    expect(firstPage).toEqual(tasks.slice(0, 2))
+    expect(context.tasks.list({
+      after: {
+        projectId: firstPage[1]!.projectId,
+        code: firstPage[1]!.code,
+        id: firstPage[1]!.id,
+      },
+      limit: 2,
+    })).toEqual(tasks.slice(2))
+  })
+
   it('validates runtime input, active assignees, date order, and same-project references', () => {
     const context = setup()
     const otherTask = context.tasks.create(

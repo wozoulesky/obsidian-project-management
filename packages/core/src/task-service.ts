@@ -84,6 +84,12 @@ export type TaskListFilter = {
   projectId?: string
   assigneeId?: string
   status?: TaskStatus
+  after?: {
+    projectId: string
+    code: string
+    id: string
+  }
+  limit?: number
 }
 
 const createTaskInputSchema = persistedTaskSchema.pick({
@@ -277,13 +283,55 @@ export class TaskService {
       clauses.push('status = ?')
       values.push(taskStatusSchema.parse(filter.status))
     }
+    if (filter.after !== undefined) {
+      if (
+        filter.after.projectId.length === 0
+        || filter.after.code.length === 0
+        || filter.after.id.length === 0
+      ) {
+        throw new DomainError(
+          'INPUT_INVALID',
+          'Task list keyset is invalid',
+        )
+      }
+      clauses.push(`
+        (
+          project_id > ?
+          OR (
+            project_id = ?
+            AND (
+              code > ?
+              OR (code = ? AND id > ?)
+            )
+          )
+        )
+      `)
+      values.push(
+        filter.after.projectId,
+        filter.after.projectId,
+        filter.after.code,
+        filter.after.code,
+        filter.after.id,
+      )
+    }
+    if (
+      filter.limit !== undefined
+      && (!Number.isInteger(filter.limit) || filter.limit < 1)
+    ) {
+      throw new DomainError('INPUT_INVALID', 'Task list limit is invalid')
+    }
     const where = clauses.length === 0
       ? ''
       : `WHERE ${clauses.join(' AND ')}`
+    const limit = filter.limit === undefined ? '' : 'LIMIT ?'
+    if (filter.limit !== undefined) {
+      values.push(filter.limit)
+    }
     const rows = this.database.prepare(`
       ${taskSelect}
       ${where}
       ORDER BY project_id, code, id
+      ${limit}
     `).all(...values) as unknown as TaskRow[]
     return rows.map((row) => this.mapTask(row))
   }

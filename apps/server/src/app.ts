@@ -13,7 +13,10 @@ import type {
 import { ZodError } from 'zod'
 import type { AppContext } from './context.js'
 import { errorEnvelope, successEnvelope } from './envelope.js'
-import { actorRoutes } from './routes/actors.js'
+import {
+  actorRoutes,
+  ResponseContractError,
+} from './routes/actors.js'
 import { projectRoutes } from './routes/projects.js'
 import { taskRoutes } from './routes/tasks.js'
 
@@ -244,6 +247,24 @@ function safeDetails(
 }
 
 function mapError(error: unknown): ErrorResponse {
+  if (error instanceof URIError) {
+    return {
+      status: 400,
+      code: 'INVALID_URL',
+      message: 'Request URL is invalid',
+      details: {},
+    }
+  }
+
+  if (error instanceof ResponseContractError) {
+    return {
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: {},
+    }
+  }
+
   if (error instanceof ZodError) {
     return {
       status: 400,

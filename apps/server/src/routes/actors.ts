@@ -65,7 +65,26 @@ const cursorPayloadSchema = z.object({
 
 type CursorPayload = z.infer<typeof cursorPayloadSchema>
 
-function cursorError(cursor: string): DomainError {
+export class ResponseContractError extends Error {
+  constructor() {
+    super('Response did not match its public contract')
+    this.name = 'ResponseContractError'
+    Object.setPrototypeOf(this, new.target.prototype)
+  }
+}
+
+export function parseResponse<Output>(
+  schema: z.ZodType<Output>,
+  value: unknown,
+): Output {
+  const parsed = schema.safeParse(value)
+  if (!parsed.success) {
+    throw new ResponseContractError()
+  }
+  return parsed.data
+}
+
+export function cursorError(cursor: string): DomainError {
   return new DomainError(
     'PAGINATION_CURSOR_INVALID',
     'Pagination cursor is invalid or expired',
@@ -97,38 +116,36 @@ function decodeCursor(cursor: string): CursorPayload {
   }
 }
 
+export function readCursorPosition(options: {
+  scope: string
+  filters: Record<string, string | undefined>
+  cursor: string | undefined
+}): string[] | undefined {
+  if (options.cursor === undefined) {
+    return undefined
+  }
+  const decoded = decodeCursor(options.cursor)
+  if (
+    decoded.scope !== options.scope
+    || decoded.filters !== JSON.stringify(options.filters)
+  ) {
+    throw cursorError(options.cursor)
+  }
+  return decoded.position
+}
+
 export function paginate<Item>(
   items: readonly Item[],
   options: {
     scope: string
     filters: Record<string, string | undefined>
     limit: number
-    cursor: string | undefined
     position(item: Item): string[]
   },
 ): { items: Item[]; next_cursor: string | null } {
   const filters = JSON.stringify(options.filters)
-  let start = 0
-  if (options.cursor !== undefined) {
-    const decoded = decodeCursor(options.cursor)
-    if (decoded.scope !== options.scope || decoded.filters !== filters) {
-      throw cursorError(options.cursor)
-    }
-    const cursorIndex = items.findIndex((item) => {
-      const position = options.position(item)
-      return position.length === decoded.position.length
-        && position.every(
-          (value, index) => value === decoded.position[index],
-        )
-    })
-    if (cursorIndex < 0) {
-      throw cursorError(options.cursor)
-    }
-    start = cursorIndex + 1
-  }
-
-  const pageItems = items.slice(start, start + options.limit)
-  const hasMore = start + pageItems.length < items.length
+  const hasMore = items.length > options.limit
+  const pageItems = items.slice(0, options.limit)
   const last = pageItems.at(-1)
   return {
     items: pageItems,
@@ -144,7 +161,10 @@ export function paginate<Item>(
 }
 
 export function requestActorId(context: AppContext): string {
-  const actor = context.services.actors.get(context.localActorId)
+  const actor = parseResponse(
+    persistedActorSchema,
+    context.services.actors.get(context.localActorId),
+  )
   if (actor.status !== 'active') {
     throw new DomainError(
       'ACTOR_INACTIVE',
@@ -178,20 +198,58 @@ export const actorRoutes: AppRouteModule = {
     router.get('/actors', (request, response) => {
       const query = actorListQuerySchema.parse(request.query)
       const context = getContext()
-      const actors = context.services.actors.list({
+      const filters = {
         kind: query.kind,
         status: query.status,
-      } as ActorListFilter).map(
-        (actor) => persistedActorSchema.parse(actor),
+      }
+      const position = readCursorPosition({
+        scope: 'actors',
+        filters,
+        cursor: query.cursor,
+      })
+      let after: ActorListFilter['after']
+      if (position !== undefined) {
+        if (position.length !== 2) {
+          throw cursorError(query.cursor!)
+        }
+        let anchor
+        try {
+          anchor = parseResponse(
+            persistedActorSchema,
+            context.services.actors.get(position[1]!),
+          )
+        } catch (error) {
+          if (
+            error instanceof DomainError
+            && error.code === 'ACTOR_NOT_FOUND'
+          ) {
+            throw cursorError(query.cursor!)
+          }
+          throw error
+        }
+        if (
+          anchor.name !== position[0]
+          || anchor.id !== position[1]
+          || (query.kind !== undefined && anchor.kind !== query.kind)
+          || (query.status !== undefined && anchor.status !== query.status)
+        ) {
+          throw cursorError(query.cursor!)
+        }
+        after = { name: anchor.name, id: anchor.id }
+      }
+      const fetchLimit = query.limit + 1
+      const rawActors = context.services.actors.list({
+        ...filters,
+        ...(after === undefined ? {} : { after }),
+        limit: fetchLimit,
+      } as ActorListFilter)
+      const actors = rawActors.slice(0, fetchLimit).map(
+        (actor) => parseResponse(persistedActorSchema, actor),
       )
       const page = paginate(actors, {
         scope: 'actors',
-        filters: {
-          kind: query.kind,
-          status: query.status,
-        },
+        filters,
         limit: query.limit,
-        cursor: query.cursor,
         position: (actor) => [actor.name, actor.id],
       })
       sendSuccess(response, page)
@@ -205,13 +263,13 @@ export const actorRoutes: AppRouteModule = {
         requestActorId(context),
         'web',
       )
-      sendSuccess(response, persistedActorSchema.parse(actor), 201)
+      sendSuccess(response, parseResponse(persistedActorSchema, actor), 201)
     })
 
     router.get('/actors/:id', (request, response) => {
       const { id } = actorIdParamsSchema.parse(request.params)
       const actor = getContext().services.actors.get(id)
-      sendSuccess(response, persistedActorSchema.parse(actor))
+      sendSuccess(response, parseResponse(persistedActorSchema, actor))
     })
 
     router.patch('/actors/:id', (request, response) => {
@@ -224,7 +282,7 @@ export const actorRoutes: AppRouteModule = {
         requestActorId(context),
         'web',
       )
-      sendSuccess(response, persistedActorSchema.parse(actor))
+      sendSuccess(response, parseResponse(persistedActorSchema, actor))
     })
 
     router.post('/actors/:id/deactivate', (request, response) => {
@@ -232,7 +290,10 @@ export const actorRoutes: AppRouteModule = {
       const { version } = deactivateActorBodySchema.parse(request.body)
       const context = getContext()
       const actorId = requestActorId(context)
-      const current = context.services.actors.get(id)
+      const current = parseResponse(
+        persistedActorSchema,
+        context.services.actors.get(id),
+      )
       if (current.version !== version) {
         throw new DomainError(
           'ACTOR_VERSION_CONFLICT',
@@ -245,7 +306,7 @@ export const actorRoutes: AppRouteModule = {
         )
       }
       const actor = context.services.actors.deactivate(id, actorId, 'web')
-      sendSuccess(response, persistedActorSchema.parse(actor))
+      sendSuccess(response, parseResponse(persistedActorSchema, actor))
     })
   },
 }

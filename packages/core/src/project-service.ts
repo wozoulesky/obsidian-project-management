@@ -68,6 +68,11 @@ export type UpdateProjectInput = {
 export type ProjectListFilter = {
   ownerId?: string
   status?: ProjectStatus
+  after?: {
+    code: string
+    id: string
+  }
+  limit?: number
 }
 
 function mapProject(row: ProjectRow): PersistedProject {
@@ -262,10 +267,34 @@ export class ProjectService {
       clauses.push('status = ?')
       values.push(projectStatusSchema.parse(filter.status))
     }
+    if (filter.after !== undefined) {
+      if (filter.after.code.length === 0 || filter.after.id.length === 0) {
+        throw new DomainError(
+          'INPUT_INVALID',
+          'Project list keyset is invalid',
+        )
+      }
+      clauses.push('(code > ? OR (code = ? AND id > ?))')
+      values.push(
+        filter.after.code,
+        filter.after.code,
+        filter.after.id,
+      )
+    }
+    if (
+      filter.limit !== undefined
+      && (!Number.isInteger(filter.limit) || filter.limit < 1)
+    ) {
+      throw new DomainError('INPUT_INVALID', 'Project list limit is invalid')
+    }
 
     const where = clauses.length === 0
       ? ''
       : `WHERE ${clauses.join(' AND ')}`
+    const limit = filter.limit === undefined ? '' : 'LIMIT ?'
+    if (filter.limit !== undefined) {
+      values.push(filter.limit)
+    }
     const rows = this.database.prepare(`
       SELECT
         id,
@@ -283,6 +312,7 @@ export class ProjectService {
       FROM projects
       ${where}
       ORDER BY code, id
+      ${limit}
     `).all(...values) as unknown as ProjectRow[]
 
     return rows.map(mapProject)

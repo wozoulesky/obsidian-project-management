@@ -12,9 +12,12 @@ import {
   persistedProjectSchema,
   persistedTaskSchema,
 } from '@project-os/contracts'
-import { seedDatabase } from '@project-os/core'
+import {
+  ActorService,
+  seedDatabase,
+} from '@project-os/core'
 import request from 'supertest'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createApp } from '../app.js'
 import {
@@ -112,6 +115,7 @@ afterEach(() => {
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
+  vi.restoreAllMocks()
 })
 
 describe('actor routes', () => {
@@ -224,7 +228,7 @@ describe('actor routes', () => {
   })
 
   it('uses opaque, filter-bound pagination and rejects invalid or expired cursors', async () => {
-    const { api } = createApi()
+    const { api, context } = createApi()
     const firstActor = await createHuman(api, 'A Actor')
     await createHuman(api, 'B Actor')
 
@@ -234,6 +238,14 @@ describe('actor routes', () => {
     const cursor = firstPage.body.data.next_cursor as string
     const secondPage = await api
       .get(`/api/v1/actors?kind=human&status=active&limit=1&cursor=${cursor}`)
+      .expect(200)
+    const thirdPage = await api
+      .get(
+        `/api/v1/actors?kind=human&status=active&limit=1&cursor=${secondPage.body.data.next_cursor}`,
+      )
+      .expect(200)
+    const allActors = await api
+      .get('/api/v1/actors?kind=human&status=active&limit=200')
       .expect(200)
     const wrongFilter = await api
       .get(`/api/v1/actors?kind=human&status=inactive&cursor=${cursor}`)
@@ -246,16 +258,63 @@ describe('actor routes', () => {
     expect(firstPage.body.data.items[0].id).toBe(firstActor.id)
     expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/)
     expect(secondPage.body.data.items[0].name).toBe('B Actor')
+    const pagedIds = [
+      ...firstPage.body.data.items,
+      ...secondPage.body.data.items,
+      ...thirdPage.body.data.items,
+    ].map(({ id }: { id: string }) => id)
+    expect(pagedIds).toEqual(allActors.body.data.items.map(
+      ({ id }: { id: string }) => id,
+    ))
+    expect(new Set(pagedIds).size).toBe(pagedIds.length)
     expect(wrongFilter.body.error.code).toBe('PAGINATION_CURSOR_INVALID')
     expect(invalid.body.error.code).toBe('PAGINATION_CURSOR_INVALID')
 
-    await api.post(`/api/v1/actors/${firstActor.id}/deactivate`)
-      .send({ version: firstActor.version })
-      .expect(200)
+    context.database.prepare(`
+      DELETE FROM activities
+      WHERE entity_type = 'actor' AND entity_id = ?
+    `).run(firstActor.id)
+    context.database.prepare('DELETE FROM actors WHERE id = ?')
+      .run(firstActor.id)
     const expired = await api
       .get(`/api/v1/actors?kind=human&status=active&cursor=${cursor}`)
       .expect(400)
     expect(expired.body.error.code).toBe('PAGINATION_CURSOR_INVALID')
+  })
+
+  it('pushes limit plus one into SQLite instead of reading ten thousand actors', async () => {
+    const context = createContext(false)
+    const insert = context.database.prepare(`
+      INSERT INTO actors (
+        id, name, kind, role, status, client, capabilities_json,
+        registered_at, last_active_at, version
+      ) VALUES (?, ?, 'human', 'member', 'active', NULL, '[]', ?, NULL, 1)
+    `)
+    context.database.exec('BEGIN')
+    try {
+      for (let index = 0; index < 10_000; index += 1) {
+        const suffix = index.toString().padStart(5, '0')
+        insert.run(
+          `actor_bulk_${suffix}`,
+          `Actor ${suffix}`,
+          '2026-07-29T00:00:00.000Z',
+        )
+      }
+      context.database.exec('COMMIT')
+    } catch (error) {
+      context.database.exec('ROLLBACK')
+      throw error
+    }
+    const list = vi.spyOn(ActorService.prototype, 'list')
+
+    const response = await request(createApp({ context }))
+      .get('/api/v1/actors?limit=1')
+      .expect(200)
+
+    expect(response.body.data.items).toHaveLength(1)
+    expect(response.body.data.next_cursor).toBeTypeOf('string')
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ limit: 2 }))
+    expect(list.mock.results.at(-1)?.value).toHaveLength(2)
   })
 })
 
@@ -516,6 +575,38 @@ describe('task routes', () => {
 })
 
 describe('strict request boundaries and live context', () => {
+  it('maps a malformed percent-encoded path to a sanitized client error', async () => {
+    const { api } = createApi()
+
+    const response = await api
+      .get('/api/v1/actors/%E0%A4%A')
+      .expect(400)
+
+    expect(response.body.error).toEqual({
+      code: 'INVALID_URL',
+      message: 'Request URL is invalid',
+      details: {},
+    })
+  })
+
+  it('maps invalid service output to a sanitized internal error', async () => {
+    const { api } = createApi()
+    vi.spyOn(ActorService.prototype, 'list').mockReturnValue([{
+      id: 'actor_broken',
+      name: null,
+    }] as never)
+
+    const response = await api.get('/api/v1/actors').expect(500)
+
+    expect(response.body.error).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: {},
+    })
+    expect(JSON.stringify(response.body))
+      .not.toMatch(/issues|path|actor_broken/i)
+  })
+
   it('rejects unknown, repeated, null, invalid limit, and oversized id inputs', async () => {
     const { api } = createApi()
     const cases = [

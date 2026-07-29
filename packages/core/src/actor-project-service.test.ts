@@ -130,6 +130,22 @@ describe('actor and project services', () => {
     }).toThrow()
   })
 
+  it('applies actor composite keyset and limit in stable name order', () => {
+    actors.createHuman({ name: 'C', role: 'member' })
+    const first = actors.createHuman({ name: 'A', role: 'owner' })
+    const second = actors.createHuman({ name: 'B', role: 'member' })
+
+    expect(actors.list({
+      kind: 'human',
+      limit: 2,
+    })).toEqual([first, second])
+    expect(actors.list({
+      kind: 'human',
+      after: { name: second.name, id: second.id },
+      limit: 2,
+    }).map(({ name }) => name)).toEqual(['C'])
+  })
+
   it('treats an actor version-only update as a semantic no-op', () => {
     const owner = actors.createHuman({
       name: 'Lin',
@@ -308,6 +324,28 @@ describe('actor and project services', () => {
     expect(borealis.code).toBe('PRJ-0002')
     expect(projects.get(atlas.id)).toEqual(atlas)
     expect(projects.list({ ownerId: lin.id })).toEqual([atlas])
+  })
+
+  it('applies project composite keyset and limit in stable code order', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const created = ['A', 'B', 'C'].map((name) => projects.create(
+      { name, ownerId: owner.id },
+      owner.id,
+      'web',
+    ))
+
+    expect(projects.list({
+      ownerId: owner.id,
+      limit: 2,
+    })).toEqual(created.slice(0, 2))
+    expect(projects.list({
+      ownerId: owner.id,
+      after: {
+        code: created[1]!.code,
+        id: created[1]!.id,
+      },
+      limit: 2,
+    })).toEqual(created.slice(2))
   })
 
   it('adds one owner membership at creation and active members idempotently', () => {

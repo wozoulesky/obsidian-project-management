@@ -5,6 +5,7 @@ import {
   projectStatusSchema,
 } from '@project-os/contracts'
 import type { Router } from 'express'
+import { DomainError } from '@project-os/core'
 import type {
   CreateProjectServiceInput,
   ProjectListFilter,
@@ -13,7 +14,10 @@ import type {
 import { z } from 'zod'
 import type { AppRouteModule } from '../app.js'
 import {
+  cursorError,
   paginate,
+  parseResponse,
+  readCursorPosition,
   requestActorId,
   routeIdSchema,
   routeVersionSchema,
@@ -78,20 +82,68 @@ export const projectRoutes: AppRouteModule = {
     router.get('/projects', (request, response) => {
       const query = projectListQuerySchema.parse(request.query)
       const context = getContext()
-      const projects = context.services.projects.list({
+      const filters = {
         ownerId: query.owner_id,
         status: query.status,
-      } as ProjectListFilter).map(
-        (project) => persistedProjectSchema.parse(project),
+      }
+      const cursorFilters = {
+        owner_id: query.owner_id,
+        status: query.status,
+      }
+      const position = readCursorPosition({
+        scope: 'projects',
+        filters: cursorFilters,
+        cursor: query.cursor,
+      })
+      let after: ProjectListFilter['after']
+      if (position !== undefined) {
+        if (position.length !== 2) {
+          throw cursorError(query.cursor!)
+        }
+        let anchor
+        try {
+          anchor = parseResponse(
+            persistedProjectSchema,
+            context.services.projects.get(position[1]!),
+          )
+        } catch (error) {
+          if (
+            error instanceof DomainError
+            && error.code === 'PROJECT_NOT_FOUND'
+          ) {
+            throw cursorError(query.cursor!)
+          }
+          throw error
+        }
+        if (
+          anchor.code !== position[0]
+          || anchor.id !== position[1]
+          || (
+            query.owner_id !== undefined
+            && anchor.ownerId !== query.owner_id
+          )
+          || (
+            query.status !== undefined
+            && anchor.status !== query.status
+          )
+        ) {
+          throw cursorError(query.cursor!)
+        }
+        after = { code: anchor.code, id: anchor.id }
+      }
+      const fetchLimit = query.limit + 1
+      const rawProjects = context.services.projects.list({
+        ...filters,
+        ...(after === undefined ? {} : { after }),
+        limit: fetchLimit,
+      } as ProjectListFilter)
+      const projects = rawProjects.slice(0, fetchLimit).map(
+        (project) => parseResponse(persistedProjectSchema, project),
       )
       const page = paginate(projects, {
         scope: 'projects',
-        filters: {
-          owner_id: query.owner_id,
-          status: query.status,
-        },
+        filters: cursorFilters,
         limit: query.limit,
-        cursor: query.cursor,
         position: (project) => [project.code, project.id],
       })
       sendSuccess(response, page)
@@ -105,13 +157,13 @@ export const projectRoutes: AppRouteModule = {
         requestActorId(context),
         'web',
       )
-      sendSuccess(response, persistedProjectSchema.parse(project), 201)
+      sendSuccess(response, parseResponse(persistedProjectSchema, project), 201)
     })
 
     router.get('/projects/:id', (request, response) => {
       const { id } = projectIdParamsSchema.parse(request.params)
       const project = getContext().services.projects.get(id)
-      sendSuccess(response, persistedProjectSchema.parse(project))
+      sendSuccess(response, parseResponse(persistedProjectSchema, project))
     })
 
     router.patch('/projects/:id', (request, response) => {
@@ -124,25 +176,31 @@ export const projectRoutes: AppRouteModule = {
         requestActorId(context),
         'web',
       )
-      sendSuccess(response, persistedProjectSchema.parse(project))
+      sendSuccess(response, parseResponse(persistedProjectSchema, project))
     })
 
     router.get('/projects/:projectId/members', (request, response) => {
       const { projectId } = memberProjectParamsSchema.parse(request.params)
       const context = getContext()
-      context.services.projects.get(projectId)
+      parseResponse(
+        persistedProjectSchema,
+        context.services.projects.get(projectId),
+      )
       const rows = context.database.prepare(`
         SELECT project_id, actor_id, membership_role, joined_at
         FROM project_members
         WHERE project_id = ?
         ORDER BY membership_role, joined_at, actor_id
       `).all(projectId) as unknown as MemberRow[]
-      const items = rows.map((row) => persistedProjectMemberSchema.parse({
-        projectId: row.project_id,
-        actorId: row.actor_id,
-        membershipRole: row.membership_role,
-        joinedAt: row.joined_at,
-      }))
+      const items = rows.map((row) => parseResponse(
+        persistedProjectMemberSchema,
+        {
+          projectId: row.project_id,
+          actorId: row.actor_id,
+          membershipRole: row.membership_role,
+          joinedAt: row.joined_at,
+        },
+      ))
       sendSuccess(response, { items })
     })
 
@@ -158,7 +216,7 @@ export const projectRoutes: AppRouteModule = {
       )
       sendSuccess(
         response,
-        persistedProjectMemberSchema.parse(member),
+        parseResponse(persistedProjectMemberSchema, member),
         201,
       )
     })
