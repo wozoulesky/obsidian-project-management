@@ -3,10 +3,16 @@ import {
   mkdtempSync,
   mkdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import {
+  dirname,
+  join,
+  resolve,
+} from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   seedDatabase,
 } from '@project-os/core'
@@ -33,6 +39,10 @@ import {
 
 const contexts: AppContext[] = []
 const directories: string[] = []
+const repositoryRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../..',
+)
 
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'project-os-skill-route-'))
@@ -158,6 +168,32 @@ describe('Project OS Skill package routes', () => {
     }
   })
 
+  it('emits valid verifier JavaScript for a quoted Windows runtime root', async () => {
+    const archive = createProjectOsSkillArchive(
+      repositoryRoot,
+      "C:/Program Files/O'Brien Project",
+    )
+    const entries = unzipSync(archive)
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-skill-check-'))
+    directories.push(directory)
+    const verifier = join(directory, 'verify-connection.mjs')
+    writeFileSync(
+      verifier,
+      entries['project-os/scripts/verify-connection.mjs']!,
+    )
+
+    const result = await import('node:child_process').then(
+      ({ spawnSync }) => spawnSync(
+        process.execPath,
+        ['--check', verifier],
+        { encoding: 'utf8' },
+      ),
+    )
+
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
+  })
+
   it('runs the exported verifier outside the repository without dependencies', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'project-os-skill-extract-'))
     directories.push(directory)
@@ -220,6 +256,50 @@ describe('Project OS Skill package routes', () => {
         name,
         new TextEncoder().encode(content),
       )).toThrow(/unsafe|invalid/i)
+    },
+  )
+
+  it.each(['agents', 'references', 'scripts'])(
+    'rejects a parent %s directory junction before reading entries',
+    (linkedDirectory) => {
+      const projectRoot = mkdtempSync(join(tmpdir(), 'project-os-skill-source-'))
+      directories.push(projectRoot)
+      const integrationRoot = join(
+        projectRoot,
+        'integrations',
+        'project-os',
+      )
+      const externalRoot = join(projectRoot, 'external', linkedDirectory)
+      mkdirSync(integrationRoot, { recursive: true })
+      mkdirSync(externalRoot, { recursive: true })
+      writeFileSync(join(integrationRoot, 'SKILL.md'), 'safe skill')
+
+      const files = [
+        'agents/openai.yaml',
+        'references/claude-code-config.md',
+        'references/codex-config.md',
+        'references/kimi-code-config.md',
+        'references/tool-reference.md',
+        'scripts/verify-connection.mjs',
+      ]
+      for (const relativePath of files) {
+        const [directoryName] = relativePath.split('/')
+        const destination = directoryName === linkedDirectory
+          ? join(externalRoot, relativePath.slice(directoryName.length + 1))
+          : join(integrationRoot, relativePath)
+        mkdirSync(dirname(destination), { recursive: true })
+        writeFileSync(destination, 'safe exported content')
+      }
+      symlinkSync(
+        externalRoot,
+        join(integrationRoot, linkedDirectory),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      )
+
+      expect(() => createProjectOsSkillArchive(
+        projectRoot,
+        repositoryRoot,
+      )).toThrow(/source path.*unsafe/i)
     },
   )
 

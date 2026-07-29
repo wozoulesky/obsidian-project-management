@@ -1,9 +1,12 @@
 import {
   lstatSync,
   readFileSync,
+  realpathSync,
 } from 'node:fs'
 import {
   dirname,
+  isAbsolute,
+  relative,
   resolve,
   sep,
 } from 'node:path'
@@ -161,19 +164,30 @@ function substituteRuntimePaths(
 
 function packagedContent(
   relativePath: typeof includedFiles[number],
-  projectRoot: string,
+  runtimeProjectRoot: string,
   source: string,
 ): string {
   if (relativePath === 'references/codex-config.md') {
-    return configReference('codex', projectRoot)
+    return configReference('codex', runtimeProjectRoot)
   }
   if (relativePath === 'references/claude-code-config.md') {
-    return configReference('claude-code', projectRoot)
+    return configReference('claude-code', runtimeProjectRoot)
   }
   if (relativePath === 'references/kimi-code-config.md') {
-    return configReference('kimi-code', projectRoot)
+    return configReference('kimi-code', runtimeProjectRoot)
   }
-  return substituteRuntimePaths(source, projectRoot)
+  if (relativePath === 'scripts/verify-connection.mjs') {
+    const declaration =
+      "const packagedProjectRoot = '{{PROJECT_OS_ROOT}}'"
+    const replacement = `const packagedProjectRoot = ${
+      JSON.stringify(pathsFor(runtimeProjectRoot).projectRoot)
+    }`
+    if (!source.includes(declaration)) {
+      throw new Error('Skill verifier runtime placeholder is missing')
+    }
+    return source.replace(declaration, replacement)
+  }
+  return substituteRuntimePaths(source, runtimeProjectRoot)
 }
 
 export function validateSkillPackageEntry(
@@ -211,22 +225,50 @@ export function validateSkillPackageEntry(
 }
 
 export function createProjectOsSkillArchive(
-  projectRoot = sourceRoot,
+  sourceProjectRoot = sourceRoot,
+  runtimeProjectRoot = sourceProjectRoot,
 ): Uint8Array {
-  const integrationRoot = resolve(projectRoot, 'integrations/project-os')
+  const integrationRoot = resolve(
+    sourceProjectRoot,
+    'integrations/project-os',
+  )
+  const integrationStat = lstatSync(integrationRoot)
+  if (
+    integrationStat.isSymbolicLink()
+    || !integrationStat.isDirectory()
+  ) {
+    throw new Error('Skill package source path is invalid or unsafe')
+  }
+  const realIntegrationRoot = realpathSync(integrationRoot)
   const entries: Record<string, Uint8Array> = {}
   for (const relativePath of [...includedFiles].sort(compareEntryNames)) {
-    const file = resolve(integrationRoot, relativePath)
+    let file = integrationRoot
+    const segments = relativePath.split('/')
+    for (const [index, segment] of segments.entries()) {
+      file = resolve(file, segment)
+      const stat = lstatSync(file)
+      const final = index === segments.length - 1
+      if (
+        stat.isSymbolicLink()
+        || (final ? !stat.isFile() : !stat.isDirectory())
+      ) {
+        throw new Error('Skill package source path is invalid or unsafe')
+      }
+    }
+    const realFile = realpathSync(file)
+    const realRelative = relative(realIntegrationRoot, realFile)
     if (
-      !file.startsWith(`${integrationRoot}${sep}`)
-      || lstatSync(file).isSymbolicLink()
+      realRelative === ''
+      || isAbsolute(realRelative)
+      || realRelative === '..'
+      || realRelative.startsWith(`..${sep}`)
     ) {
       throw new Error('Skill package source path is invalid or unsafe')
     }
     const entryName = `project-os/${relativePath}`
     const content = strToU8(packagedContent(
       relativePath,
-      projectRoot,
+      runtimeProjectRoot,
       readFileSync(file, 'utf8'),
     ))
     validateSkillPackageEntry(entryName, content)
