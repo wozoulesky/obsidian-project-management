@@ -25,14 +25,17 @@
 |---|---|---|
 | 全量静态/单元/构建/文档 | `npm run check` | PASS：Web 232、contracts 12、core 173（另 3 skipped）、MCP 17、server 185、Skill 5、runtime 3；lint/build/docs PASS |
 | Playwright | `npm run test:e2e` | PASS：最终源码包含 `825bf60`、`0ede881`、`c0e9890`，57 passed、10 intentional project skips |
-| 文档专项 | `npm run check:docs` | PASS：6 documents |
-| stdio 合约 | `node integrations/project-os/scripts/verify-connection.mjs` | PASS：contract-only、22 tools、无副作用 |
+| 文档专项 | `npm run check:docs` | PASS：6 documents，且 fresh-clone 自检在模拟 `apps/mcp/dist/stdio.js` 缺失时通过 |
+| stdio 合约 | `node integrations/project-os/scripts/verify-connection.mjs` | PASS：contract-only、22 tools、无业务 tool 写入；启动打开/迁移默认 SQLite |
 | harness 自检 | `node scripts/smoke-clients.mjs --self-test` | PASS：audit/isolation/adapter/process-tree/redaction/evidence |
 | 真实客户端 smoke | `node scripts/smoke-clients.mjs --clients codex,claude,kimi --write-smoke` | EXPECTED INCOMPLETE：exit 1，见下表 |
 | 空白/冲突标记 | `git diff --check` | PASS |
 
 默认连接验证应报告 `mode: "contract-only"`、`transport: "stdio"` 和
-`toolCount: 22`，且 `sideEffects` 为空。
+`toolCount: 22`，且 `sideEffects` 为空。这里的空数组只表示没有
+Agent/project/task/activity 等业务 tool 写入；stdio 启动仍会打开指定 SQLite，
+并可能创建目录、数据库、WAL 或执行 migrations。若不能触碰目标数据库，应使用
+临时 `--database` 路径。
 
 ## 真实客户端证据
 

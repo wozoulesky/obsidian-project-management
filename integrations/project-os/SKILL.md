@@ -60,3 +60,9 @@ authenticated tools because those calls update Agent activity. Use
 explicitly acceptable. An optional `--agent-id <id>` is accepted only together
 with that write flag. The verifier uses only Node.js built-in modules, so an
 exported Skill does not require `npm install`.
+
+Contract-only verification still starts stdio and opens the selected SQLite
+path. It can create the parent directory, database, WAL files, and apply schema
+migrations. `sideEffects: []` means no business-tool writes; it does not mean
+the filesystem or schema is untouched. Pass `--database` with a disposable path
+when those effects must be isolated.

@@ -118,7 +118,7 @@ ZIP 中的路径和配置片段会指向生成 ZIP 的 Project OS 运行目录�
 ## 验证连接与副作用
 
 默认验证只启动 stdio、完成协议初始化，并严格核对 22 tools；它不会调用需要
-Agent 身份的工具：
+Agent 身份的业务 tools，因此不会写入 Agent、项目、任务或活动：
 
 ```bash
 node integrations/project-os/scripts/verify-connection.mjs
@@ -126,6 +126,17 @@ node integrations/project-os/scripts/verify-connection.mjs
 
 预期 JSON 包含 `ok: true`、`mode: "contract-only"`、
 `transport: "stdio"` 和 `toolCount: 22`。
+
+这里的 `sideEffects: []` 只表示没有业务 tool 副作用，不代表文件系统只读。
+stdio 启动会打开所选 SQLite；路径不存在时会创建父目录、数据库和 WAL，并执行
+待应用的 schema migrations。需要保护现有数据库或验证 fresh clone 时，应显式
+使用临时路径：
+
+```bash
+node integrations/project-os/scripts/verify-connection.mjs --database data/verify-temp.db
+```
+
+该命令仍会创建/迁移临时数据库；验证后只可删除已确认的临时目标。
 
 写入验证必须显式启用：
 

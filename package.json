@@ -14,7 +14,7 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present && node --test scripts/runtime-control.test.mjs",
     "check": "npm run lint --workspace web && npm run test && npm run build && npm run check:docs",
-    "check:docs": "node scripts/check-docs.mjs",
+    "check:docs": "node scripts/check-docs.mjs --self-test",
     "dev": "node scripts/dev.mjs",
     "start": "npm run start --workspace @project-os/server",
     "test:e2e": "npm run test:e2e --workspace web --"

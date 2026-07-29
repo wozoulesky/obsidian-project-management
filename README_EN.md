@@ -113,6 +113,12 @@ token except for `/api/v1/health`.
 See the [Agent setup guide](docs/agent-setup.md) for all client configurations,
 Skill installation, side effects, verification, and troubleshooting.
 
+Default connection verification does not call business tools, so it does not
+write Agents, projects, tasks, or activities. Starting stdio still opens the
+selected SQLite path and may create its parent directory, database, WAL files,
+and schema migrations. Pass a temporary `--database` path when filesystem and
+schema effects must be isolated.
+
 ## Data and backups
 
 The settings page creates/restores SQLite backups and exports/imports JSON.

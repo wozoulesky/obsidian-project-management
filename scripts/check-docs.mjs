@@ -9,6 +9,22 @@ const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '..',
 )
+const arguments_ = process.argv.slice(2)
+assert(
+  arguments_.length === 0
+  || (arguments_.length === 1 && arguments_[0] === '--self-test'),
+  'Usage: node scripts/check-docs.mjs [--self-test]',
+)
+const selfTestRequested = arguments_[0] === '--self-test'
+const generatedMcpDistEntry = resolve(
+  repositoryRoot,
+  'apps/mcp/dist/stdio.js',
+)
+const fileExists = (absolutePath) => (
+  selfTestRequested && resolve(absolutePath) === generatedMcpDistEntry
+    ? false
+    : existsSync(absolutePath)
+)
 const requiredDocuments = [
   'README.md',
   'README_EN.md',
@@ -24,13 +40,21 @@ const operationalReferences = [
   'integrations/project-os/references/kimi-code-config.md',
   'integrations/project-os/references/tool-reference.md',
 ]
+const trackedRuntimeFiles = [
+  'apps/mcp/build.mjs',
+  'apps/mcp/package.json',
+  'apps/mcp/src/stdio.ts',
+  'integrations/project-os/SKILL.md',
+  'integrations/project-os/scripts/verify-connection.mjs',
+  'scripts/smoke-clients.mjs',
+]
 const rootPackage = JSON.parse(
   readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8'),
 )
 
 function read(relativePath) {
   const absolutePath = resolve(repositoryRoot, relativePath)
-  assert(existsSync(absolutePath), `Document is missing: ${relativePath}`)
+  assert(fileExists(absolutePath), `Document is missing: ${relativePath}`)
   return readFileSync(absolutePath, 'utf8')
 }
 
@@ -52,7 +76,7 @@ function assertReferencesExist(relativePath, markdown) {
       target,
     )
     assert(
-      existsSync(absoluteTarget),
+      fileExists(absoluteTarget),
       `${relativePath} references a missing file: ${target}`,
     )
   }
@@ -86,8 +110,17 @@ function assertRootScriptsExist(markdown, relativePath) {
   )) {
     const commandPath = match[1]
     assert(
-      existsSync(resolve(repositoryRoot, commandPath)),
+      fileExists(resolve(repositoryRoot, commandPath)),
       `${relativePath} documents a missing Node CLI: ${commandPath}`,
+    )
+  }
+}
+
+function assertTrackedRuntimeFiles(runtimeFileExists = fileExists) {
+  for (const runtimeFile of trackedRuntimeFiles) {
+    assert(
+      runtimeFileExists(resolve(repositoryRoot, runtimeFile)),
+      `Missing tracked runtime source: ${runtimeFile}`,
     )
   }
 }
@@ -211,15 +244,31 @@ assert.equal(
   './dist/stdio.js',
   'Documented MCP dist entry does not match package bin',
 )
-
-for (const runtimeFile of [
-  'apps/mcp/dist/stdio.js',
-  'integrations/project-os/SKILL.md',
-  'integrations/project-os/scripts/verify-connection.mjs',
-  'scripts/smoke-clients.mjs',
-]) {
-  assert(existsSync(resolve(repositoryRoot, runtimeFile)), `Missing ${runtimeFile}`)
-}
+assert.equal(
+  mcpPackage.scripts?.start,
+  'node dist/stdio.js',
+  'MCP start script does not match the documented dist entry',
+)
+assert.match(
+  mcpPackage.scripts?.build ?? '',
+  /\bnode build\.mjs\b/,
+  'MCP build script does not invoke build.mjs',
+)
+const mcpBuild = readFileSync(
+  resolve(repositoryRoot, 'apps/mcp/build.mjs'),
+  'utf8',
+)
+assert.match(
+  mcpBuild,
+  /outdir:\s*['"]dist['"]/,
+  'MCP build does not generate the documented dist directory',
+)
+assert.match(
+  mcpBuild,
+  /stdio:\s*['"]src\/stdio\.ts['"]/,
+  'MCP build does not generate dist/stdio.js from src/stdio.ts',
+)
+assertTrackedRuntimeFiles()
 
 const verifier = readFileSync(
   resolve(
@@ -238,6 +287,19 @@ assert(
   combined.includes(`${approvedToolCount} tools`),
   'Documentation tool count does not match the verifier contract',
 )
+
+if (selfTestRequested) {
+  assert.equal(
+    fileExists(generatedMcpDistEntry),
+    false,
+    'Fresh-clone simulation must hide the generated MCP dist entry',
+  )
+  assertTrackedRuntimeFiles()
+  process.stdout.write(
+    'Documentation fresh-clone self-test PASS '
+      + '(generated MCP dist entry absent)\n',
+  )
+}
 
 process.stdout.write(
   `Documentation verification PASS (${requiredDocuments.length} documents)\n`,

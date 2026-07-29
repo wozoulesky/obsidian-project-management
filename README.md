@@ -105,6 +105,10 @@ Project OS 暴露 22 tools。两种连接方式使用相同服务层和 SQLite �
 完整的三客户端配置、Skill 安装、验证副作用与排障见
 [Agent 接入指南](docs/agent-setup.md)。
 
+默认连接验证不会调用业务 tools，因而不会写入 Agent、项目、任务或活动；但
+stdio 启动会打开指定 SQLite，可能创建父目录、数据库、WAL 并执行迁移。
+需要完全隔离文件影响时，请给验证命令传入临时 `--database` 路径。
+
 ## 数据与备份
 
 设置页可以创建/恢复 SQLite 备份、导出 JSON、导入 JSON。恢复和导入会替换
