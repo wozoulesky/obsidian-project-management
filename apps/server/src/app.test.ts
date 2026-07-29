@@ -625,12 +625,20 @@ describe('production context', () => {
   it('propagates an explicit non-loopback runtime binding into MCP authentication', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'project-os-remote-'))
     createdDirectories.push(directory)
+    const databasePath = join(directory, 'runtime.db')
+    const bootstrap = createAppContext({
+      databasePath,
+      backupRoot: join(directory, 'bootstrap-backups'),
+    })
+    seedDatabase(bootstrap.database, defaultSeedDocument)
+    const token = bootstrap.services.tokens.issue('runtime-remote')
+    bootstrap.close()
     const runtime = await startServer({
       host: '0.0.0.0',
       allowedHosts: ['127.0.0.1'],
       allowedOrigins: [],
       port: 0,
-      databasePath: join(directory, 'runtime.db'),
+      databasePath,
       backupRoot: join(directory, 'backups'),
     })
     const address = runtime.server.address()
@@ -648,7 +656,9 @@ describe('production context', () => {
         clientInfo: { name: 'runtime-remote', version: '0.0.0' },
       },
     })
-    const token = runtime.context.services.tokens.issue('runtime-remote')
+    const authorization = {
+      Authorization: `Bearer ${token.token}`,
+    }
 
     try {
       const missing = await fetch(endpoint, {
@@ -663,7 +673,7 @@ describe('production context', () => {
         method: 'POST',
         headers: {
           Accept: 'application/json, text/event-stream',
-          Authorization: `Bearer ${token.token}`,
+          ...authorization,
           'Content-Type': 'application/json',
         },
         body,
@@ -672,6 +682,77 @@ describe('production context', () => {
       expect(address.address).toBe('0.0.0.0')
       expect(missing.status).toBe(401)
       expect(valid.status).toBe(200)
+
+      const health = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/health`,
+      )
+      const missingProjects = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/projects`,
+      )
+      const invalidSettings = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/settings`,
+        { headers: { Authorization: 'Bearer pos_invalid' } },
+      )
+      const anonymousIssue = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/tokens`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'anonymous-escalation' }),
+        },
+      )
+      const invalidImport = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/import`,
+        {
+          method: 'POST',
+          headers: { Authorization: 'Bearer pos_invalid' },
+        },
+      )
+      const projects = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/projects`,
+        { headers: authorization },
+      )
+      const settings = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/settings`,
+        { headers: authorization },
+      )
+      const issued = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/tokens`,
+        {
+          method: 'POST',
+          headers: {
+            ...authorization,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: 'authorized-child' }),
+        },
+      )
+      const authorizedImport = await fetch(
+        `http://127.0.0.1:${address.port}/api/v1/import`,
+        {
+          method: 'POST',
+          headers: authorization,
+        },
+      )
+      const unauthorizedBodies = await Promise.all([
+        missingProjects.text(),
+        invalidSettings.text(),
+        anonymousIssue.text(),
+        invalidImport.text(),
+      ])
+
+      expect(health.status).toBe(200)
+      expect(missingProjects.status).toBe(401)
+      expect(invalidSettings.status).toBe(401)
+      expect(anonymousIssue.status).toBe(401)
+      expect(invalidImport.status).toBe(401)
+      expect(projects.status).toBe(200)
+      expect(settings.status).toBe(200)
+      expect(issued.status).toBe(201)
+      expect(authorizedImport.status).toBe(400)
+      expect(unauthorizedBodies.join('\n')).not.toMatch(
+        /pos_[A-Za-z0-9_-]{24}_[A-Za-z0-9_-]{43}/,
+      )
     } finally {
       await runtime.close()
     }

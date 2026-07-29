@@ -516,6 +516,47 @@ function securityHeaders(options: {
   }
 }
 
+function remoteApiAuthentication(options: {
+  bindingHost: string
+  context: AppContext
+}) {
+  const required = !isLoopbackBindingHost(options.bindingHost)
+
+  return (
+    request: Request,
+    _response: Response,
+    next: NextFunction,
+  ): void => {
+    if (
+      !required
+      || request.path === `${apiPrefix}/health`
+      || (
+        request.path !== apiPrefix
+        && !request.path.startsWith(`${apiPrefix}/`)
+      )
+    ) {
+      next()
+      return
+    }
+
+    const authorization = request.get('Authorization')
+    const token = authorization === undefined
+      ? undefined
+      : /^Bearer ([^\s]+)$/.exec(authorization)?.[1]
+    if (
+      token === undefined
+      || !options.context.services.tokens.verify(token)
+    ) {
+      next(new DomainError(
+        'AUTHENTICATION_REQUIRED',
+        'Bearer authentication is required',
+      ))
+      return
+    }
+    next()
+  }
+}
+
 export const apiErrorHandler: ErrorRequestHandler = (
   error,
   _request,
@@ -556,6 +597,10 @@ export function createApp(options: CreateAppOptions): ProjectOsApp {
     allowedHosts: options.allowedHosts ?? [],
     allowedOrigins: options.allowedOrigins ?? [],
     bindingHost,
+  }))
+  app.use(remoteApiAuthentication({
+    bindingHost,
+    context: options.context,
   }))
 
   const mcp = createStreamableHttpHandler({

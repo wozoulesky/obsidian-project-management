@@ -8,7 +8,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import {
+  fileURLToPath,
+  pathToFileURL,
+} from 'node:url'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
 
@@ -177,4 +180,16 @@ it('builds and starts the root production server command', async () => {
     },
     error: null,
   })
+})
+
+it('resolves the workspace MCP library from source without requiring dist', () => {
+  expect(import.meta.resolve('@project-os/mcp')).toBe(
+    pathToFileURL(join(
+      repositoryRoot,
+      'apps',
+      'mcp',
+      'src',
+      'index.ts',
+    )).href,
+  )
 })
