@@ -1,6 +1,10 @@
 import { execFile, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { promisify } from 'node:util'
+import {
+  RuntimeControl,
+  supervisedExitCode,
+} from './runtime-control.mjs'
 
 const execFileAsync = promisify(execFile)
 const npmCli = process.env.npm_execpath
@@ -58,20 +62,22 @@ async function terminate(child, signal = 'SIGTERM') {
   }
 }
 
-const children = [
-  spawnNpm(['run', 'start', '--workspace', '@project-os/server']),
-  spawnNpm(['run', 'dev', '--workspace', 'web']),
-]
-
-let stopping
-function stopAll(signal = 'SIGTERM') {
-  stopping ??= Promise.all(children.map((child) => terminate(child, signal)))
-  return stopping
+const control = new RuntimeControl(terminate)
+const children = []
+let shutdownRequested = false
+for (const args of [
+  ['run', 'start', '--workspace', '@project-os/server'],
+  ['run', 'dev', '--workspace', 'web'],
+]) {
+  const child = spawnNpm(args)
+  control.add(child)
+  children.push(child)
 }
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => {
-    void stopAll(signal).then(() => {
+    shutdownRequested = true
+    void control.stop(signal).then(() => {
       process.exitCode = 0
     })
   })
@@ -96,5 +102,5 @@ const firstExit = await Promise.race(exits)
 if (firstExit.error !== undefined) {
   console.error(firstExit.error.message)
 }
-await stopAll()
-process.exitCode = firstExit.code
+await control.stop()
+process.exitCode = supervisedExitCode(firstExit.code, shutdownRequested)

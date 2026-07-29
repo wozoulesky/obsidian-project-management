@@ -4,7 +4,12 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import {
+  RuntimeControl,
+  RuntimeStoppingError,
+} from './runtime-control.mjs'
 
 const execFileAsync = promisify(execFile)
 const npmCli = process.env.npm_execpath
@@ -12,10 +17,13 @@ const npmCli = process.env.npm_execpath
 const npmCommand = npmCli === process.env.npm_execpath
   ? [process.execPath, [npmCli]]
   : [npmCli, []]
+const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'project-os-e2e-'))
+const shutdownAfterReady = process.argv.includes('--shutdown-after-ready')
 
 function spawnNpm(args, environment = {}) {
   return spawn(npmCommand[0], [...npmCommand[1], ...args], {
+    cwd: repositoryRoot,
     detached: process.platform !== 'win32',
     env: { ...process.env, ...environment },
     stdio: 'inherit',
@@ -100,19 +108,11 @@ async function waitFor(url, child) {
   throw new Error(`Timed out waiting for ${url}`)
 }
 
-const children = []
-let cleanupPromise
-async function cleanup(signal = 'SIGTERM') {
-  cleanupPromise ??= (async () => {
-    await Promise.all(children.map((child) => terminate(child, signal)))
-    await rm(temporaryDirectory, { recursive: true, force: true })
-  })()
-  return cleanupPromise
-}
+const control = new RuntimeControl(terminate)
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => {
-    void cleanup(signal).then(() => {
+    void control.stop(signal).then(() => {
       process.exitCode = 0
     })
   })
@@ -121,11 +121,16 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 try {
   await execFileAsync(
     npmCommand[0],
-    [...npmCommand[1], 'run', 'build', '--workspace', 'web'],
-    { timeout: 120_000 },
+    [...npmCommand[1], 'run', 'build'],
+    {
+      cwd: repositoryRoot,
+      timeout: 120_000,
+    },
   )
+  control.checkpoint()
 
   const apiPort = await availablePort()
+  control.checkpoint()
   const api = spawnNpm(
     ['run', 'start', '--workspace', '@project-os/server'],
     {
@@ -135,8 +140,9 @@ try {
       PROJECT_OS_BACKUP_ROOT: join(temporaryDirectory, 'backups'),
     },
   )
-  children.push(api)
+  control.add(api)
   await waitFor(`http://127.0.0.1:${apiPort}/api/v1/health`, api)
+  control.checkpoint()
 
   const previewConfigPath = join(temporaryDirectory, 'vite.config.mjs')
   await writeFile(
@@ -151,6 +157,7 @@ try {
 `,
     'utf8',
   )
+  control.checkpoint()
   const preview = spawnNpm([
     'run',
     'preview',
@@ -165,10 +172,16 @@ try {
     '--config',
     previewConfigPath,
   ])
-  children.push(preview)
+  control.add(preview)
   await waitFor('http://127.0.0.1:4173', preview)
+  control.checkpoint()
 
-  const exits = children.map((child) => new Promise((resolve) => {
+  if (shutdownAfterReady) {
+    await control.stop('SIGTERM')
+    control.checkpoint()
+  }
+
+  const exits = [api, preview].map((child) => new Promise((resolve) => {
     if (child.exitCode !== null || child.signalCode !== null) {
       resolve({ code: child.exitCode ?? 128 })
       return
@@ -184,8 +197,11 @@ try {
   }
   process.exitCode = firstExit.code
 } catch (error) {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
+  if (!control.stopping && !(error instanceof RuntimeStoppingError)) {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  }
 } finally {
-  await cleanup()
+  await control.stop()
+  await rm(temporaryDirectory, { recursive: true, force: true })
 }
