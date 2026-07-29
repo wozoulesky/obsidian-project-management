@@ -161,6 +161,30 @@ describe('HTTP project repository', () => {
     )
   })
 
+  it('rejects a repeated pagination cursor instead of requesting forever', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(success({ items: [task], next_cursor: 'repeated' })),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          success({
+            items: [{ ...task, id: 'task-2', code: 'TASK-002' }],
+            next_cursor: 'repeated',
+          }),
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.listTasks('project/one')).rejects.toMatchObject({
+      code: 'API_PAGINATION_CURSOR_REPEATED',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('loads the current version before submitting legacy progress input', async () => {
     const fetchMock = vi
       .fn()

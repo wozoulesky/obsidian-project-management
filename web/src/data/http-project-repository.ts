@@ -10,7 +10,7 @@ import {
 } from '@project-os/contracts'
 import { z } from 'zod'
 
-import { ApiClient } from './api-client'
+import { ApiClient, ApiError } from './api-client'
 import type {
   ActivityListInput,
   ActivityPage,
@@ -41,6 +41,7 @@ async function allPages<Output>(
   itemSchema: z.ZodType<Output>,
 ): Promise<Output[]> {
   const items: Output[] = []
+  const cursors = new Set<string>()
   let cursor: string | undefined
   do {
     const page = await client.request(
@@ -48,6 +49,18 @@ async function allPages<Output>(
       cursorPageSchema(itemSchema),
     )
     items.push(...page.items)
+    if (
+      page.next_cursor !== null
+      && cursors.has(page.next_cursor)
+    ) {
+      throw new ApiError({
+        code: 'API_PAGINATION_CURSOR_REPEATED',
+        message: 'API pagination cursor was repeated',
+        status: 200,
+        details: { cursor: page.next_cursor },
+      })
+    }
+    if (page.next_cursor !== null) cursors.add(page.next_cursor)
     cursor = page.next_cursor ?? undefined
   } while (cursor !== undefined)
   return items

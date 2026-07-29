@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockProjectRepository } from './mock-project-repository'
+import type { ActivityPage } from './project-repository'
 import {
   ProjectRepositoryProvider,
   projectQueryKeys,
@@ -32,6 +33,43 @@ afterEach(() => {
 })
 
 describe('ActivitySync', () => {
+  it('coalesces interval and visibility triggers while a poll is pending', async () => {
+    vi.useFakeTimers()
+    const repository = createMockProjectRepository()
+    let resolveInitial!: (page: ActivityPage) => void
+    const initial = new Promise<ActivityPage>((resolve) => {
+      resolveInitial = resolve
+    })
+    const listActivities = vi
+      .spyOn(repository, 'listActivities')
+      .mockReturnValueOnce(initial)
+      .mockResolvedValue({ items: [], nextCursor: 'activity-initial' })
+
+    render(<ActivitySync intervalMs={3_000} />, {
+      wrapper: wrapper(new QueryClient(), repository),
+    })
+    await act(async () => Promise.resolve())
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+    })
+    expect(listActivities).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveInitial({ items: [], nextCursor: 'activity-initial' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(listActivities).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(listActivities).toHaveBeenCalledTimes(2)
+  })
+
   it('uses the initial page only as a cursor, then invalidates MCP-affected queries', async () => {
     vi.useFakeTimers()
     const repository = createMockProjectRepository()

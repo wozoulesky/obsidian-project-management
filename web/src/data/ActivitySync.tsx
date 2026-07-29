@@ -83,13 +83,14 @@ export function ActivitySync({ intervalMs = 3_000 }: { intervalMs?: number }) {
     }
 
     const poll = async () => {
-      if (activePoll !== undefined) await activePoll
+      if (activePoll !== undefined) return
       if (disposed) return
-      activePoll = performPoll()
+      const currentPoll = performPoll()
+      activePoll = currentPoll
       try {
-        await activePoll
+        await currentPoll
       } finally {
-        activePoll = undefined
+        if (activePoll === currentPoll) activePoll = undefined
       }
     }
 
