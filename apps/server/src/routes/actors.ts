@@ -305,6 +305,17 @@ export const actorRoutes: AppRouteModule = {
       const { id } = actorIdParamsSchema.parse(request.params)
       const input = updateActorBodySchema.parse(request.body)
       const context = getContext()
+      const current = callService(
+        persistedActorSchema,
+        () => context.services.actors.get(id),
+      )
+      if (current.kind !== 'human') {
+        throw new DomainError(
+          'ACTOR_KIND_INVALID',
+          'Web edits are limited to human actors',
+          { actorId: id, kind: current.kind },
+        )
+      }
       const actor = callService(
         persistedActorSchema,
         () => context.services.actors.update(
@@ -322,24 +333,14 @@ export const actorRoutes: AppRouteModule = {
       const { version } = deactivateActorBodySchema.parse(request.body)
       const context = getContext()
       const actorId = requestActorId(context)
-      const current = callService(
-        persistedActorSchema,
-        () => context.services.actors.get(id),
-      )
-      if (current.version !== version) {
-        throw new DomainError(
-          'ACTOR_VERSION_CONFLICT',
-          'Actor version is stale',
-          {
-            actorId: id,
-            expectedVersion: version,
-            currentVersion: current.version,
-          },
-        )
-      }
       const actor = callService(
         persistedActorSchema,
-        () => context.services.actors.deactivate(id, actorId, 'web'),
+        () => context.services.actors.deactivate(
+          id,
+          version,
+          actorId,
+          'web',
+        ),
       )
       sendSuccess(response, actor)
     })

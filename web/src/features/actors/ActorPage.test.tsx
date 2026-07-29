@@ -214,11 +214,41 @@ describe('ActorPage', () => {
     )
   })
 
-  it('marks inactive humans as unavailable and disables assignment actions', async () => {
+  it('deactivates an active Agent with its row version', async () => {
+    arrangeDirectory()
+    const deactivateActor = vi.spyOn(projectRepository, 'deactivateActor')
+      .mockResolvedValue({
+        ...actors[1]!,
+        status: 'inactive',
+        version: 6,
+      })
+    const user = userEvent.setup()
+
+    renderApp(<ActorPage />)
+    const row = await screen.findByRole('row', { name: /dev-agent/ })
+    expect(within(row).queryByRole('button', { name: '编辑 dev-agent' }))
+      .not.toBeInTheDocument()
+    await user.click(
+      within(row).getByRole('button', { name: '停用 dev-agent' }),
+    )
+    const dialog = screen.getByRole('dialog', { name: '确认停用 dev-agent' })
+    await user.click(
+      within(dialog).getByRole('button', { name: '确认停用' }),
+    )
+
+    expect(deactivateActor).toHaveBeenCalledWith('dev-agent-7f3a', 5)
+  })
+
+  it('marks inactive actors as unavailable and disables lifecycle actions', async () => {
     vi.spyOn(projectRepository, 'listActors').mockResolvedValue([
       {
         ...actors[0]!,
         name: 'Inactive Lin',
+        status: 'inactive',
+      },
+      {
+        ...actors[1]!,
+        name: 'Inactive Agent',
         status: 'inactive',
       },
     ])
@@ -234,6 +264,12 @@ describe('ActorPage', () => {
       .toBeDisabled()
     expect(within(row).getByRole('button', { name: '停用 Inactive Lin' }))
       .toBeDisabled()
+
+    const agentRow = screen.getByRole('row', { name: /Inactive Agent/ })
+    expect(agentRow).toHaveAttribute('aria-disabled', 'true')
+    expect(within(agentRow).getByRole('button', {
+      name: '停用 Inactive Agent',
+    })).toBeDisabled()
   })
 
   it('closes the form with Escape and restores focus to its opener', async () => {

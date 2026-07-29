@@ -300,13 +300,26 @@ export function ActorPage() {
                                 </Button>
                               </>
                             ) : (
-                              <Button
-                                aria-label={`复制 ${actor.name} 的 Agent ID`}
-                                onClick={() => void copyActorId(actor)}
-                                variant="ghost"
-                              >
-                                复制 Agent ID
-                              </Button>
+                              <>
+                                <Button
+                                  aria-label={`复制 ${actor.name} 的 Agent ID`}
+                                  onClick={() => void copyActorId(actor)}
+                                  variant="ghost"
+                                >
+                                  复制 Agent ID
+                                </Button>
+                                <Button
+                                  aria-label={`停用 ${actor.name}`}
+                                  disabled={inactive}
+                                  onClick={(event) => openDialog(event, {
+                                    mode: 'deactivate',
+                                    actor,
+                                  })}
+                                  variant="ghost"
+                                >
+                                  停用
+                                </Button>
+                              </>
                             )}
                           </div>
                         </td>

@@ -416,7 +416,12 @@ describe('actor and project services', () => {
       'web',
     )
 
-    const inactive = actors.deactivate(owner.id, owner.id, 'web')
+    const inactive = actors.deactivate(
+      owner.id,
+      owner.version,
+      owner.id,
+      'web',
+    )
 
     expect(inactive.status).toBe('inactive')
     expect(actors.get(owner.id).status).toBe('inactive')
@@ -438,6 +443,20 @@ describe('actor and project services', () => {
     }).toThrowError(expect.objectContaining({ code: 'ACTOR_INACTIVE' }))
   })
 
+  it('rejects stale actor deactivation without actor or activity mutation', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const current = actors.touch(owner.id, owner.id, 'web')
+    const activityCount = activities.list({ entityId: owner.id }).length
+
+    expect(() => {
+      actors.deactivate(owner.id, owner.version, owner.id, 'web')
+    }).toThrowError(expect.objectContaining({
+      code: 'ACTOR_VERSION_CONFLICT',
+    }))
+    expect(actors.get(owner.id)).toEqual(current)
+    expect(activities.list({ entityId: owner.id })).toHaveLength(activityCount)
+  })
+
   it('rejects inactive project members', () => {
     const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
     const member = actors.createHuman(
@@ -450,7 +469,7 @@ describe('actor and project services', () => {
       owner.id,
       'web',
     )
-    actors.deactivate(member.id, owner.id, 'web')
+    actors.deactivate(member.id, member.version, owner.id, 'web')
 
     expect(() => {
       projects.addMember(project.id, member.id, owner.id, 'web')
@@ -583,7 +602,7 @@ describe('actor and project services', () => {
       owner.id,
       'web',
     )
-    actors.deactivate(owner.id, owner.id, 'web')
+    actors.deactivate(owner.id, owner.version, owner.id, 'web')
     const activityCount = activities.list({ entityId: project.id }).length
 
     expect(() => {
@@ -630,7 +649,7 @@ describe('actor and project services', () => {
       owner.id,
       'web',
     )
-    actors.deactivate(member.id, owner.id, 'web')
+    actors.deactivate(member.id, member.version, owner.id, 'web')
 
     const rows = database.prepare(`
       SELECT actor_id, source, entity_id, operation

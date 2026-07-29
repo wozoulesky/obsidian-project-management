@@ -306,7 +306,12 @@ describe('TaskService', () => {
       context.pm.id,
       'mcp',
     )
-    context.actors.deactivate(context.otherDev.id, context.owner.id, 'web')
+    context.actors.deactivate(
+      context.otherDev.id,
+      context.otherDev.version,
+      context.owner.id,
+      'web',
+    )
 
     expect(() => context.tasks.create(
       { ...taskInput(context.project.id, context.dev.id), title: null } as never,
@@ -446,7 +451,12 @@ describe('TaskService', () => {
       context.otherDev.id,
       'mcp',
     )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
-    context.actors.deactivate(context.dev.id, context.owner.id, 'web')
+    context.actors.deactivate(
+      context.dev.id,
+      context.dev.version,
+      context.owner.id,
+      'web',
+    )
     expect(() => context.tasks.submitProgress(
       task.id,
       {

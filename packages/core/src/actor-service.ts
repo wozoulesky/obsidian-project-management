@@ -101,6 +101,22 @@ function actorInactive(id: string): DomainError {
   )
 }
 
+function actorVersionConflict(
+  id: string,
+  expectedVersion: number,
+  currentVersion: number,
+): DomainError {
+  return new DomainError(
+    'ACTOR_VERSION_CONFLICT',
+    'Actor version is stale',
+    {
+      actorId: id,
+      expectedVersion,
+      currentVersion,
+    },
+  )
+}
+
 function validateActorData(input: {
   name: string
   kind: 'human' | 'agent'
@@ -361,15 +377,7 @@ export class ActorService {
         throw actorInactive(id)
       }
       if (current.version !== input.version) {
-        throw new DomainError(
-          'ACTOR_VERSION_CONFLICT',
-          'Actor version is stale',
-          {
-            actorId: id,
-            expectedVersion: input.version,
-            currentVersion: current.version,
-          },
-        )
+        throw actorVersionConflict(id, input.version, current.version)
       }
 
       const name = input.name === undefined ? current.name : input.name
@@ -456,6 +464,7 @@ export class ActorService {
 
   deactivate(
     id: string,
+    expectedVersion: number,
     actorId: string = id,
     source: ActivitySource = 'web',
   ): PersistedActor {
@@ -463,15 +472,22 @@ export class ActorService {
 
     return withImmediateTransaction(this.database, () => {
       const current = this.get(id)
+      if (current.version !== expectedVersion) {
+        throw actorVersionConflict(id, expectedVersion, current.version)
+      }
       if (current.status === 'inactive') {
         return current
       }
 
-      this.database.prepare(`
+      const result = this.database.prepare(`
         UPDATE actors
         SET status = 'inactive', version = version + 1
-        WHERE id = ?
-      `).run(id)
+        WHERE id = ? AND version = ?
+      `).run(id, expectedVersion)
+      if (Number(result.changes) !== 1) {
+        const latest = this.get(id)
+        throw actorVersionConflict(id, expectedVersion, latest.version)
+      }
 
       recordActivity(this.database, {
         actorId,

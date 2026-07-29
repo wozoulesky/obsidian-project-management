@@ -154,7 +154,7 @@ describe('actor routes', () => {
   })
 
   it('lists, gets, updates, and deactivates actors with version semantics', async () => {
-    const { api } = createApi()
+    const { api, context } = createApi()
     const actor = await createHuman(api, 'Lin')
 
     const listed = await api
@@ -166,10 +166,16 @@ describe('actor routes', () => {
       capabilities: ['planning'],
       version: actor.version,
     }).expect(200)
+    const activityCountBeforeStale = context.services.activities.list({
+      entityId: actor.id,
+    }).length
     const staleDeactivate = await api
       .post(`/api/v1/actors/${actor.id}/deactivate`)
       .send({ version: actor.version })
       .expect(409)
+    expect(context.services.actors.get(actor.id)).toEqual(updated.body.data)
+    expect(context.services.activities.list({ entityId: actor.id }))
+      .toHaveLength(activityCountBeforeStale)
     const missingDeactivateVersion = await api
       .post(`/api/v1/actors/${actor.id}/deactivate`)
       .send({})
@@ -195,6 +201,36 @@ describe('actor routes', () => {
       status: 'inactive',
       version: 3,
     })
+  })
+
+  it('rejects direct Web edits to Agent profiles without mutation', async () => {
+    const { api, context } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const agent = context.services.actors.registerAgent(
+      {
+        name: 'builder',
+        role: 'dev-agent',
+        client: 'codex',
+        capabilities: ['typescript'],
+      },
+      owner.id,
+      'mcp',
+    )
+    const activityCount = context.services.activities.list({
+      entityId: agent.id,
+    }).length
+
+    const response = await api.patch(`/api/v1/actors/${agent.id}`).send({
+      name: 'renamed-builder',
+      capabilities: ['web-edited'],
+      version: agent.version,
+    }).expect(400)
+
+    expect(apiErrorEnvelopeSchema.parse(response.body)).toEqual(response.body)
+    expect(response.body.error.code).toBe('ACTOR_KIND_INVALID')
+    expect(context.services.actors.get(agent.id)).toEqual(agent)
+    expect(context.services.activities.list({ entityId: agent.id }))
+      .toHaveLength(activityCount)
   })
 
   it('rejects agent registration, impersonation fields, nulls, and unknown fields', async () => {
