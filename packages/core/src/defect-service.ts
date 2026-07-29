@@ -206,14 +206,28 @@ export class DefectService {
     const validatedSource = activitySourceSchema.parse(source)
     const validated = createDefectInputSchema.parse({
       ...input,
-      description: input.description ?? '',
-      status: input.status ?? 'open',
-      reproductionSteps: input.reproductionSteps ?? [],
+      description: input.description === undefined
+        ? ''
+        : input.description,
+      status: input.status === undefined ? 'open' : input.status,
+      reproductionSteps: input.reproductionSteps === undefined
+        ? []
+        : input.reproductionSteps,
     })
 
     return withImmediateTransaction(this.database, () => {
       const actor = this.assertActiveActor(actorId)
       assertPermission(actor.role, 'defect.write')
+      if (
+        actor.role === 'dev-agent'
+        && validated.assigneeId !== actorId
+      ) {
+        throw new DomainError(
+          'PERMISSION_DENIED',
+          'Developer agents may create only defects assigned to themselves',
+          { actorId, assigneeId: validated.assigneeId },
+        )
+      }
       this.assertProject(validated.projectId)
       this.assertActiveActor(validated.assigneeId)
       this.assertLinks(
@@ -340,6 +354,16 @@ export class DefectService {
         version: current.version,
         updatedAt: current.updatedAt,
       })
+      if (
+        actor.role === 'dev-agent'
+        && candidate.assigneeId !== actorId
+      ) {
+        throw new DomainError(
+          'PERMISSION_DENIED',
+          'Developer agents may retain only their own defect assignments',
+          { actorId, defectId: id, assigneeId: candidate.assigneeId },
+        )
+      }
       this.assertActiveActor(candidate.assigneeId)
       this.assertLinks(
         current.projectId,

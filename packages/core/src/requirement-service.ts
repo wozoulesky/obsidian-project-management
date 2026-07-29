@@ -144,13 +144,23 @@ export class RequirementService {
     source: ActivitySource,
   ): PersistedRequirement {
     const validatedSource = activitySourceSchema.parse(source)
-    const validated = createRequirementInputSchema.parse({
+    const parsed = createRequirementInputSchema.parse({
       ...input,
-      description: input.description ?? '',
-      status: input.status ?? 'draft',
-      acceptanceCriteria: input.acceptanceCriteria ?? [],
-      linkedTaskIds: unique(input.linkedTaskIds ?? []),
+      description: input.description === undefined
+        ? ''
+        : input.description,
+      status: input.status === undefined ? 'draft' : input.status,
+      acceptanceCriteria: input.acceptanceCriteria === undefined
+        ? []
+        : input.acceptanceCriteria,
+      linkedTaskIds: input.linkedTaskIds === undefined
+        ? []
+        : input.linkedTaskIds,
     })
+    const validated = {
+      ...parsed,
+      linkedTaskIds: unique(parsed.linkedTaskIds ?? []),
+    }
 
     return withImmediateTransaction(this.database, () => {
       const actor = this.assertActiveActor(actorId)
@@ -158,8 +168,9 @@ export class RequirementService {
       this.assertProject(validated.projectId)
       this.assertLinkedTasks(
         validated.projectId,
-        validated.linkedTaskIds ?? [],
+        validated.linkedTaskIds,
       )
+      const linkedTaskIds = this.canonicalTaskIds(validated.linkedTaskIds)
       const id = `requirement_${randomUUID()}`
       const code = this.nextCode(validated.projectId)
       const timestamp = new Date().toISOString()
@@ -180,7 +191,7 @@ export class RequirementService {
         timestamp,
         timestamp,
       )
-      this.replaceLinks(id, validated.linkedTaskIds ?? [])
+      this.replaceLinks(id, linkedTaskIds)
       recordActivity(this.database, {
         actorId,
         projectId: validated.projectId,
@@ -265,14 +276,18 @@ export class RequirementService {
           },
         )
       }
-      const candidate = persistedRequirementSchema.parse({
+      const candidateInput = persistedRequirementSchema.parse({
         ...current,
         ...validated,
         version: current.version,
         updatedAt: current.updatedAt,
         completedTaskCount: current.completedTaskCount,
       })
-      this.assertLinkedTasks(current.projectId, candidate.linkedTaskIds)
+      this.assertLinkedTasks(current.projectId, candidateInput.linkedTaskIds)
+      const candidate = persistedRequirementSchema.parse({
+        ...candidateInput,
+        linkedTaskIds: this.canonicalTaskIds(candidateInput.linkedTaskIds),
+      })
       if (sameRequirement(candidate, current)) {
         return current
       }
@@ -377,6 +392,24 @@ export class RequirementService {
     for (const taskId of taskIds) {
       insert.run(requirementId, taskId)
     }
+  }
+
+  private canonicalTaskIds(taskIds: readonly string[]): string[] {
+    if (taskIds.length === 0) {
+      return []
+    }
+    const codeById = new Map(
+      taskIds.map((taskId) => {
+        const row = this.database.prepare(`
+          SELECT code FROM tasks WHERE id = ?
+        `).get(taskId) as { code: string }
+        return [taskId, row.code] as const
+      }),
+    )
+    return unique(taskIds).sort((left, right) => (
+      codeById.get(left)!.localeCompare(codeById.get(right)!)
+      || left.localeCompare(right)
+    ))
   }
 
   private assertActiveActor(actorId: string): ActorAccessRow {

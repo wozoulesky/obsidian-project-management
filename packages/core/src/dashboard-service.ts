@@ -104,7 +104,7 @@ export class DashboardService {
         activeAgents: activeActors.agents ?? 0,
       },
       taskStatusCounts,
-      trend: [],
+      trend: this.buildTrend(tasks, today),
       risks: tasks
         .filter((task) => effectiveStatus(task) === 'overdue')
         .map((task) => ({
@@ -160,9 +160,40 @@ export class DashboardService {
     if (projectId === undefined) {
       return this.activities.list({ limit })
     }
-    return this.activities.list({ limit: 200 })
-      .filter((activity) => activity.projectId === projectId)
-      .slice(0, limit)
+    return this.activities.list({ projectId, limit })
+  }
+
+  private buildTrend(
+    tasks: readonly PersistedTask[],
+    today: string,
+  ): DashboardSnapshot['trend'] {
+    if (tasks.length === 0) {
+      return []
+    }
+    const earliestStart = tasks.reduce(
+      (earliest, task) => task.startDate < earliest
+        ? task.startDate
+        : earliest,
+      tasks[0]!.startDate,
+    )
+    const firstDate = earliestStart > today ? today : earliestStart
+    const points: DashboardSnapshot['trend'] = []
+    const cursor = new Date(`${firstDate}T00:00:00.000Z`)
+    const last = new Date(`${today}T00:00:00.000Z`)
+
+    while (cursor <= last) {
+      const date = cursor.toISOString().slice(0, 10)
+      points.push({
+        date,
+        planned: tasks.filter((task) => task.dueDate <= date).length,
+        actual: tasks.filter((task) => (
+          task.status === 'done'
+          && task.updatedAt.slice(0, 10) <= date
+        )).length,
+      })
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+    return points
   }
 
   private validateToday(today: string | undefined): string {

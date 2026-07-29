@@ -39,6 +39,7 @@ type ActivityRow = {
 export type ActivityListFilter = {
   entityId?: string
   actorId?: string
+  projectId?: string
   source?: ActivitySource
   after?: string
   limit?: number
@@ -156,6 +157,10 @@ export class ActivityService {
     if (filter.actorId !== undefined) {
       clauses.push('activities.actor_id = ?')
       values.push(filter.actorId)
+    }
+    if (filter.projectId !== undefined) {
+      clauses.push('activities.project_id = ?')
+      values.push(filter.projectId)
     }
     if (source !== undefined) {
       clauses.push('activities.source = ?')

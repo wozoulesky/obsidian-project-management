@@ -186,9 +186,15 @@ export class TaskService {
     const validatedSource = activitySourceSchema.parse(source)
     const validated = createTaskInputSchema.parse({
       ...input,
-      description: input.description ?? '',
-      milestoneId: input.milestoneId ?? '',
-      dependencyIds: input.dependencyIds ?? [],
+      description: input.description === undefined
+        ? ''
+        : input.description,
+      milestoneId: input.milestoneId === undefined
+        ? ''
+        : input.milestoneId,
+      dependencyIds: input.dependencyIds === undefined
+        ? []
+        : input.dependencyIds,
     })
     assertDateOrder(validated.startDate, validated.dueDate)
 

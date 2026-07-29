@@ -11,7 +11,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { dashboardSnapshotSchema, persistedTaskSchema } from '@project-os/contracts'
-import { ActivityService } from './activity-service.js'
+import {
+  ActivityService,
+  recordActivity,
+} from './activity-service.js'
 import { ActorService } from './actor-service.js'
 import { createTestDatabase, openDatabase } from './database.js'
 import { DefectService } from './defect-service.js'
@@ -167,6 +170,27 @@ describe('work service permissions', () => {
 })
 
 describe('TaskService', () => {
+  it.each([
+    ['description', { description: null }],
+    ['milestoneId', { milestoneId: null }],
+    ['dependencyIds', { dependencyIds: null }],
+    ['parentId', { parentId: null }],
+  ])('rejects null task create %s before applying defaults', (_name, patch) => {
+    const context = setup()
+    const activityCount = context.activities.list().length
+
+    expect(() => context.tasks.create(
+      {
+        ...taskInput(context.project.id, context.dev.id),
+        ...patch,
+      } as never,
+      context.pm.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ name: 'ZodError' }))
+    expect(context.tasks.list({ projectId: context.project.id })).toEqual([])
+    expect(context.activities.list()).toHaveLength(activityCount)
+  })
+
   it('creates, gets, lists, and updates valid project tasks', () => {
     const context = setup()
     const first = context.tasks.create(
@@ -354,6 +378,34 @@ describe('TaskService', () => {
     expect(context.activities.list({ entityId: task.id })).toHaveLength(count)
   })
 
+  it.each([
+    ['description', { description: null }],
+    ['milestoneId', { milestoneId: null }],
+    ['dependencyIds', { dependencyIds: null }],
+    ['parentId', { parentId: null }],
+    ['status', { status: null }],
+  ])('rejects null task update %s before no-op detection', (_name, patch) => {
+    const context = setup()
+    const task = context.tasks.create(
+      taskInput(context.project.id, context.dev.id),
+      context.pm.id,
+      'mcp',
+    )
+    const activityCount = context.activities.list({
+      entityId: task.id,
+    }).length
+
+    expect(() => context.tasks.update(
+      task.id,
+      { ...patch, version: task.version } as never,
+      context.pm.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ name: 'ZodError' }))
+    expect(context.tasks.get(task.id)).toEqual(task)
+    expect(context.activities.list({ entityId: task.id }))
+      .toHaveLength(activityCount)
+  })
+
   it('rolls back task changes when activity insertion fails', () => {
     const context = setup()
     const task = context.tasks.create(
@@ -386,6 +438,34 @@ describe('TaskService', () => {
 })
 
 describe('RequirementService', () => {
+  it.each([
+    ['description', { description: null }],
+    ['status', { status: null }],
+    ['acceptanceCriteria', { acceptanceCriteria: null }],
+    ['linkedTaskIds', { linkedTaskIds: null }],
+  ])(
+    'rejects null requirement create %s before applying defaults',
+    (_name, patch) => {
+      const context = setup()
+      const activityCount = context.activities.list().length
+
+      expect(() => context.requirements.create(
+        {
+          projectId: context.project.id,
+          title: 'Invalid',
+          priority: 'P1',
+          ...patch,
+        } as never,
+        context.pm.id,
+        'mcp',
+      )).toThrowError(expect.objectContaining({ name: 'ZodError' }))
+      expect(context.requirements.list({
+        projectId: context.project.id,
+      })).toEqual([])
+      expect(context.activities.list()).toHaveLength(activityCount)
+    },
+  )
+
   it('manages same-project task links and dynamically aggregates completion', () => {
     const context = setup()
     const first = context.tasks.create(
@@ -484,9 +564,111 @@ describe('RequirementService', () => {
     expect(context.activities.list({ entityId: requirement.id }))
       .toHaveLength(activityCount)
   })
+
+  it('treats reordered and duplicate linked task IDs as one canonical set', () => {
+    const context = setup()
+    const first = context.tasks.create(
+      taskInput(context.project.id, context.dev.id, 'First'),
+      context.pm.id,
+      'mcp',
+    )
+    const second = context.tasks.create(
+      taskInput(context.project.id, context.dev.id, 'Second'),
+      context.pm.id,
+      'mcp',
+    )
+    const requirement = context.requirements.create(
+      {
+        projectId: context.project.id,
+        title: 'Canonical links',
+        priority: 'P1',
+        linkedTaskIds: [second.id, first.id, second.id],
+      },
+      context.pm.id,
+      'mcp',
+    )
+    expect(requirement.linkedTaskIds).toEqual([first.id, second.id])
+    const activityCount = context.activities.list({
+      entityId: requirement.id,
+    }).length
+
+    const result = context.requirements.update(
+      requirement.id,
+      {
+        linkedTaskIds: [second.id, first.id, first.id],
+        version: requirement.version,
+      },
+      context.pm.id,
+      'mcp',
+    )
+
+    expect(result).toEqual(requirement)
+    expect(context.requirements.get(requirement.id)).toEqual(requirement)
+    expect(context.activities.list({ entityId: requirement.id }))
+      .toHaveLength(activityCount)
+  })
+
+  it.each([
+    ['description', { description: null }],
+    ['status', { status: null }],
+    ['acceptanceCriteria', { acceptanceCriteria: null }],
+    ['linkedTaskIds', { linkedTaskIds: null }],
+  ])(
+    'rejects null requirement update %s before no-op detection',
+    (_name, patch) => {
+      const context = setup()
+      const requirement = context.requirements.create(
+        {
+          projectId: context.project.id,
+          title: 'Valid',
+          priority: 'P1',
+        },
+        context.pm.id,
+        'mcp',
+      )
+      const activityCount = context.activities.list({
+        entityId: requirement.id,
+      }).length
+
+      expect(() => context.requirements.update(
+        requirement.id,
+        { ...patch, version: requirement.version } as never,
+        context.pm.id,
+        'mcp',
+      )).toThrowError(expect.objectContaining({ name: 'ZodError' }))
+      expect(context.requirements.get(requirement.id)).toEqual(requirement)
+      expect(context.activities.list({ entityId: requirement.id }))
+        .toHaveLength(activityCount)
+    },
+  )
 })
 
 describe('DefectService', () => {
+  it.each([
+    ['description', { description: null }],
+    ['status', { status: null }],
+    ['reproductionSteps', { reproductionSteps: null }],
+    ['linkedRequirementId', { linkedRequirementId: null }],
+    ['linkedTaskId', { linkedTaskId: null }],
+  ])('rejects null defect create %s before defaults', (_name, patch) => {
+    const context = setup()
+    const activityCount = context.activities.list().length
+
+    expect(() => context.defects.create(
+      {
+        projectId: context.project.id,
+        title: 'Invalid',
+        severity: 'normal',
+        assigneeId: context.dev.id,
+        ...patch,
+      } as never,
+      context.qa.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ name: 'ZodError' }))
+    expect(context.defects.list({ projectId: context.project.id })).toEqual([])
+    expect(context.activities.list()).toHaveLength(activityCount)
+  })
+
   it('creates linked defects and atomically converts one defect to one task', () => {
     const context = setup()
     const requirement = context.requirements.create(
@@ -593,6 +775,75 @@ describe('DefectService', () => {
       'mcp',
     ).status).toBe('fixing')
   })
+
+  it('requires dev agents to create and retain only their own assignments', () => {
+    const context = setup()
+
+    expect(() => context.defects.create(
+      {
+        projectId: context.project.id,
+        title: 'Wrong assignee',
+        severity: 'normal',
+        assigneeId: context.otherDev.id,
+      },
+      context.dev.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+
+    const defect = context.defects.create(
+      {
+        projectId: context.project.id,
+        title: 'Own assignment',
+        severity: 'normal',
+        assigneeId: context.dev.id,
+      },
+      context.dev.id,
+      'mcp',
+    )
+    expect(() => context.defects.update(
+      defect.id,
+      {
+        assigneeId: context.otherDev.id,
+        version: defect.version,
+      },
+      context.dev.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+    expect(context.defects.get(defect.id)).toEqual(defect)
+  })
+
+  it.each([
+    ['description', { description: null }],
+    ['status', { status: null }],
+    ['reproductionSteps', { reproductionSteps: null }],
+    ['linkedRequirementId', { linkedRequirementId: null }],
+    ['linkedTaskId', { linkedTaskId: null }],
+  ])('rejects null defect update %s before no-op', (_name, patch) => {
+    const context = setup()
+    const defect = context.defects.create(
+      {
+        projectId: context.project.id,
+        title: 'Valid',
+        severity: 'normal',
+        assigneeId: context.dev.id,
+      },
+      context.qa.id,
+      'mcp',
+    )
+    const activityCount = context.activities.list({
+      entityId: defect.id,
+    }).length
+
+    expect(() => context.defects.update(
+      defect.id,
+      { ...patch, version: defect.version } as never,
+      context.qa.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ name: 'ZodError' }))
+    expect(context.defects.get(defect.id)).toEqual(defect)
+    expect(context.activities.list({ entityId: defect.id }))
+      .toHaveLength(activityCount)
+  })
 })
 
 describe('DashboardService', () => {
@@ -698,6 +949,103 @@ describe('DashboardService', () => {
       today: '2026-07-29',
     })).toEqual([{ ...late, status: 'overdue' }])
     expect(context.tasks.get(late.id).status).toBe('not_started')
+  })
+
+  it('filters project activities before applying the dashboard limit', () => {
+    const context = setup()
+    const target = context.tasks.create(
+      taskInput(context.project.id, context.dev.id),
+      context.pm.id,
+      'mcp',
+    )
+    for (let index = 0; index < 205; index += 1) {
+      recordActivity(context.database, {
+        actorId: context.owner.id,
+        projectId: context.otherProject.id,
+        source: 'web',
+        operation: 'project.update',
+        entityType: 'project',
+        entityId: context.otherProject.id,
+        action: `Unrelated activity ${index}`,
+        createdAt: new Date(
+          Date.UTC(2026, 6, 30, 0, 0, index),
+        ).toISOString(),
+      })
+    }
+
+    const snapshot = context.dashboard.snapshot({
+      projectId: context.project.id,
+      today: '2026-07-30',
+      activityLimit: 5,
+    })
+
+    expect(snapshot.activities.length).toBeGreaterThan(0)
+    expect(snapshot.activities.every(
+      (activity) => activity.projectId === context.project.id,
+    )).toBe(true)
+    expect(snapshot.activities.some(
+      (activity) => activity.entityId === target.id,
+    )).toBe(true)
+  })
+
+  it('builds date-sorted cumulative planned and actual task trends', () => {
+    const context = setup()
+    const completed = context.tasks.create(
+      {
+        ...taskInput(context.project.id, context.dev.id, 'Completed'),
+        startDate: '2026-07-27',
+        dueDate: '2026-07-28',
+      },
+      context.pm.id,
+      'mcp',
+    )
+    context.tasks.create(
+      {
+        ...taskInput(context.project.id, context.dev.id, 'Planned today'),
+        startDate: '2026-07-28',
+        dueDate: '2026-07-29',
+      },
+      context.pm.id,
+      'mcp',
+    )
+    context.tasks.create(
+      {
+        ...taskInput(context.otherProject.id, context.dev.id, 'Other project'),
+        startDate: '2026-07-01',
+        dueDate: '2026-07-02',
+      },
+      context.pm.id,
+      'mcp',
+    )
+    context.tasks.submitProgress(
+      completed.id,
+      {
+        progress: 100,
+        status: 'done',
+        note: 'done today',
+        version: completed.version,
+      },
+      context.dev.id,
+      'mcp',
+    )
+
+    const snapshot = context.dashboard.snapshot({
+      projectId: context.project.id,
+      today: '2026-07-29',
+    })
+
+    expect(snapshot.trend.length).toBeGreaterThan(0)
+    expect(snapshot.trend.map((point) => point.date)).toEqual(
+      [...snapshot.trend.map((point) => point.date)].sort(),
+    )
+    expect(snapshot.trend.at(-1)).toEqual({
+      date: '2026-07-29',
+      planned: 2,
+      actual: 1,
+    })
+    expect(snapshot.trend.every(
+      (point) => point.planned <= 2 && point.actual <= 1,
+    )).toBe(true)
   })
 })
 
