@@ -187,6 +187,69 @@ describe('HTTP project repository', () => {
     })
   })
 
+  it('submits a supplied progress version unchanged without prefetching', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(success({ ...task, progress: 70, version: 4 })),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+    await repository.updateTaskProgress('task-1', {
+      progress: 70,
+      status: 'in_progress',
+      note: 'Connected',
+      version: 2,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/tasks/task-1/progress')
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(JSON.parse(String(init.body))).toMatchObject({ version: 2 })
+  })
+
+  it('submits supplied task dates unchanged without prefetching', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(success({ ...task, startDate: '2026-08-01', version: 4 })),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+    await repository.updateTaskDates('task-1', {
+      startDate: '2026-08-01',
+      dueDate: '2026-08-03',
+      version: 2,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/tasks/task-1')
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(JSON.parse(String(init.body))).toEqual({
+      startDate: '2026-08-01',
+      dueDate: '2026-08-03',
+      version: 2,
+    })
+  })
+
+  it('loads the current version for legacy task date input', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(success(task)))
+      .mockResolvedValueOnce(
+        jsonResponse(success({ ...task, startDate: '2026-08-01', version: 4 })),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+    await repository.updateTaskDates('task-1', {
+      startDate: '2026-08-01',
+      dueDate: '2026-08-03',
+    })
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/tasks/task-1')
+    const init = fetchMock.mock.calls[1]?.[1] as RequestInit
+    expect(JSON.parse(String(init.body))).toMatchObject({ version: 3 })
+  })
+
   it('validates settings and reads activity cursors through the repository', async () => {
     const settings = {
       theme: 'system',

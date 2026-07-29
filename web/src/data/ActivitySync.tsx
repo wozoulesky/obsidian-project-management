@@ -6,8 +6,9 @@ import { projectQueryKeys, useProjectRepository } from './query-hooks'
 
 function affectedQueryKeys(
   activity: ActivityEvent,
-  projectId: string,
+  selectedProjectId: string,
 ): readonly (readonly unknown[])[] {
+  const projectId = activity.projectId ?? selectedProjectId
   const dashboard = projectQueryKeys.dashboardPrefixFor(projectId)
   if (activity.operation.startsWith('actor.')) {
     return [projectQueryKeys.actors, dashboard]
@@ -58,10 +59,14 @@ export function ActivitySync({ intervalMs = 3_000 }: { intervalMs?: number }) {
         disposed
         || document.visibilityState !== 'visible'
       ) return
-      const page = await repository.listActivities({
-        ...(cursor === undefined ? {} : { after: cursor }),
-        projectId,
-      })
+      let page
+      try {
+        page = await repository.listActivities(
+          cursor === undefined ? {} : { after: cursor },
+        )
+      } catch {
+        return
+      }
       if (disposed) return
       cursor = page.nextCursor ?? cursor
       if (!initialized) {

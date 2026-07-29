@@ -103,25 +103,25 @@ export function createHttpProjectRepository(
     },
 
     async updateTaskProgress(taskId, input) {
-      const task = await getTask(taskId)
+      const version = input.version ?? (await getTask(taskId)).version
       return client.request(
         `/tasks/${encodeURIComponent(taskId)}/progress`,
         persistedTaskSchema,
         {
           method: 'POST',
-          ...jsonBody({ ...input, version: task.version }),
+          ...jsonBody({ ...input, version }),
         },
       )
     },
 
     async updateTaskDates(taskId, input) {
-      const task = await getTask(taskId)
+      const version = input.version ?? (await getTask(taskId)).version
       return client.request(
         `/tasks/${encodeURIComponent(taskId)}`,
         persistedTaskSchema,
         {
           method: 'PATCH',
-          ...jsonBody({ ...input, version: task.version }),
+          ...jsonBody({ ...input, version }),
         },
       )
     },
