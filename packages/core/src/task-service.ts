@@ -22,7 +22,10 @@ import {
   withImmediateTransaction,
 } from './activity-service.js'
 import { DomainError } from './errors.js'
-import { assertPermission } from './permissions.js'
+import {
+  assertPermission,
+  canPerform,
+} from './permissions.js'
 
 type TaskRow = {
   id: string
@@ -296,14 +299,17 @@ export class TaskService {
 
     return withImmediateTransaction(this.database, () => {
       const actor = this.assertActiveActor(actorId)
-      const suppliedKeys = Object.keys(validated)
-        .filter((key) => key !== 'version')
+      const suppliedKeys = Object.entries(input)
+        .filter(([key, value]) => key !== 'version' && value !== undefined)
+        .map(([key]) => key)
       const descriptionOnly = suppliedKeys.length > 0
         && suppliedKeys.every((key) => key === 'description')
-      assertPermission(
-        actor.role,
-        descriptionOnly ? 'description.write' : 'task.write',
-      )
+      if (!canPerform(actor.role, 'task.write')) {
+        assertPermission(
+          actor.role,
+          descriptionOnly ? 'description.write' : 'task.write',
+        )
+      }
       const current = this.get(id)
       this.assertVersion(id, validated.version, current.version)
       const candidate = persistedTaskSchema.parse({

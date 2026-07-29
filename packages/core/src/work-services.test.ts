@@ -378,6 +378,51 @@ describe('TaskService', () => {
     expect(context.activities.list({ entityId: task.id })).toHaveLength(count)
   })
 
+  it('composes task domain-write and description-only permissions', () => {
+    const context = setup()
+    const task = context.tasks.create(
+      taskInput(context.project.id, context.dev.id),
+      context.pm.id,
+      'mcp',
+    )
+
+    const byPm = context.tasks.update(
+      task.id,
+      { description: 'PM edit', version: task.version },
+      context.pm.id,
+      'mcp',
+    )
+    const byDoc = context.tasks.update(
+      task.id,
+      { description: 'Doc edit', version: byPm.version },
+      context.doc.id,
+      'mcp',
+    )
+    expect(byDoc.description).toBe('Doc edit')
+
+    expect(() => context.tasks.update(
+      task.id,
+      {
+        description: 'Smuggled edit',
+        title: byDoc.title,
+        version: byDoc.version,
+      },
+      context.doc.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+    expect(() => context.tasks.update(
+      task.id,
+      {
+        description: 'Unauthorized',
+        title: byDoc.title,
+        version: byDoc.version,
+      },
+      context.qa.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+    expect(context.tasks.get(task.id)).toEqual(byDoc)
+  })
+
   it.each([
     ['description', { description: null }],
     ['milestoneId', { milestoneId: null }],
@@ -608,6 +653,45 @@ describe('RequirementService', () => {
       .toHaveLength(activityCount)
   })
 
+  it('composes requirement domain-write and description-only permissions', () => {
+    const context = setup()
+    const requirement = context.requirements.create(
+      {
+        projectId: context.project.id,
+        title: 'Editable',
+        priority: 'P1',
+      },
+      context.pm.id,
+      'mcp',
+    )
+
+    const byPm = context.requirements.update(
+      requirement.id,
+      { description: 'PM edit', version: requirement.version },
+      context.pm.id,
+      'mcp',
+    )
+    const byDoc = context.requirements.update(
+      requirement.id,
+      { description: 'Doc edit', version: byPm.version },
+      context.doc.id,
+      'mcp',
+    )
+    expect(byDoc.description).toBe('Doc edit')
+
+    expect(() => context.requirements.update(
+      requirement.id,
+      {
+        description: 'Smuggled edit',
+        priority: byDoc.priority,
+        version: byDoc.version,
+      },
+      context.doc.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+    expect(context.requirements.get(requirement.id)).toEqual(byDoc)
+  })
+
   it.each([
     ['description', { description: null }],
     ['status', { status: null }],
@@ -810,6 +894,62 @@ describe('DefectService', () => {
       'mcp',
     )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
     expect(context.defects.get(defect.id)).toEqual(defect)
+  })
+
+  it('composes defect domain-write and description-only permissions', () => {
+    const context = setup()
+    const defect = context.defects.create(
+      {
+        projectId: context.project.id,
+        title: 'Editable',
+        severity: 'normal',
+        assigneeId: context.dev.id,
+      },
+      context.qa.id,
+      'mcp',
+    )
+
+    const byQa = context.defects.update(
+      defect.id,
+      { description: 'QA edit', version: defect.version },
+      context.qa.id,
+      'mcp',
+    )
+    const byDev = context.defects.update(
+      defect.id,
+      { description: 'Dev edit', version: byQa.version },
+      context.dev.id,
+      'mcp',
+    )
+    const byDoc = context.defects.update(
+      defect.id,
+      { description: 'Doc edit', version: byDev.version },
+      context.doc.id,
+      'mcp',
+    )
+    expect(byDoc.description).toBe('Doc edit')
+
+    expect(() => context.defects.update(
+      defect.id,
+      {
+        description: 'Smuggled edit',
+        status: byDoc.status,
+        version: byDoc.version,
+      },
+      context.doc.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+    expect(() => context.defects.update(
+      defect.id,
+      {
+        description: 'Unauthorized',
+        status: byDoc.status,
+        version: byDoc.version,
+      },
+      context.pm.id,
+      'mcp',
+    )).toThrowError(expect.objectContaining({ code: 'PERMISSION_DENIED' }))
+    expect(context.defects.get(defect.id)).toEqual(byDoc)
   })
 
   it.each([

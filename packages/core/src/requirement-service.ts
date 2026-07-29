@@ -18,7 +18,10 @@ import {
   withImmediateTransaction,
 } from './activity-service.js'
 import { DomainError } from './errors.js'
-import { assertPermission } from './permissions.js'
+import {
+  assertPermission,
+  canPerform,
+} from './permissions.js'
 
 type RequirementRow = {
   id: string
@@ -256,14 +259,17 @@ export class RequirementService {
 
     return withImmediateTransaction(this.database, () => {
       const actor = this.assertActiveActor(actorId)
-      const suppliedKeys = Object.keys(validated)
-        .filter((key) => key !== 'version')
+      const suppliedKeys = Object.entries(input)
+        .filter(([key, value]) => key !== 'version' && value !== undefined)
+        .map(([key]) => key)
       const descriptionOnly = suppliedKeys.length > 0
         && suppliedKeys.every((key) => key === 'description')
-      assertPermission(
-        actor.role,
-        descriptionOnly ? 'description.write' : 'requirement.write',
-      )
+      if (!canPerform(actor.role, 'requirement.write')) {
+        assertPermission(
+          actor.role,
+          descriptionOnly ? 'description.write' : 'requirement.write',
+        )
+      }
       const current = this.get(id)
       if (validated.version !== current.version) {
         throw new DomainError(

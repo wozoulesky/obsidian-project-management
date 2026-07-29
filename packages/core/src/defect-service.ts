@@ -23,7 +23,10 @@ import {
   withImmediateTransaction,
 } from './activity-service.js'
 import { DomainError } from './errors.js'
-import { assertPermission } from './permissions.js'
+import {
+  assertPermission,
+  canPerform,
+} from './permissions.js'
 import { TaskService } from './task-service.js'
 
 type DefectRow = {
@@ -321,14 +324,17 @@ export class DefectService {
 
     return withImmediateTransaction(this.database, () => {
       const actor = this.assertActiveActor(actorId)
-      const suppliedKeys = Object.keys(validated)
-        .filter((key) => key !== 'version')
+      const suppliedKeys = Object.entries(input)
+        .filter(([key, value]) => key !== 'version' && value !== undefined)
+        .map(([key]) => key)
       const descriptionOnly = suppliedKeys.length > 0
         && suppliedKeys.every((key) => key === 'description')
-      assertPermission(
-        actor.role,
-        descriptionOnly ? 'description.write' : 'defect.write',
-      )
+      if (!canPerform(actor.role, 'defect.write')) {
+        assertPermission(
+          actor.role,
+          descriptionOnly ? 'description.write' : 'defect.write',
+        )
+      }
       const current = this.get(id)
       if (actor.role === 'dev-agent' && current.assigneeId !== actorId) {
         throw new DomainError(
