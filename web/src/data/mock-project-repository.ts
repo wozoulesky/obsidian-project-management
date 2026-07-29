@@ -107,6 +107,13 @@ export function createMockProjectRepository(): ProjectRepository {
       return clone(project)
     },
 
+    async listAllTasks() {
+      return clone(taskState.map((task) => ({
+        ...task,
+        projectId: task.projectId ?? 'atlas',
+      })))
+    },
+
     async getDashboard(projectId, days = 30): Promise<DashboardSnapshot> {
       void projectId
       const activeDefects = defectState.filter(

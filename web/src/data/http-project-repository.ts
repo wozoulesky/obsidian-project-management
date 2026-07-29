@@ -104,6 +104,7 @@ export function createHttpProjectRepository(
         ...jsonBody(body),
       })
     },
+    listAllTasks: () => allPages(client, '/tasks', persistedTaskSchema),
 
     getDashboard(projectId, days = 30) {
       return client.request(

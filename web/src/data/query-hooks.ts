@@ -58,6 +58,8 @@ export function resetProjectRepositoryForTests() {
 
 export const projectQueryKeys = {
   actors: ['actors'] as const,
+  activities: ['activities'] as const,
+  allTasks: ['tasks', 'all'] as const,
   projects: ['projects'] as const,
   settings: ['settings'] as const,
   dashboardPrefixFor: (selectedProjectId: string) =>
@@ -117,15 +119,18 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.projects,
     projectQueryKeys.actors,
     ['dashboard'],
+    projectQueryKeys.activities,
   ],
   taskProgress: [
     projectQueryKeys.tasks,
+    projectQueryKeys.allTasks,
     projectQueryKeys.gantt,
     projectQueryKeys.requirements,
     projectQueryKeys.dashboardPrefix,
   ],
   taskDates: [
     projectQueryKeys.tasks,
+    projectQueryKeys.allTasks,
     projectQueryKeys.gantt,
     projectQueryKeys.dashboardPrefix,
   ],
@@ -135,6 +140,7 @@ export const mutationInvalidationKeys = {
   ],
   defectConversion: [
     projectQueryKeys.tasks,
+    projectQueryKeys.allTasks,
     projectQueryKeys.gantt,
     projectQueryKeys.defects,
     projectQueryKeys.dashboardPrefix,
@@ -174,6 +180,14 @@ export function useActors() {
   })
 }
 
+export function useAllTasks() {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.allTasks,
+    queryFn: () => context.repository.listAllTasks(),
+  })
+}
+
 export function useCreateProject() {
   const queryClient = useQueryClient()
   const context = useProjectRepository()
@@ -185,6 +199,7 @@ export function useCreateProject() {
         projectQueryKeys.projects,
         projectQueryKeys.actors,
         ['dashboard'],
+        projectQueryKeys.activities,
       ])
     },
   })
@@ -213,6 +228,7 @@ export function useUpdateTaskProgress() {
         queryClient,
         [
           projectQueryKeys.tasksFor(context.projectId),
+          projectQueryKeys.allTasks,
           projectQueryKeys.ganttFor(context.projectId),
           projectQueryKeys.requirementsFor(context.projectId),
           projectQueryKeys.dashboardPrefixFor(context.projectId),
@@ -236,6 +252,7 @@ export function useUpdateTaskDates() {
     onSuccess: async () => {
       await invalidateKeys(queryClient, [
         projectQueryKeys.tasksFor(context.projectId),
+        projectQueryKeys.allTasks,
         projectQueryKeys.ganttFor(context.projectId),
         projectQueryKeys.dashboardPrefixFor(context.projectId),
       ])
@@ -293,6 +310,7 @@ export function useCreateTaskFromDefect() {
         queryClient,
         [
           projectQueryKeys.tasksFor(context.projectId),
+          projectQueryKeys.allTasks,
           projectQueryKeys.ganttFor(context.projectId),
           projectQueryKeys.defectsFor(context.projectId),
           projectQueryKeys.dashboardPrefixFor(context.projectId),

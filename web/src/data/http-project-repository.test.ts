@@ -133,6 +133,28 @@ describe('ApiClient', () => {
 })
 
 describe('HTTP project repository', () => {
+  it('loads every task once through the global cursor endpoint', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(success({ items: [task], next_cursor: 'next page' })),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(success({
+          items: [{ ...task, id: 'task-2' }],
+          next_cursor: null,
+        })),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+    await expect(repository.listAllTasks()).resolves.toHaveLength(2)
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      '/api/tasks?limit=200',
+      '/api/tasks?limit=200&cursor=next+page',
+    ])
+  })
+
   it('creates a project through the strict project endpoint contract', async () => {
     const project = {
       id: 'project-1',

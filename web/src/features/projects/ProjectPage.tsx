@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import {
@@ -10,16 +10,20 @@ import {
 import { Button } from '../../components/ui/Button'
 import {
   useActors,
+  useAllTasks,
   useProjects,
 } from '../../data/query-hooks'
 import { CreateProjectDialog } from './CreateProjectDialog'
 import { ProjectCard } from './ProjectCard'
+import { projectRisk } from './project-risk'
 
 export function ProjectPage() {
   const projectsQuery = useProjects()
   const actorsQuery = useActors()
+  const tasksQuery = useAllTasks()
   const [searchParams, setSearchParams] = useSearchParams()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const openerRef = useRef<HTMLButtonElement | null>(null)
   const ownerId = searchParams.get('owner') ?? ''
   const search = searchParams.get('q') ?? ''
   const actors = useMemo(() => actorsQuery.data ?? [], [actorsQuery.data])
@@ -36,23 +40,58 @@ export function ProjectPage() {
     setSearchParams(next, { replace: true })
   }
 
-  const filteredProjects = (projectsQuery.data ?? []).filter((project) => {
-    const haystack = [
-      project.name,
-      project.code,
-      actorById.get(project.ownerId)?.name ?? '',
-    ].join(' ').toLocaleLowerCase()
-    return (
-      (!ownerId || project.ownerId === ownerId)
-      && (!search || haystack.includes(search.trim().toLocaleLowerCase()))
-    )
-  })
+  const taskCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const task of tasksQuery.data ?? []) {
+      if (!task.projectId) continue
+      counts.set(task.projectId, (counts.get(task.projectId) ?? 0) + 1)
+    }
+    return counts
+  }, [tasksQuery.data])
 
-  const isPending = projectsQuery.isPending || actorsQuery.isPending
-  const error = projectsQuery.error ?? actorsQuery.error
+  const filteredProjects = (projectsQuery.data ?? [])
+    .filter((project) => {
+      const haystack = [
+        project.name,
+        project.code,
+        actorById.get(project.ownerId)?.name ?? '',
+      ].join(' ').toLocaleLowerCase()
+      return (
+        (!ownerId || project.ownerId === ownerId)
+        && (!search || haystack.includes(search.trim().toLocaleLowerCase()))
+      )
+    })
+    .sort((left, right) => {
+      const rank = (project: typeof left) => {
+        const risk = projectRisk(project)
+        return risk === '已逾期' ? 0 : risk === '7 天内到期' ? 1 : 2
+      }
+      return (
+        rank(left) - rank(right)
+        || (left.dueDate ?? '9999-12-31').localeCompare(
+          right.dueDate ?? '9999-12-31',
+        )
+        || left.name.localeCompare(right.name)
+      )
+    })
+
+  const queries = [projectsQuery, actorsQuery, tasksQuery]
+  const initialErrorQuery = queries.find(
+    (query) => query.isError && query.data === undefined,
+  )
+  const isPending = !initialErrorQuery && queries.some((query) => query.isPending)
+  const error = initialErrorQuery?.error
+    ?? projectsQuery.error
+    ?? actorsQuery.error
+    ?? tasksQuery.error
   const retry = () => {
     void projectsQuery.refetch()
     void actorsQuery.refetch()
+    void tasksQuery.refetch()
+  }
+  const closeDialog = () => {
+    setDialogOpen(false)
+    openerRef.current?.focus()
   }
 
   return (
@@ -62,7 +101,13 @@ export function ProjectPage() {
           <p className="project-page__eyebrow">PROJECTS</p>
           <h1 id="project-page-title">全部项目</h1>
         </div>
-        <Button onClick={() => setDialogOpen(true)} variant="primary">
+        <Button
+          onClick={(event) => {
+            openerRef.current = event.currentTarget
+            setDialogOpen(true)
+          }}
+          variant="primary"
+        >
           新建项目
         </Button>
       </header>
@@ -100,19 +145,20 @@ export function ProjectPage() {
       </div>
 
       {isPending ? <LoadingState label="正在加载项目" /> : null}
-      {!isPending && error && projectsQuery.data === undefined ? (
+      {!isPending && initialErrorQuery ? (
         <ErrorState error={error} onRetry={retry} />
       ) : null}
-      {!isPending && !error ? (
+      {!isPending && !initialErrorQuery ? (
         <>
           <RefreshState
             dataUpdatedAt={Math.min(
               projectsQuery.dataUpdatedAt,
               actorsQuery.dataUpdatedAt,
+              tasksQuery.dataUpdatedAt,
             )}
-            error={projectsQuery.error ?? actorsQuery.error}
-            isError={projectsQuery.isError || actorsQuery.isError}
-            isFetching={projectsQuery.isFetching || actorsQuery.isFetching}
+            error={error}
+            isError={queries.some((query) => query.isError)}
+            isFetching={queries.some((query) => query.isFetching)}
           />
           {filteredProjects.length > 0 ? (
             <div className="project-grid">
@@ -121,6 +167,7 @@ export function ProjectPage() {
                   key={project.id}
                   owner={actorById.get(project.ownerId)}
                   project={project}
+                  taskCount={taskCounts.get(project.id) ?? 0}
                 />
               ))}
             </div>
@@ -133,7 +180,7 @@ export function ProjectPage() {
       {dialogOpen ? (
         <CreateProjectDialog
           activeActors={activeActors}
-          onClose={() => setDialogOpen(false)}
+          onClose={closeDialog}
         />
       ) : null}
     </section>

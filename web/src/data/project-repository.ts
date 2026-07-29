@@ -27,6 +27,7 @@ export interface ProjectRepository {
   listActors(): Promise<Actor[]>
   listProjects(): Promise<Project[]>
   createProject(input: CreateProjectInput): Promise<Project>
+  listAllTasks(): Promise<Task[]>
   getDashboard(
     projectId: string,
     days?: 7 | 30 | 90,

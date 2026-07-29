@@ -19,6 +19,7 @@ function affectedQueryKeys(
   if (activity.operation.startsWith('task.')) {
     return [
       projectQueryKeys.tasksFor(projectId),
+      projectQueryKeys.allTasks,
       projectQueryKeys.ganttFor(projectId),
       projectQueryKeys.requirementsFor(projectId),
       dashboard,
@@ -31,6 +32,7 @@ function affectedQueryKeys(
     return [
       projectQueryKeys.defectsFor(projectId),
       projectQueryKeys.tasksFor(projectId),
+      projectQueryKeys.allTasks,
       projectQueryKeys.ganttFor(projectId),
       dashboard,
     ]

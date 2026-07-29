@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderApp } from '../../app/test-utils'
-import type { Actor, Project } from '../../data/domain'
+import type { Actor, Project, Task } from '../../data/domain'
 import { projectRepository } from '../../data/query-hooks'
 import { ProjectPage } from './ProjectPage'
 
@@ -70,16 +70,23 @@ afterEach(cleanup)
 function mockPortfolio() {
   vi.spyOn(projectRepository, 'listActors').mockResolvedValue(actors)
   vi.spyOn(projectRepository, 'listProjects').mockResolvedValue(projects)
+  vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue([])
 }
 
 describe('ProjectPage', () => {
-  it('renders actual portfolio fields and never invents task counts', async () => {
+  it('renders actual portfolio fields and real grouped task counts', async () => {
     mockPortfolio()
+    vi.mocked(projectRepository.listAllTasks).mockResolvedValue([
+      { projectId: 'atlas' },
+      { projectId: 'atlas' },
+      { projectId: 'borealis' },
+    ] as Task[])
     renderApp(<ProjectPage />)
 
     expect(screen.getByRole('heading', { name: '全部项目' })).toBeVisible()
     const atlas = await screen.findByRole('article', { name: 'Atlas 迁移' })
     expect(within(atlas).getByText('PRJ-001')).toBeVisible()
+    expect(within(atlas).getByText('主要负责人')).toBeVisible()
     expect(within(atlas).getByText('Lin')).toBeVisible()
     expect(within(atlas).getByText('进行中')).toBeVisible()
     expect(within(atlas).getByText('62%')).toBeVisible()
@@ -88,7 +95,80 @@ describe('ProjectPage', () => {
       'href',
       '/projects/atlas',
     )
-    expect(screen.queryByText(/任务/)).not.toBeInTheDocument()
+    expect(within(atlas).getByText('2')).toBeVisible()
+    expect(
+      within(screen.getByRole('article', { name: 'Borealis 发布' }))
+        .getByText('1'),
+    ).toBeVisible()
+  })
+
+  it('orders overdue and near-due projects before normal projects', async () => {
+    mockPortfolio()
+    vi.mocked(projectRepository.listProjects).mockResolvedValue([
+      projects[1]!,
+      {
+        ...projects[0]!,
+        id: 'normal',
+        name: 'Normal',
+        dueDate: '2026-09-01',
+      },
+      {
+        ...projects[0]!,
+        id: 'near',
+        name: 'Near',
+        dueDate: '2026-08-01',
+      },
+      projects[0]!,
+    ])
+    renderApp(<ProjectPage />)
+
+    expect(
+      (await screen.findAllByRole('article')).map(
+        (article) => article.getAttribute('aria-label'),
+      ),
+    ).toEqual(['Atlas 迁移', 'Near', 'Normal', 'Borealis 发布'])
+  })
+
+  it('shows the initial error when actors fail after projects load', async () => {
+    vi.spyOn(projectRepository, 'listProjects').mockResolvedValue(projects)
+    vi.spyOn(projectRepository, 'listActors').mockRejectedValue(
+      new Error('负责人服务不可用'),
+    )
+    vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue([])
+    renderApp(<ProjectPage />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '负责人服务不可用',
+    )
+    expect(screen.queryByRole('article')).not.toBeInTheDocument()
+  })
+
+  it('keeps stale cards visible when an actor refetch fails', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    vi.mocked(projectRepository.listActors)
+      .mockResolvedValueOnce(actors)
+      .mockRejectedValueOnce(new Error('负责人刷新失败'))
+    vi.spyOn(projectRepository, 'createProject').mockResolvedValue({
+      ...projects[0]!,
+      id: 'new-project',
+      code: 'PRJ-003',
+      name: '触发刷新',
+    })
+    renderApp(<ProjectPage />)
+    expect(await screen.findByRole('article', { name: 'Atlas 迁移' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: '新建项目' }))
+    const dialog = screen.getByRole('dialog', { name: '新建项目' })
+    await user.type(within(dialog).getByLabelText('项目名称'), '触发刷新')
+    await user.selectOptions(
+      within(dialog).getByLabelText('主要负责人'),
+      'owner-active',
+    )
+    await user.click(within(dialog).getByRole('button', { name: '创建项目' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('负责人刷新失败')
+    expect(screen.getByRole('article', { name: 'Atlas 迁移' })).toBeVisible()
   })
 
   it('hydrates owner and search filters from the URL and writes changes back', async () => {
@@ -137,7 +217,7 @@ describe('ProjectPage', () => {
 
     await user.type(within(dialog).getByLabelText('项目名称'), '新项目')
     await user.selectOptions(
-      within(dialog).getByLabelText('负责人'),
+      within(dialog).getByLabelText('主要负责人'),
       'owner-active',
     )
     await user.type(within(dialog).getByLabelText('项目描述'), '范围说明')
@@ -164,7 +244,7 @@ describe('ProjectPage', () => {
     const dialog = screen.getByRole('dialog', { name: '新建项目' })
     await user.type(within(dialog).getByLabelText('项目名称'), '保留项目')
     await user.selectOptions(
-      within(dialog).getByLabelText('负责人'),
+      within(dialog).getByLabelText('主要负责人'),
       'owner-active',
     )
     await user.type(within(dialog).getByLabelText('开始日期'), '2026-08-10')
@@ -181,5 +261,28 @@ describe('ProjectPage', () => {
     )
     expect(within(dialog).getByLabelText('项目名称')).toHaveValue('保留项目')
     expect(within(dialog).getByLabelText('开始日期')).toHaveValue('2026-08-10')
+  })
+
+  it('traps focus, closes on Escape, and restores focus to its opener', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    renderApp(<ProjectPage />)
+    const opener = await screen.findByRole('button', { name: '新建项目' })
+
+    await user.click(opener)
+    const dialog = screen.getByRole('dialog', { name: '新建项目' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+
+    const close = within(dialog).getByRole('button', { name: '关闭新建项目' })
+    const submit = within(dialog).getByRole('button', { name: '创建项目' })
+    close.focus()
+    await user.tab({ shift: true })
+    expect(submit).toHaveFocus()
+    await user.tab()
+    expect(close).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(opener).toHaveFocus()
   })
 })

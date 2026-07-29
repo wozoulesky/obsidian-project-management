@@ -161,6 +161,9 @@ describe('ActivitySync', () => {
       queryKey: projectQueryKeys.tasksFor('project-2'),
     })
     expect(invalidate).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.allTasks,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
       queryKey: projectQueryKeys.ganttFor('project-2'),
     })
     expect(invalidate).toHaveBeenCalledWith({

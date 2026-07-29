@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import type { Actor, Project, ProjectStatus } from '../../data/domain'
+import { projectRisk } from './project-risk'
 
 const statusLabels: Record<ProjectStatus, string> = {
   not_started: '未开始',
@@ -10,30 +11,14 @@ const statusLabels: Record<ProjectStatus, string> = {
   cancelled: '已取消',
 }
 
-function projectRisk(project: Project): string {
-  if (
-    project.dueDate === null
-    || project.status === 'completed'
-    || project.status === 'cancelled'
-  ) {
-    return project.dueDate === null ? '未排期' : '已结束'
-  }
-  const today = new Date().toISOString().slice(0, 10)
-  if (project.dueDate < today) return '已逾期'
-  const days = Math.ceil(
-    (Date.parse(`${project.dueDate}T00:00:00Z`)
-      - Date.parse(`${today}T00:00:00Z`))
-      / 86_400_000,
-  )
-  return days <= 7 ? '7 天内到期' : '排期正常'
-}
-
 export function ProjectCard({
   owner,
   project,
+  taskCount,
 }: {
   owner?: Actor
   project: Project
+  taskCount: number
 }) {
   const risk = projectRisk(project)
   return (
@@ -52,8 +37,12 @@ export function ProjectCard({
       ) : null}
       <dl className="project-card__facts">
         <div>
-          <dt>负责人</dt>
+          <dt>主要负责人</dt>
           <dd>{owner?.name ?? project.ownerId}</dd>
+        </div>
+        <div>
+          <dt>任务数</dt>
+          <dd>{taskCount}</dd>
         </div>
         <div>
           <dt>截止日期</dt>

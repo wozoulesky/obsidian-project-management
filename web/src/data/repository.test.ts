@@ -27,6 +27,15 @@ describe('mock project repository', () => {
     await expect(repository.listProjects()).resolves.toContainEqual(created)
   })
 
+  it('exposes global task records with their real project association', async () => {
+    const repository = createMockProjectRepository()
+
+    const allTasks = await repository.listAllTasks()
+
+    expect(allTasks).toHaveLength(tasks.length)
+    expect(allTasks.every((task) => task.projectId === 'atlas')).toBe(true)
+  })
+
   it('keeps dashboard metrics derived from coherent fixture collections', async () => {
     const repository = createMockProjectRepository()
 

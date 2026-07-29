@@ -1,4 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import {
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 
 import { Button } from '../../components/ui/Button'
 import type { Actor } from '../../data/domain'
@@ -27,6 +32,7 @@ export function CreateProjectDialog({
   activeActors: Actor[]
   onClose: () => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
   const createProject = useCreateProject()
   const [values, setValues] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -76,8 +82,39 @@ export function CreateProjectDialog({
     }
   }
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onClose()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const focusable = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])',
+      ) ?? [],
+    )
+    const first = focusable[0]
+    const last = focusable.at(-1)
+    if (!first || !last) return
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
-    <div aria-labelledby="create-project-title" className="project-dialog" role="dialog">
+    <div
+      aria-labelledby="create-project-title"
+      aria-modal="true"
+      className="project-dialog"
+      onKeyDown={handleKeyDown}
+      ref={dialogRef}
+      role="dialog"
+    >
       <form className="project-dialog__panel" onSubmit={submit}>
         <header>
           <h2 id="create-project-title">新建项目</h2>
@@ -97,9 +134,9 @@ export function CreateProjectDialog({
           {errors.name ? <span className="project-dialog__field-error">{errors.name}</span> : null}
         </label>
         <label>
-          负责人
+          主要负责人
           <select
-            aria-label="负责人"
+            aria-label="主要负责人"
             aria-invalid={Boolean(errors.ownerId)}
             onChange={(event) => setValue('ownerId', event.target.value)}
             value={values.ownerId}

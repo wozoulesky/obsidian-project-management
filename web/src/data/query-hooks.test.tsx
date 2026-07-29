@@ -23,6 +23,8 @@ function createHarness() {
     projectQueryKeys.dashboard(7),
     projectQueryKeys.requirements,
     projectQueryKeys.defects,
+    projectQueryKeys.allTasks,
+    projectQueryKeys.activities,
   ]
   for (const key of keys) {
     queryClient.setQueryData(key, { seeded: true })
@@ -56,6 +58,7 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.projects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.actors)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
   })
 
   it('invalidates all progress-dependent views', async () => {
@@ -73,6 +76,7 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
     expect(isInvalidated(projectQueryKeys.requirements)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
   })
 
   it('invalidates all scheduling-dependent views', async () => {
@@ -89,6 +93,7 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.tasks)).toBe(true)
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
   })
 
   it('invalidates requirements and dashboard after a status change', async () => {
