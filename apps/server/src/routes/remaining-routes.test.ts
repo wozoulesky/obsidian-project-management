@@ -358,41 +358,117 @@ describe('activity routes', () => {
 
     expect(items).toHaveLength(2)
     expect(items[0]!.createdAt >= items[1]!.createdAt).toBe(true)
-    expect(response.body.data.next_cursor).toBe(items.at(-1)!.id)
+    expect(response.body.data.next_cursor).toBe(items[0]!.id)
     expect(response.headers['cache-control']).toBe('no-store')
   })
 
-  it('polls only newer MCP activities in ascending order and retains cursor when empty', async () => {
+  it('advances a filtered initial cursor, then polls same-timestamp updates exactly once', async () => {
     const { api, context } = createApi()
     const owner = defaultSeedDocument.actors[0]!
     const project = defaultSeedDocument.projects[0]!
-    context.services.tasks.create({
+    const first = context.services.tasks.create({
       projectId: project.id,
-      title: 'MCP anchor',
+      title: 'MCP initial one',
       assigneeId: owner.id,
       startDate: '2026-07-29',
       dueDate: '2026-08-01',
       priority: 'P1',
     }, owner.id, 'mcp')
+    const second = context.services.tasks.create({
+      projectId: project.id,
+      title: 'MCP initial two',
+      assigneeId: owner.id,
+      startDate: '2026-07-29',
+      dueDate: '2026-08-01',
+      priority: 'P1',
+    }, owner.id, 'mcp')
+    const setActivityKey = (
+      entityId: string,
+      id: string,
+      createdAt: string,
+    ) => {
+      context.database.prepare(`
+        UPDATE activities
+        SET id = ?, created_at = ?
+        WHERE entity_id = ?
+      `).run(id, createdAt, entityId)
+    }
+    setActivityKey(
+      first.id,
+      'activity_poll_100',
+      '2026-07-29T10:00:00.000Z',
+    )
+    setActivityKey(
+      second.id,
+      'activity_poll_200',
+      '2026-07-29T10:00:00.000Z',
+    )
+    const unrelated = context.services.tasks.create({
+      projectId: project.id,
+      title: 'Web activity excluded by filter',
+      assigneeId: owner.id,
+      startDate: '2026-07-29',
+      dueDate: '2026-08-01',
+      priority: 'P1',
+    }, owner.id, 'web')
+    setActivityKey(
+      unrelated.id,
+      'activity_poll_900',
+      '2026-07-29T11:00:00.000Z',
+    )
+
     const initial = await api.get(
-      `/api/v1/activities?project_id=${project.id}&source=mcp&limit=1`,
+      `/api/v1/activities?project_id=${project.id}&source=mcp&limit=50`,
     ).expect(200)
-    const anchor = initial.body.data.items[0].id as string
-    const task = context.services.tasks.create({
+    expect(initial.body.data.items.map(
+      ({ id }: { id: string }) => id,
+    )).toEqual(['activity_poll_200', 'activity_poll_100'])
+    const anchor = initial.body.data.next_cursor as string
+    expect(anchor).toBe('activity_poll_200')
+
+    const immediate = await api.get(
+      `/api/v1/activities?after=${anchor}&project_id=${project.id}&source=mcp`,
+    ).expect(200)
+    expect(immediate.body.data).toEqual({
+      items: [],
+      next_cursor: anchor,
+    })
+
+    const newerOne = context.services.tasks.create({
       projectId: project.id,
-      title: 'MCP newer',
+      title: 'MCP newer one',
       assigneeId: owner.id,
       startDate: '2026-07-29',
       dueDate: '2026-08-01',
       priority: 'P1',
     }, owner.id, 'mcp')
+    const newerTwo = context.services.tasks.create({
+      projectId: project.id,
+      title: 'MCP newer two',
+      assigneeId: owner.id,
+      startDate: '2026-07-29',
+      dueDate: '2026-08-01',
+      priority: 'P1',
+    }, owner.id, 'mcp')
+    setActivityKey(
+      newerOne.id,
+      'activity_poll_300',
+      '2026-07-29T12:00:00.000Z',
+    )
+    setActivityKey(
+      newerTwo.id,
+      'activity_poll_400',
+      '2026-07-29T12:00:00.000Z',
+    )
+
     const polled = await api.get(
       `/api/v1/activities?after=${anchor}&project_id=${project.id}&source=mcp`,
     ).expect(200)
     expect(polled.body.data.items.map(
-      ({ entityId }: { entityId: string }) => entityId,
-    )).toEqual([task.id])
+      ({ id }: { id: string }) => id,
+    )).toEqual(['activity_poll_300', 'activity_poll_400'])
     const nextCursor = polled.body.data.next_cursor as string
+    expect(nextCursor).toBe('activity_poll_400')
     const empty = await api.get(
       `/api/v1/activities?after=${nextCursor}&project_id=${project.id}&source=mcp`,
     ).expect(200)

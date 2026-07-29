@@ -50,7 +50,9 @@ export const activityRoutes: AppRouteModule = {
       )
       sendSuccess(response, {
         items,
-        next_cursor: items.at(-1)?.id ?? query.after ?? null,
+        next_cursor: query.after === undefined
+          ? items[0]?.id ?? null
+          : items.at(-1)?.id ?? query.after,
       })
     })
   },
