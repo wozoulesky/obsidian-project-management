@@ -50,6 +50,7 @@ export type AppearanceContextValue = {
   appearance: Appearance
   setAppearance: (next: Appearance) => void
   save: () => Promise<void>
+  isDirty: boolean
   isSaving: boolean
   saveMessage: string
   saveError: string

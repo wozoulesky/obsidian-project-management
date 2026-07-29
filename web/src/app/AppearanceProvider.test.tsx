@@ -50,10 +50,17 @@ function Harness({
 }
 
 function Probe() {
-  const { appearance, setAppearance, save, saveError } = useAppearance()
+  const {
+    appearance,
+    isDirty,
+    setAppearance,
+    save,
+    saveError,
+  } = useAppearance()
   return (
     <>
       <output aria-label="当前外观">{JSON.stringify(appearance)}</output>
+      <output aria-label="草稿状态">{isDirty ? 'dirty' : 'clean'}</output>
       <button
         onClick={() => setAppearance({
           ...appearance,
@@ -164,6 +171,62 @@ describe('AppearanceProvider reconciliation', () => {
     expect(vi.mocked(repository.updateSettings).mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ accent: 'purple', version: 1 }),
     )
+    expect(vi.mocked(repository.updateSettings).mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ accent: 'purple', version: 2 }),
+    )
+  })
+
+  it('preserves edits made while an older save is in flight and saves them next', async () => {
+    let resolveFirstSave:
+      ((settings: PersistedAppSettings) => void) | undefined
+    const repository = createMockProjectRepository()
+    repository.getSettings = vi.fn().mockResolvedValue(remoteLight)
+    repository.updateSettings = vi.fn()
+      .mockImplementationOnce(() =>
+        new Promise<PersistedAppSettings>((resolve) => {
+          resolveFirstSave = resolve
+        }),
+      )
+      .mockImplementationOnce(async (input) => ({
+        ...input,
+        updatedAt: '2026-07-29T12:02:00.000Z',
+        version: 3,
+      }))
+    const user = userEvent.setup()
+    render(
+      <Harness repository={repository}>
+        <AppearanceSettings />
+        <Probe />
+      </Harness>,
+    )
+    await screen.findByText(/"blue"/)
+
+    await user.click(screen.getByRole('radio', { name: '深色' }))
+    await user.click(screen.getByRole('button', { name: '保存外观设置' }))
+    await waitFor(() => {
+      expect(repository.updateSettings).toHaveBeenCalledTimes(1)
+    })
+
+    await user.click(screen.getByRole('radio', { name: '紫色' }))
+    await act(async () => resolveFirstSave?.({
+      ...remoteLight,
+      theme: 'dark',
+      accent: 'blue',
+      updatedAt: '2026-07-29T12:01:00.000Z',
+      version: 2,
+    }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('radio', { name: '紫色' })).toBeChecked()
+      expect(document.documentElement).toHaveAttribute('data-accent', 'purple')
+      expect(screen.getByLabelText('草稿状态')).toHaveTextContent('dirty')
+    })
+
+    await user.click(screen.getByRole('button', { name: '保存外观设置' }))
+    await waitFor(() => {
+      expect(repository.updateSettings).toHaveBeenCalledTimes(2)
+      expect(screen.getByLabelText('草稿状态')).toHaveTextContent('clean')
+    })
     expect(vi.mocked(repository.updateSettings).mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({ accent: 'purple', version: 2 }),
     )

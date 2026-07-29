@@ -2,6 +2,7 @@ import {
   useEffect,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -32,6 +33,7 @@ function AppearanceProviderRoot({ children }: { children: ReactNode }) {
   })
   const [draft, setDraft] = useState<Appearance>(startupCache)
   const [isDirty, setIsDirty] = useState(false)
+  const draftRevision = useRef(0)
   const [saveMessage, setSaveMessage] = useState('')
   const [saveError, setSaveError] = useState('')
   const settings = useSettings()
@@ -61,6 +63,7 @@ function AppearanceProviderRoot({ children }: { children: ReactNode }) {
 
   function setAppearance(next: Appearance) {
     const parsed = appearanceSchema.parse(next)
+    draftRevision.current += 1
     applyAppearance(parsed)
     localStorage.setItem(appearanceStorageKey, JSON.stringify(parsed))
     setDraft(parsed)
@@ -77,6 +80,7 @@ function AppearanceProviderRoot({ children }: { children: ReactNode }) {
       setSaveError('无法读取当前设置版本，请稍后重试。')
       return
     }
+    const submittedRevision = draftRevision.current
     try {
       const saved = await update.mutateAsync({ ...appearance, version })
       const savedAppearance = appearanceSchema.parse({
@@ -85,14 +89,16 @@ function AppearanceProviderRoot({ children }: { children: ReactNode }) {
         accent: saved.accent,
         density: saved.density,
       })
-      applyAppearance(savedAppearance)
-      localStorage.setItem(
-        appearanceStorageKey,
-        JSON.stringify(savedAppearance),
-      )
-      setDraft(savedAppearance)
-      setIsDirty(false)
-      setSaveMessage('外观设置已保存。')
+      if (draftRevision.current === submittedRevision) {
+        applyAppearance(savedAppearance)
+        localStorage.setItem(
+          appearanceStorageKey,
+          JSON.stringify(savedAppearance),
+        )
+        setDraft(savedAppearance)
+        setIsDirty(false)
+        setSaveMessage('外观设置已保存。')
+      }
     } catch (error) {
       if (
         error instanceof ApiError
@@ -116,6 +122,7 @@ function AppearanceProviderRoot({ children }: { children: ReactNode }) {
       appearance,
       setAppearance,
       save,
+      isDirty,
       isSaving: update.isPending,
       saveMessage,
       saveError,
