@@ -147,10 +147,15 @@ describe('SettingsPage', () => {
     expect(screen.queryByText(token!)).not.toBeInTheDocument()
   })
 
-  it('copies client snippets and reports the future Skill route cleanly', async () => {
+  it('loads and copies server-generated stdio client snippets', async () => {
     const user = userEvent.setup()
     const writeText = vi.spyOn(navigator.clipboard, 'writeText')
       .mockResolvedValue()
+    projectRepository.getSkillConfigSnippet = vi.fn(async (client) => ({
+      client,
+      transport: 'stdio' as const,
+      snippet: `${client}: server-generated stdio configuration`,
+    }))
     renderApp(<SettingsPage />)
 
     const skillSection = (await screen.findByRole('heading', {
@@ -159,18 +164,50 @@ describe('SettingsPage', () => {
     if (!skillSection) throw new Error('Expected Skill settings section')
     expect(screen.getByText('http://127.0.0.1:4310/mcp')).toBeVisible()
     expect(screen.queryByText(/5173\/mcp/)).not.toBeInTheDocument()
+    await within(skillSection).findByText(
+      'codex: server-generated stdio configuration',
+    )
 
     await user.click(within(skillSection).getByRole('button', {
       name: '复制 Codex 配置',
     }))
     expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining('[mcp_servers.project-os]'),
+      'codex: server-generated stdio configuration',
     )
+    expect(projectRepository.getSkillConfigSnippet).toHaveBeenCalledTimes(3)
+  })
 
+  it('downloads the real Skill archive and revokes its object URL', async () => {
+    const user = userEvent.setup()
+    const archive = new Blob(['zip'], { type: 'application/zip' })
+    projectRepository.downloadSkill = vi.fn().mockResolvedValue(archive)
+    projectRepository.getSkillConfigSnippet = vi.fn(async (client) => ({
+      client,
+      transport: 'stdio' as const,
+      snippet: `${client} config`,
+    }))
+    const createObjectURL = vi.fn().mockReturnValue('blob:project-os-skill')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', Object.assign(URL, {
+      createObjectURL,
+      revokeObjectURL,
+    }))
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    renderApp(<SettingsPage />)
+
+    const skillSection = (await screen.findByRole('heading', {
+      name: 'Agent Skills',
+    })).closest('section')
+    if (!skillSection) throw new Error('Expected Skill settings section')
     await user.click(within(skillSection).getByRole('button', {
       name: '下载 Project OS Skill',
     }))
-    expect(await within(skillSection).findByRole('alert'))
-      .toHaveTextContent('尚未安装')
+
+    expect(await within(skillSection).findByRole('status'))
+      .toHaveTextContent('下载已开始')
+    expect(createObjectURL).toHaveBeenCalledWith(archive)
+    expect(anchorClick).toHaveBeenCalledOnce()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:project-os-skill')
   })
 })

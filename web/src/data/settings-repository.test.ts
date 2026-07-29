@@ -162,4 +162,43 @@ describe('settings repository', () => {
     expect(importInit.body).toBeInstanceOf(FormData)
     expect(new Headers(importInit.headers).has('Content-Type')).toBe(false)
   })
+
+  it('loads validated stdio Skill snippets from client-specific routes', async () => {
+    const snippets = [
+      {
+        client: 'codex',
+        transport: 'stdio',
+        snippet: '[mcp_servers.project-os]',
+      },
+      {
+        client: 'claude-code',
+        transport: 'stdio',
+        snippet: 'claude mcp add --transport stdio',
+      },
+      {
+        client: 'kimi-code',
+        transport: 'stdio',
+        snippet: '{"mcpServers":{}}',
+      },
+    ]
+    const fetchMock = vi.fn()
+    for (const snippet of snippets) {
+      fetchMock.mockResolvedValueOnce(jsonResponse(success(snippet)))
+    }
+    vi.stubGlobal('fetch', fetchMock)
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.getSkillConfigSnippet('codex'))
+      .resolves.toEqual(snippets[0])
+    await expect(repository.getSkillConfigSnippet('claude-code'))
+      .resolves.toEqual(snippets[1])
+    await expect(repository.getSkillConfigSnippet('kimi-code'))
+      .resolves.toEqual(snippets[2])
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/skills/project-os/config-snippets/codex',
+      '/api/skills/project-os/config-snippets/claude-code',
+      '/api/skills/project-os/config-snippets/kimi-code',
+    ])
+  })
 })

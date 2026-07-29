@@ -516,7 +516,39 @@ export function createMockProjectRepository(): ProjectRepository {
       }
     },
     async downloadSkill() {
-      throw new Error('Agent Skill 尚未安装：服务端下载路由将在 Task 04.5 提供。')
+      return new Blob(['project-os-skill'], { type: 'application/zip' })
+    },
+    async getSkillConfigSnippet(client) {
+      const root = 'E:/project_manage'
+      const entry = `${root}/apps/mcp/dist/stdio.js`
+      const database = `${root}/data/project_manage.db`
+      const snippets = {
+        codex: [
+          '[mcp_servers.project-os]',
+          'command = "node"',
+          `args = ["${entry}"]`,
+          `env = { PROJECT_OS_DB = "${database}" }`,
+        ].join('\n'),
+        'claude-code': [
+          'claude mcp add --transport stdio',
+          `--env PROJECT_OS_DB=${database}`,
+          `project-os -- node ${entry}`,
+        ].join(' '),
+        'kimi-code': JSON.stringify({
+          mcpServers: {
+            'project-os': {
+              command: 'node',
+              args: [entry],
+              env: { PROJECT_OS_DB: database },
+            },
+          },
+        }, null, 2),
+      }
+      return {
+        client,
+        transport: 'stdio',
+        snippet: snippets[client],
+      }
     },
   }
 }

@@ -132,6 +132,14 @@ export type ImportCounts = {
   }
 }
 
+export type SkillConfigClient = 'codex' | 'claude-code' | 'kimi-code'
+
+export type SkillConfigSnippet = {
+  client: SkillConfigClient
+  transport: 'stdio'
+  snippet: string
+}
+
 export interface ProjectRepository {
   listActors(): Promise<Actor[]>
   createHuman(input: CreateHumanActorInput): Promise<Actor>
@@ -173,4 +181,7 @@ export interface ProjectRepository {
   exportData(): Promise<unknown>
   importData(file: File): Promise<ImportCounts>
   downloadSkill(): Promise<Blob>
+  getSkillConfigSnippet(
+    client: SkillConfigClient,
+  ): Promise<SkillConfigSnippet>
 }

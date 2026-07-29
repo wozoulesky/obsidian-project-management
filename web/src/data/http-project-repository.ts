@@ -21,6 +21,7 @@ import type {
   ActivityListInput,
   ActivityPage,
   ProjectRepository,
+  SkillConfigClient,
 } from './project-repository'
 import {
   createHumanActorInputSchema,
@@ -63,6 +64,16 @@ const importCountsSchema = z.object({
     requirements: z.number().int().nonnegative(),
     defects: z.number().int().nonnegative(),
   }).strict(),
+}).strict()
+const skillConfigClientSchema = z.enum([
+  'codex',
+  'claude-code',
+  'kimi-code',
+])
+const skillConfigSnippetSchema = z.object({
+  client: skillConfigClientSchema,
+  transport: z.literal('stdio'),
+  snippet: z.string().min(1),
 }).strict()
 const settingsUpdateSchema = z.object({
   theme: themeSchema,
@@ -381,6 +392,15 @@ export function createHttpProjectRepository(
     },
     downloadSkill() {
       return client.download('/skills/project-os.zip')
+    },
+    getSkillConfigSnippet(configClient: SkillConfigClient) {
+      const selected = skillConfigClientSchema.parse(configClient)
+      return client.request(
+        `/skills/project-os/config-snippets/${
+          encodeURIComponent(selected)
+        }`,
+        skillConfigSnippetSchema,
+      )
     },
   }
 }

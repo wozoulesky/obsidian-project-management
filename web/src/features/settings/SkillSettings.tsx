@@ -1,18 +1,78 @@
-import { useState } from 'react'
+import {
+  useEffect,
+  useState,
+} from 'react'
 
 import { useProjectRepository } from '../../data/query-hooks'
-import { mcpClientSnippets as snippets } from './mcp-client-config'
+import type {
+  SkillConfigClient,
+  SkillConfigSnippet,
+} from '../../data/project-repository'
+
+const clients = [
+  'codex',
+  'claude-code',
+  'kimi-code',
+] as const satisfies readonly SkillConfigClient[]
+
+const clientLabels: Record<SkillConfigClient, string> = {
+  codex: 'Codex',
+  'claude-code': 'Claude Code',
+  'kimi-code': 'Kimi Code',
+}
 
 export function SkillSettings() {
   const { repository } = useProjectRepository()
+  const [snippets, setSnippets] = useState<
+    Partial<Record<SkillConfigClient, SkillConfigSnippet>>
+  >({})
+  const [snippetError, setSnippetError] = useState('')
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
 
-  async function copy(client: keyof typeof snippets) {
+  useEffect(() => {
+    let active = true
+    void Promise.allSettled(
+      clients.map((client) => repository.getSkillConfigSnippet(client)),
+    ).then((results) => {
+      if (!active) return
+      const loaded: Partial<
+        Record<SkillConfigClient, SkillConfigSnippet>
+      > = {}
+      const failures: string[] = []
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          loaded[result.value.client] = result.value
+        } else {
+          failures.push(
+            result.reason instanceof Error
+              ? result.reason.message
+              : '配置读取失败',
+          )
+        }
+      }
+      setSnippets(loaded)
+      setSnippetError(
+        failures.length === 0
+          ? ''
+          : `部分客户端配置读取失败：${failures[0]}`,
+      )
+    })
+    return () => {
+      active = false
+    }
+  }, [repository])
+
+  async function copy(client: SkillConfigClient) {
     setError('')
+    const snippet = snippets[client]?.snippet
+    if (snippet === undefined) {
+      setError(`${clientLabels[client]} 配置尚未加载。`)
+      return
+    }
     try {
-      await navigator.clipboard.writeText(snippets[client])
-      setStatus(`${client} 配置已复制。`)
+      await navigator.clipboard.writeText(snippet)
+      setStatus(`${clientLabels[client]} 配置已复制。`)
     } catch {
       setError('无法访问剪贴板，请手动复制配置。')
     }
@@ -31,11 +91,10 @@ export function SkillSettings() {
       URL.revokeObjectURL(url)
       setStatus('Agent Skill 下载已开始。')
     } catch (caught) {
-      const detail = caught instanceof Error ? caught.message : ''
       setError(
-        detail.includes('尚未安装')
-          ? detail
-          : 'Agent Skill 尚未安装；服务端下载能力将在 Task 04.5 提供。',
+        caught instanceof Error
+          ? caught.message
+          : 'Agent Skill 下载失败，请稍后重试。',
       )
     }
   }
@@ -47,19 +106,22 @@ export function SkillSettings() {
     >
       <header>
         <h2 id="skill-settings-title">Agent Skills</h2>
-        <p>复制客户端连接片段，或在服务端能力安装后下载完整 Skill ZIP。</p>
+        <p>复制本机 stdio 连接片段，或下载可安装的完整 Skill ZIP。</p>
       </header>
       <div className="settings-snippets">
-        {(Object.keys(snippets) as (keyof typeof snippets)[]).map((client) => (
+        {clients.map((client) => (
           <article key={client}>
-            <h3>{client}</h3>
-            <pre><code>{snippets[client]}</code></pre>
+            <h3>{clientLabels[client]}</h3>
+            <pre><code>
+              {snippets[client]?.snippet ?? '正在读取服务端配置…'}
+            </code></pre>
             <button
               className="button button--secondary"
+              disabled={snippets[client] === undefined}
               onClick={() => void copy(client)}
               type="button"
             >
-              复制 {client} 配置
+              复制 {clientLabels[client]} 配置
             </button>
           </article>
         ))}
@@ -73,6 +135,7 @@ export function SkillSettings() {
           下载 Project OS Skill
         </button>
         {status && <p role="status">{status}</p>}
+        {snippetError && <p role="alert">{snippetError}</p>}
         {error && <p role="alert">{error}</p>}
       </div>
     </section>
