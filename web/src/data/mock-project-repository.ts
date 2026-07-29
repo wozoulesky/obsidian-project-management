@@ -1,6 +1,8 @@
 import type {
   ActivityEvent,
+  CreateProjectInput,
   DashboardSnapshot,
+  Project,
   Requirement,
   RequirementStatus,
   Task,
@@ -34,6 +36,20 @@ export function createMockProjectRepository(): ProjectRepository {
   const requirementState = seed.requirements
   const defectState = seed.defects
   const activityState = seed.activities
+  const projectState: Project[] = [{
+    id: 'atlas',
+    code: 'ATLAS',
+    name: 'Atlas',
+    description: '',
+    ownerId: seed.actors.lin?.id ?? Object.values(seed.actors)[0]!.id,
+    startDate: '2026-07-01',
+    dueDate: '2026-08-31',
+    status: 'in_progress',
+    progress: 62,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-28T04:00:00.000Z',
+    version: 1,
+  }]
   const settingsState = {
     theme: 'system' as const,
     background: 'soft' as const,
@@ -71,20 +87,24 @@ export function createMockProjectRepository(): ProjectRepository {
     },
 
     async listProjects() {
-      return clone([{
-        id: 'atlas',
-        code: 'ATLAS',
-        name: 'Atlas',
-        description: '',
-        ownerId: seed.actors.lin?.id ?? Object.values(seed.actors)[0]!.id,
-        startDate: '2026-07-01',
-        dueDate: '2026-08-31',
-        status: 'in_progress' as const,
-        progress: 62,
-        createdAt: '2026-07-01T00:00:00.000Z',
-        updatedAt: '2026-07-28T04:00:00.000Z',
+      return clone(projectState)
+    },
+
+    async createProject(input: CreateProjectInput) {
+      const now = new Date().toISOString()
+      const sequence = projectState.length + 1
+      const project: Project = {
+        ...clone(input),
+        id: `project-${sequence}`,
+        code: `PRJ-${String(sequence).padStart(3, '0')}`,
+        status: 'not_started',
+        progress: 0,
+        createdAt: now,
+        updatedAt: now,
         version: 1,
-      }])
+      }
+      projectState.push(project)
+      return clone(project)
     },
 
     async getDashboard(projectId, days = 30): Promise<DashboardSnapshot> {

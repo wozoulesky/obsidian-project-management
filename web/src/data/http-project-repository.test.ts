@@ -133,6 +133,49 @@ describe('ApiClient', () => {
 })
 
 describe('HTTP project repository', () => {
+  it('creates a project through the strict project endpoint contract', async () => {
+    const project = {
+      id: 'project-1',
+      code: 'PRJ-001',
+      name: 'Atlas',
+      description: '',
+      ownerId: 'actor-1',
+      startDate: null,
+      dueDate: null,
+      status: 'not_started',
+      progress: 0,
+      createdAt: '2026-07-29T00:00:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+      version: 1,
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(success(project), 201),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+    await expect(repository.createProject({
+      name: 'Atlas',
+      description: '',
+      ownerId: 'actor-1',
+      startDate: null,
+      dueDate: null,
+    })).resolves.toEqual(project)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/projects')
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
+    expect(JSON.parse(String(
+      (fetchMock.mock.calls[0]?.[1] as RequestInit).body,
+    ))).toEqual({
+      name: 'Atlas',
+      description: '',
+      ownerId: 'actor-1',
+      startDate: null,
+      dueDate: null,
+    })
+  })
+
   it('follows cursor pages and URL-encodes a project-scoped task list', async () => {
     const fetchMock = vi
       .fn()

@@ -12,6 +12,7 @@ import {
 } from 'react'
 
 import type {
+  CreateProjectInput,
   RequirementStatus,
   TaskDateInput,
   TaskProgressInput,
@@ -112,6 +113,11 @@ const createTaskQueryOptions = (
       })
 
 export const mutationInvalidationKeys = {
+  projectCreate: [
+    projectQueryKeys.projects,
+    projectQueryKeys.actors,
+    ['dashboard'],
+  ],
   taskProgress: [
     projectQueryKeys.tasks,
     projectQueryKeys.gantt,
@@ -149,6 +155,38 @@ export function useDashboard(days: 7 | 30 | 90 = 30) {
   return useQuery({
     queryKey: projectQueryKeys.dashboardFor(context.projectId, days),
     queryFn: () => context.repository.getDashboard(context.projectId, days),
+  })
+}
+
+export function useProjects() {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.projects,
+    queryFn: () => context.repository.listProjects(),
+  })
+}
+
+export function useActors() {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.actors,
+    queryFn: () => context.repository.listActors(),
+  })
+}
+
+export function useCreateProject() {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: (input: CreateProjectInput) =>
+      context.repository.createProject(input),
+    onSuccess: async () => {
+      await invalidateKeys(queryClient, [
+        projectQueryKeys.projects,
+        projectQueryKeys.actors,
+        ['dashboard'],
+      ])
+    },
   })
 }
 

@@ -2,6 +2,7 @@ import type {
   ActivityEvent,
   Actor,
   AppSettings,
+  CreateProjectInput,
   DashboardSnapshot,
   Defect,
   Project,
@@ -25,6 +26,7 @@ export type ActivityPage = {
 export interface ProjectRepository {
   listActors(): Promise<Actor[]>
   listProjects(): Promise<Project[]>
+  createProject(input: CreateProjectInput): Promise<Project>
   getDashboard(
     projectId: string,
     days?: 7 | 30 | 90,

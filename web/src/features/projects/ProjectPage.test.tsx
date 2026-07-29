@@ -1,0 +1,185 @@
+import { cleanup, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { renderApp } from '../../app/test-utils'
+import type { Actor, Project } from '../../data/domain'
+import { projectRepository } from '../../data/query-hooks'
+import { ProjectPage } from './ProjectPage'
+
+const actors: Actor[] = [
+  {
+    id: 'owner-active',
+    name: 'Lin',
+    kind: 'human',
+    role: 'owner',
+    status: 'active',
+    client: null,
+    capabilities: [],
+    registeredAt: '2026-07-01T00:00:00.000Z',
+    lastActiveAt: null,
+    version: 1,
+  },
+  {
+    id: 'owner-inactive',
+    name: 'Maya',
+    kind: 'human',
+    role: 'owner',
+    status: 'inactive',
+    client: null,
+    capabilities: [],
+    registeredAt: '2026-07-01T00:00:00.000Z',
+    lastActiveAt: null,
+    version: 1,
+  },
+]
+
+const projects: Project[] = [
+  {
+    id: 'atlas',
+    code: 'PRJ-001',
+    name: 'Atlas 迁移',
+    description: '核心服务迁移',
+    ownerId: 'owner-active',
+    startDate: '2026-07-01',
+    dueDate: '2026-07-28',
+    status: 'in_progress',
+    progress: 62,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-28T04:00:00.000Z',
+    version: 1,
+  },
+  {
+    id: 'borealis',
+    code: 'PRJ-002',
+    name: 'Borealis 发布',
+    description: '',
+    ownerId: 'owner-inactive',
+    startDate: null,
+    dueDate: null,
+    status: 'not_started',
+    progress: 0,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-28T04:00:00.000Z',
+    version: 1,
+  },
+]
+
+afterEach(cleanup)
+
+function mockPortfolio() {
+  vi.spyOn(projectRepository, 'listActors').mockResolvedValue(actors)
+  vi.spyOn(projectRepository, 'listProjects').mockResolvedValue(projects)
+}
+
+describe('ProjectPage', () => {
+  it('renders actual portfolio fields and never invents task counts', async () => {
+    mockPortfolio()
+    renderApp(<ProjectPage />)
+
+    expect(screen.getByRole('heading', { name: '全部项目' })).toBeVisible()
+    const atlas = await screen.findByRole('article', { name: 'Atlas 迁移' })
+    expect(within(atlas).getByText('PRJ-001')).toBeVisible()
+    expect(within(atlas).getByText('Lin')).toBeVisible()
+    expect(within(atlas).getByText('进行中')).toBeVisible()
+    expect(within(atlas).getByText('62%')).toBeVisible()
+    expect(within(atlas).getByText('已逾期')).toBeVisible()
+    expect(within(atlas).getByRole('link')).toHaveAttribute(
+      'href',
+      '/projects/atlas',
+    )
+    expect(screen.queryByText(/任务/)).not.toBeInTheDocument()
+  })
+
+  it('hydrates owner and search filters from the URL and writes changes back', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    renderApp(<ProjectPage />, {
+      route: '/projects?owner=owner-active&q=Atlas',
+    })
+
+    expect(await screen.findByRole('article', { name: 'Atlas 迁移' })).toBeVisible()
+    expect(
+      screen.queryByRole('article', { name: 'Borealis 发布' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lin' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await user.clear(screen.getByRole('searchbox', { name: '搜索项目' }))
+    await user.click(screen.getByRole('button', { name: '全部负责人' }))
+
+    expect(window.location.search).toBe('')
+    expect(await screen.findByRole('article', { name: 'Borealis 发布' })).toBeVisible()
+  })
+
+  it('validates and creates a project with nullable dates', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    const createProject = vi.spyOn(projectRepository, 'createProject')
+      .mockResolvedValue({
+        ...projects[0]!,
+        id: 'new-project',
+        code: 'PRJ-003',
+        name: '新项目',
+        description: '范围说明',
+        startDate: null,
+        dueDate: null,
+      })
+    renderApp(<ProjectPage />)
+
+    await user.click(await screen.findByRole('button', { name: '新建项目' }))
+    const dialog = screen.getByRole('dialog', { name: '新建项目' })
+    await user.click(within(dialog).getByRole('button', { name: '创建项目' }))
+    expect(within(dialog).getByText('请输入项目名称')).toBeVisible()
+    expect(within(dialog).getByText('请选择有效负责人')).toBeVisible()
+
+    await user.type(within(dialog).getByLabelText('项目名称'), '新项目')
+    await user.selectOptions(
+      within(dialog).getByLabelText('负责人'),
+      'owner-active',
+    )
+    await user.type(within(dialog).getByLabelText('项目描述'), '范围说明')
+    await user.click(within(dialog).getByRole('button', { name: '创建项目' }))
+
+    expect(createProject).toHaveBeenCalledWith({
+      name: '新项目',
+      ownerId: 'owner-active',
+      description: '范围说明',
+      startDate: null,
+      dueDate: null,
+    })
+  })
+
+  it('keeps entered values and reports repository failures', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    vi.spyOn(projectRepository, 'createProject').mockRejectedValue(
+      new Error('项目服务不可用'),
+    )
+    renderApp(<ProjectPage />)
+
+    await user.click(await screen.findByRole('button', { name: '新建项目' }))
+    const dialog = screen.getByRole('dialog', { name: '新建项目' })
+    await user.type(within(dialog).getByLabelText('项目名称'), '保留项目')
+    await user.selectOptions(
+      within(dialog).getByLabelText('负责人'),
+      'owner-active',
+    )
+    await user.type(within(dialog).getByLabelText('开始日期'), '2026-08-10')
+    await user.type(within(dialog).getByLabelText('截止日期'), '2026-08-01')
+    await user.click(within(dialog).getByRole('button', { name: '创建项目' }))
+    expect(within(dialog).getByText('开始日期不能晚于截止日期')).toBeVisible()
+
+    await user.clear(within(dialog).getByLabelText('截止日期'))
+    await user.type(within(dialog).getByLabelText('截止日期'), '2026-08-20')
+    await user.click(within(dialog).getByRole('button', { name: '创建项目' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      '项目服务不可用',
+    )
+    expect(within(dialog).getByLabelText('项目名称')).toHaveValue('保留项目')
+    expect(within(dialog).getByLabelText('开始日期')).toHaveValue('2026-08-10')
+  })
+})

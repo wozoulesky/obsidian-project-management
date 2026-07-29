@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   projectQueryKeys,
   projectRepository,
+  useCreateProject,
   useCreateTaskFromDefect,
   useUpdateRequirementStatus,
   useUpdateTaskDates,
@@ -36,6 +37,27 @@ function createHarness() {
 }
 
 describe('repository query invalidation', () => {
+  it('invalidates projects, actors, and every dashboard after creation', async () => {
+    const { queryClient, wrapper, isInvalidated } = createHarness()
+    queryClient.setQueryData(projectQueryKeys.projects, { seeded: true })
+    queryClient.setQueryData(projectQueryKeys.actors, { seeded: true })
+    const { result } = renderHook(() => useCreateProject(), { wrapper })
+
+    await act(() =>
+      result.current.mutateAsync({
+        name: 'Atlas',
+        description: '',
+        ownerId: 'human-lin',
+        startDate: null,
+        dueDate: null,
+      }),
+    )
+
+    expect(isInvalidated(projectQueryKeys.projects)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.actors)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+  })
+
   it('invalidates all progress-dependent views', async () => {
     const { wrapper, isInvalidated } = createHarness()
     const { result } = renderHook(() => useUpdateTaskProgress(), { wrapper })

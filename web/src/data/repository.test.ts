@@ -4,6 +4,29 @@ import { actors, defects, requirements, tasks } from './fixtures'
 import { createMockProjectRepository } from './mock-project-repository'
 
 describe('mock project repository', () => {
+  it('creates and lists a project with the shared nullable-date contract', async () => {
+    const repository = createMockProjectRepository()
+
+    const created = await repository.createProject({
+      name: 'Borealis',
+      description: '发布准备',
+      ownerId: actors.lin.id,
+      startDate: null,
+      dueDate: null,
+    })
+
+    expect(created).toMatchObject({
+      code: 'PRJ-002',
+      name: 'Borealis',
+      ownerId: actors.lin.id,
+      startDate: null,
+      dueDate: null,
+      status: 'not_started',
+      progress: 0,
+    })
+    await expect(repository.listProjects()).resolves.toContainEqual(created)
+  })
+
   it('keeps dashboard metrics derived from coherent fixture collections', async () => {
     const repository = createMockProjectRepository()
 

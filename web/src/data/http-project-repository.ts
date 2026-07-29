@@ -1,4 +1,5 @@
 import {
+  createProjectInputSchema,
   dashboardSnapshotSchema,
   persistedActivitySchema,
   persistedActorSchema,
@@ -96,6 +97,13 @@ export function createHttpProjectRepository(
     listActors: () => allPages(client, '/actors', persistedActorSchema),
     listProjects: () =>
       allPages(client, '/projects', persistedProjectSchema),
+    createProject(input) {
+      const body = createProjectInputSchema.strict().parse(input)
+      return client.request('/projects', persistedProjectSchema, {
+        method: 'POST',
+        ...jsonBody(body),
+      })
+    },
 
     getDashboard(projectId, days = 30) {
       return client.request(
