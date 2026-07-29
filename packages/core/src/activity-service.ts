@@ -44,7 +44,7 @@ export type ActivityListFilter = {
   limit?: number
 }
 
-export type ActivityInsert = {
+type ActivityInsert = {
   actorId: string
   projectId?: string | null
   source: ActivitySource
@@ -203,45 +203,52 @@ export class ActivityService {
     return rows.map(mapActivity)
   }
 
-  /** Records an activity inside the caller's domain transaction. */
-  record(input: ActivityInsert): PersistedActivity {
-    const source = activitySourceSchema.parse(input.source)
-    const id = generateActivityId()
-    const createdAt = input.createdAt ?? new Date().toISOString()
+}
 
-    this.database.prepare(`
-      INSERT INTO activities (
-        id,
-        actor_id,
-        project_id,
-        source,
-        operation,
-        entity_type,
-        entity_id,
-        action,
-        note,
-        details_json,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+/**
+ * Internal write primitive for domain services. The package export map exposes
+ * only `src/index.ts`, which intentionally does not re-export this function.
+ */
+export function recordActivity(
+  database: DatabaseSync,
+  input: ActivityInsert,
+): PersistedActivity {
+  const source = activitySourceSchema.parse(input.source)
+  const id = generateActivityId()
+  const createdAt = input.createdAt ?? new Date().toISOString()
+
+  database.prepare(`
+    INSERT INTO activities (
       id,
-      input.actorId,
-      input.projectId ?? null,
+      actor_id,
+      project_id,
       source,
-      input.operation,
-      input.entityType,
-      input.entityId,
-      input.action,
-      input.note ?? null,
-      JSON.stringify(input.details ?? {}),
-      createdAt,
-    )
+      operation,
+      entity_type,
+      entity_id,
+      action,
+      note,
+      details_json,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    input.actorId,
+    input.projectId ?? null,
+    source,
+    input.operation,
+    input.entityType,
+    input.entityId,
+    input.action,
+    input.note ?? null,
+    JSON.stringify(input.details ?? {}),
+    createdAt,
+  )
 
-    const row = this.database.prepare(`
-      ${activitySelect}
-      WHERE activities.id = ?
-    `).get(id) as unknown as ActivityRow
+  const row = database.prepare(`
+    ${activitySelect}
+    WHERE activities.id = ?
+  `).get(id) as unknown as ActivityRow
 
-    return mapActivity(row)
-  }
+  return mapActivity(row)
 }

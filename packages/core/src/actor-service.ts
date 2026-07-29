@@ -18,7 +18,7 @@ import type {
   PersistedActor,
 } from '@project-os/contracts'
 import {
-  ActivityService,
+  recordActivity,
   withImmediateTransaction,
 } from './activity-service.js'
 import { DomainError } from './errors.js'
@@ -114,7 +114,6 @@ export class ActorService {
 
   constructor(
     private readonly database: DatabaseSync,
-    private readonly activities = new ActivityService(database),
   ) {
     this.selectById = database.prepare(`
       SELECT
@@ -173,7 +172,7 @@ export class ActorService {
         timestamp,
       )
 
-      this.activities.record({
+      recordActivity(this.database, {
         actorId: actorId ?? id,
         source: validatedSource,
         operation: 'actor.create',
@@ -249,7 +248,7 @@ export class ActorService {
         timestamp,
       )
 
-      this.activities.record({
+      recordActivity(this.database, {
         actorId: actorId ?? id,
         source: validatedSource,
         operation: 'actor.register',
@@ -391,7 +390,7 @@ export class ActorService {
         input.version,
       )
 
-      this.activities.record({
+      recordActivity(this.database, {
         actorId,
         source: validatedSource,
         operation: 'actor.update',
@@ -423,7 +422,7 @@ export class ActorService {
         WHERE id = ?
       `).run(id)
 
-      this.activities.record({
+      recordActivity(this.database, {
         actorId,
         source: validatedSource,
         operation: 'actor.deactivate',
@@ -456,7 +455,7 @@ export class ActorService {
         WHERE id = ?
       `).run(timestamp, id)
 
-      this.activities.record({
+      recordActivity(this.database, {
         actorId,
         source: validatedSource,
         operation: 'actor.update',

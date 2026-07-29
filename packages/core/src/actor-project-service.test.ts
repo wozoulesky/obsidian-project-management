@@ -1,5 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+// @ts-expect-error Activity writes are not part of the package API.
+import type { ActivityInsert } from './index.js'
+import type { ActivityService as PublicActivityService } from './index.js'
+import * as publicApi from './index.js'
 import { ActivityService } from './activity-service.js'
 import { ActorService } from './actor-service.js'
 import { createTestDatabase } from './database.js'
@@ -14,12 +18,25 @@ describe('actor and project services', () => {
   beforeEach(() => {
     database = createTestDatabase()
     activities = new ActivityService(database)
-    actors = new ActorService(database, activities)
-    projects = new ProjectService(database, activities)
+    actors = new ActorService(database)
+    projects = new ProjectService(database)
   })
 
   afterEach(() => {
     database.close()
+  })
+
+  it('exposes activity reads but keeps activity writes internal', () => {
+    const reader: PublicActivityService = new publicApi.ActivityService(database)
+
+    expect(reader.list).toBeTypeOf('function')
+    expect('record' in reader).toBe(false)
+    expect('recordActivity' in publicApi).toBe(false)
+
+    if (false) {
+      // @ts-expect-error ActivityService is a read-only public service.
+      reader.record({} as ActivityInsert)
+    }
   })
 
   it('returns the existing agent for duplicate client and name', () => {

@@ -18,7 +18,7 @@ import type {
   ProjectStatus,
 } from '@project-os/contracts'
 import {
-  ActivityService,
+  recordActivity,
   withImmediateTransaction,
 } from './activity-service.js'
 import { DomainError } from './errors.js'
@@ -126,7 +126,6 @@ export class ProjectService {
 
   constructor(
     private readonly database: DatabaseSync,
-    private readonly activities = new ActivityService(database),
   ) {
     this.selectById = database.prepare(`
       SELECT
@@ -215,7 +214,7 @@ export class ProjectService {
         ) VALUES (?, ?, 'owner', ?)
       `).run(id, validated.ownerId, timestamp)
 
-      this.activities.record({
+      recordActivity(this.database, {
         actorId,
         projectId: id,
         source: validatedSource,
@@ -352,7 +351,7 @@ export class ProjectService {
         `).run(id, next.ownerId, next.updatedAt)
       }
 
-      this.activities.record({
+      recordActivity(this.database, {
         actorId,
         projectId: id,
         source: validatedSource,
@@ -399,7 +398,7 @@ export class ProjectService {
         ) VALUES (?, ?, 'member', ?)
       `).run(projectId, memberId, timestamp)
 
-      this.activities.record({
+      recordActivity(this.database, {
         actorId,
         projectId,
         source: validatedSource,

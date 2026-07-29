@@ -2,10 +2,7 @@ export {
   ActivityService,
   withImmediateTransaction,
 } from './activity-service.js'
-export type {
-  ActivityInsert,
-  ActivityListFilter,
-} from './activity-service.js'
+export type { ActivityListFilter } from './activity-service.js'
 export { ActorService } from './actor-service.js'
 export type {
   ActorListFilter,
