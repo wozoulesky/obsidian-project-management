@@ -69,7 +69,9 @@ export function AppearanceSettings() {
     >
       <header>
         <h2 id="appearance-settings-title">外观</h2>
-        <p>选择预设后立即预览；点击保存才会同步到服务端。</p>
+        <p>
+          选择预设后立即预览；点击保存才会同步到服务端。未保存草稿仅在当前页面保留。
+        </p>
       </header>
       <div className="appearance-options">
         {choices.map((choice) => (

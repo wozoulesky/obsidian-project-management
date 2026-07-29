@@ -1,12 +1,13 @@
 import {
   useEffect,
   useContext,
-  useRef,
+  useMemo,
   useState,
   type ReactNode,
 } from 'react'
 
 import { useSettings, useUpdateSettings } from '../data/query-hooks'
+import { ApiError } from '../data/api-client'
 import {
   AppearanceContext,
   appearanceSchema,
@@ -24,53 +25,46 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 }
 
 function AppearanceProviderRoot({ children }: { children: ReactNode }) {
-  const [initialStored] = useState(storedAppearance)
-  const [previewAppearance, setPreviewAppearance] =
-    useState<Appearance | null>(() => {
-    const initial = initialStored ?? defaultAppearance
+  const [startupCache] = useState(() => {
+    const initial = storedAppearance() ?? defaultAppearance
     applyAppearance(initial)
-    return initialStored === null ? null : initial
+    return initial
   })
+  const [draft, setDraft] = useState<Appearance>(startupCache)
+  const [isDirty, setIsDirty] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [saveError, setSaveError] = useState('')
   const settings = useSettings()
   const update = useUpdateSettings()
-  const reconciled = useRef(false)
-  const remoteAppearance = settings.data === undefined
-    ? defaultAppearance
-    : appearanceSchema.parse({
-        theme: settings.data.theme,
-        background: settings.data.background,
-        accent: settings.data.accent,
-        density: settings.data.density,
-      })
-  const appearance = previewAppearance ?? remoteAppearance
+  const apiBaseline = useMemo(
+    () => settings.data === undefined
+      ? null
+      : appearanceSchema.parse({
+          theme: settings.data.theme,
+          background: settings.data.background,
+          accent: settings.data.accent,
+          density: settings.data.density,
+        }),
+    [settings.data],
+  )
+  const cachedBaseline = apiBaseline ?? startupCache
+  const appearance = isDirty ? draft : cachedBaseline
 
   useEffect(() => {
-    if (
-      reconciled.current
-      || settings.data === undefined
-      || previewAppearance !== null
-    ) return
-    reconciled.current = true
-    if (initialStored !== null) return
-    applyAppearance(remoteAppearance)
+    if (isDirty) return
+    applyAppearance(cachedBaseline)
     localStorage.setItem(
       appearanceStorageKey,
-      JSON.stringify(remoteAppearance),
+      JSON.stringify(cachedBaseline),
     )
-  }, [
-    initialStored,
-    previewAppearance,
-    remoteAppearance,
-    settings.data,
-  ])
+  }, [cachedBaseline, isDirty])
 
   function setAppearance(next: Appearance) {
     const parsed = appearanceSchema.parse(next)
     applyAppearance(parsed)
     localStorage.setItem(appearanceStorageKey, JSON.stringify(parsed))
-    setPreviewAppearance(parsed)
+    setDraft(parsed)
+    setIsDirty(true)
     setSaveMessage('')
     setSaveError('')
   }
@@ -84,9 +78,31 @@ function AppearanceProviderRoot({ children }: { children: ReactNode }) {
       return
     }
     try {
-      await update.mutateAsync({ ...appearance, version })
+      const saved = await update.mutateAsync({ ...appearance, version })
+      const savedAppearance = appearanceSchema.parse({
+        theme: saved.theme,
+        background: saved.background,
+        accent: saved.accent,
+        density: saved.density,
+      })
+      applyAppearance(savedAppearance)
+      localStorage.setItem(
+        appearanceStorageKey,
+        JSON.stringify(savedAppearance),
+      )
+      setDraft(savedAppearance)
+      setIsDirty(false)
       setSaveMessage('外观设置已保存。')
     } catch (error) {
+      if (
+        error instanceof ApiError
+        && (
+          error.status === 409
+          || error.code === 'SETTINGS_VERSION_CONFLICT'
+        )
+      ) {
+        await settings.refetch().catch(() => undefined)
+      }
       setSaveError(
         error instanceof Error
           ? `保存失败：${error.message}`

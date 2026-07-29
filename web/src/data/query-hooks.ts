@@ -21,6 +21,7 @@ import { createMockProjectRepository } from './mock-project-repository'
 import type {
   CreateHumanActorInput,
   CreateProjectTaskInput,
+  AppearanceSettingsInput,
   ProjectRepository,
   UpdateActorInput,
 } from './project-repository'
@@ -469,7 +470,8 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient()
   const { repository } = useProjectRepository()
   return useMutation({
-    mutationFn: repository.updateSettings.bind(repository),
+    mutationFn: (input: AppearanceSettingsInput) =>
+      repository.updateSettings(input),
     onSuccess: async (settings) => {
       queryClient.setQueryData(projectQueryKeys.settings, settings)
       await queryClient.invalidateQueries({

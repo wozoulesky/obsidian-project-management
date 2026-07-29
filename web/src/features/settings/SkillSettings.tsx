@@ -1,17 +1,7 @@
 import { useState } from 'react'
 
 import { useProjectRepository } from '../../data/query-hooks'
-
-const snippets = {
-  'Codex': `[mcp_servers.project-os]
-url = "http://127.0.0.1:4310/mcp"`,
-  'Claude Code': 'claude mcp add --transport http project-os http://127.0.0.1:4310/mcp',
-  'Kimi Code': `{
-  "mcpServers": {
-    "project-os": { "url": "http://127.0.0.1:4310/mcp" }
-  }
-}`,
-} as const
+import { mcpClientSnippets as snippets } from './mcp-client-config'
 
 export function SkillSettings() {
   const { repository } = useProjectRepository()

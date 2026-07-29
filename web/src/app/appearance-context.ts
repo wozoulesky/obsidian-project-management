@@ -26,6 +26,8 @@ export const defaultAppearance: Appearance = {
 }
 
 export function storedAppearance(): Appearance | null {
+  // This key is a last-applied startup cache only. Dirty state and API version
+  // remain in memory, so a reload always lets the authoritative API reconcile.
   try {
     const raw = localStorage.getItem(appearanceStorageKey)
     if (raw === null) return null

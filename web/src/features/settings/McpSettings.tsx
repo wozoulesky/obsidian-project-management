@@ -7,6 +7,7 @@ import {
   useTokens,
 } from '../../data/query-hooks'
 import type { IssuedAccessToken } from '../../data/project-repository'
+import { webRuntimeConfig } from '../../app/runtime-config'
 
 function displayTime(value: string | null): string {
   return value === null ? '从未' : new Date(value).toLocaleString()
@@ -21,7 +22,7 @@ export function McpSettings() {
   const [issued, setIssued] = useState<IssuedAccessToken | null>(null)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
-  const mcpUrl = new URL('/mcp', window.location.origin).href
+  const mcpUrl = webRuntimeConfig.mcpUrl
 
   async function submit(event: FormEvent) {
     event.preventDefault()

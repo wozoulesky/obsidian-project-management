@@ -157,6 +157,8 @@ describe('SettingsPage', () => {
       name: 'Agent Skills',
     })).closest('section')
     if (!skillSection) throw new Error('Expected Skill settings section')
+    expect(screen.getByText('http://127.0.0.1:4310/mcp')).toBeVisible()
+    expect(screen.queryByText(/5173\/mcp/)).not.toBeInTheDocument()
 
     await user.click(within(skillSection).getByRole('button', {
       name: '复制 Codex 配置',
