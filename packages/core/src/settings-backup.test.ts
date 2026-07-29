@@ -830,6 +830,80 @@ describe('settings, tokens, export, backup, and seed', () => {
     lifecycle.database.close()
   })
 
+  it('rejects restore candidates without the active human audit actor before swapping files', () => {
+    const cases = [
+      {
+        name: 'missing',
+        actor: {
+          ...fixtureDocument().actors[0]!,
+          id: 'actor_other',
+        },
+      },
+      {
+        name: 'inactive',
+        actor: {
+          ...fixtureDocument().actors[0]!,
+          status: 'inactive' as const,
+        },
+      },
+      {
+        name: 'agent',
+        actor: {
+          ...fixtureDocument().actors[0]!,
+          kind: 'agent' as const,
+          role: 'dev-agent' as const,
+          client: 'codex',
+        },
+      },
+    ] satisfies {
+      name: string
+      actor: ExportDocument['actors'][number]
+    }[]
+
+    for (const testCase of cases) {
+      const databasePath = join(
+        temporaryDirectory,
+        `active-${testCase.name}.sqlite`,
+      )
+      const candidatePath = join(
+        temporaryDirectory,
+        `candidate-${testCase.name}.sqlite`,
+      )
+      const lifecycle = createLifecycle(databasePath)
+      new ExportService(lifecycle.database).importJson(fixtureDocument('Before'))
+      const candidateDocument = fixtureDocument('Candidate')
+      const actor = testCase.actor
+      candidateDocument.actors = [actor]
+      candidateDocument.projects[0]!.ownerId = actor.id
+      candidateDocument.projectMembers[0]!.actorId = actor.id
+      candidateDocument.tasks[0]!.assignee = actor
+      candidateDocument.tasks[0]!.assigneeId = actor.id
+      candidateDocument.defects[0]!.assignee = actor
+      candidateDocument.defects[0]!.assigneeId = actor.id
+      const candidate = openDatabase(candidatePath)
+      new ExportService(candidate).importJson(candidateDocument)
+      candidate.close()
+      const backups = new BackupService(
+        lifecycle,
+        join(temporaryDirectory, `backups-${testCase.name}`),
+      )
+
+      try {
+        expect(() => backups.restore(
+          candidatePath,
+          'actor_owner',
+          'web',
+        )).toThrowError(expect.objectContaining({ code: 'BACKUP_INVALID' }))
+        expect(new ExportService(lifecycle.database).exportJson().projects[0]?.name)
+          .toBe('Before')
+        expect(lifecycle.database.prepare('SELECT 1 AS ok').get())
+          .toEqual({ ok: 1 })
+      } finally {
+        lifecycle.database.close()
+      }
+    }
+  })
+
   it('rejects candidates with a newer or missing migration set', async () => {
     const databasePath = join(temporaryDirectory, 'active.sqlite')
     const lifecycle = createLifecycle(databasePath)

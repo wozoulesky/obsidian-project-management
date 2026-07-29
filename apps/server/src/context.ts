@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { realpathSync } from 'node:fs'
 import {
   ActivityService,
   ActorService,
@@ -37,6 +38,7 @@ export type AppContext = {
   readonly database: DatabaseSync
   readonly services: AppServices
   readonly localActorId: string
+  readonly backupRoot: string
   close(): void
 }
 
@@ -184,6 +186,7 @@ export function createAppContext(options: AppContextOptions): AppContext {
     },
     services,
     localActorId: options.localActorId ?? ownerId,
+    backupRoot: realpathSync(options.backupRoot),
     close() {
       lifecycle.closeDatabase()
     },

@@ -23,6 +23,10 @@ import { activityRoutes } from './routes/activities.js'
 import { dashboardRoutes } from './routes/dashboard.js'
 import { defectRoutes } from './routes/defects.js'
 import { requirementRoutes } from './routes/requirements.js'
+import { settingsRoutes } from './routes/settings.js'
+import { tokenRoutes } from './routes/tokens.js'
+import { backupRoutes } from './routes/backups.js'
+import { dataTransferRoutes } from './routes/data-transfer.js'
 
 const apiPrefix = '/api/v1'
 const requestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/
@@ -76,7 +80,7 @@ const publicDomainStatuses: Readonly<Record<string, number>> = {
   TASK_PROJECT_MISMATCH: 400,
   TASK_REFERENCE_INVALID: 400,
   AUTHENTICATION_REQUIRED: 401,
-  TOKEN_INVALID: 401,
+  TOKEN_INVALID: 400,
   TOKEN_REQUIRED: 401,
   HOST_FORBIDDEN: 403,
   ORIGIN_FORBIDDEN: 403,
@@ -281,6 +285,29 @@ function mapError(error: unknown): ErrorResponse {
           path,
         })),
       },
+    }
+  }
+
+  if (
+    typeof error === 'object'
+    && error !== null
+    && 'name' in error
+    && error.name === 'MulterError'
+  ) {
+    const code = 'code' in error ? error.code : undefined
+    if (code === 'LIMIT_FILE_SIZE') {
+      return {
+        status: 413,
+        code: 'PAYLOAD_TOO_LARGE',
+        message: 'Request body is too large',
+        details: {},
+      }
+    }
+    return {
+      status: 400,
+      code: 'IMPORT_INVALID',
+      message: 'Import document is invalid',
+      details: {},
     }
   }
 
@@ -493,6 +520,10 @@ export function createApp(options: CreateAppOptions) {
     defectRoutes,
     dashboardRoutes,
     activityRoutes,
+    settingsRoutes,
+    tokenRoutes,
+    backupRoutes,
+    dataTransferRoutes,
     ...(options.routeModules ?? []),
   ]) {
     routeModule.register(router, () => options.context)

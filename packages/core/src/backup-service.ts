@@ -188,7 +188,11 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
     && left.every((value, index) => value === right[index])
 }
 
-function validateCandidate(path: string, runtimeVersions: number[]): void {
+function validateCandidate(
+  path: string,
+  runtimeVersions: number[],
+  actorId?: string,
+): void {
   let candidate: DatabaseSync | undefined
   try {
     candidate = new DatabaseSync(path, { readOnly: true })
@@ -217,6 +221,20 @@ function validateCandidate(path: string, runtimeVersions: number[]): void {
     const candidateVersions = migrationVersions(candidate)
     if (!sameNumbers(candidateVersions, runtimeVersions)) {
       throw backupInvalid()
+    }
+
+    if (actorId !== undefined) {
+      const actor = candidate.prepare(`
+        SELECT kind, status
+        FROM actors
+        WHERE id = ?
+      `).get(actorId) as {
+        kind: string
+        status: string
+      } | undefined
+      if (actor?.kind !== 'human' || actor.status !== 'active') {
+        throw backupInvalid()
+      }
     }
 
     validateExportDocument(new ExportService(candidate).exportJson())
@@ -419,7 +437,7 @@ export class BackupService {
     try {
       copyFileSync(candidate, staging)
       const runtimeVersions = migrationVersions(this.lifecycle.getDatabase())
-      validateCandidate(staging, runtimeVersions)
+      validateCandidate(staging, runtimeVersions, actorId)
     } catch {
       for (const path of generatedPaths) {
         removeGenerated(path)
