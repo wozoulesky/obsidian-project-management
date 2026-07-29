@@ -10,6 +10,7 @@ export type ServerConfig = {
   port: number
   databasePath: string
   backupRoot: string
+  localActorId?: string
 }
 
 type Environment = Record<string, string | undefined>
@@ -51,6 +52,14 @@ export function loadConfig(
     throw configurationError('PROJECT_OS_PORT')
   }
 
+  const localActorId = environment.PROJECT_OS_LOCAL_ACTOR_ID
+    ?? 'actor_local_owner'
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(localActorId)
+  ) {
+    throw configurationError('PROJECT_OS_LOCAL_ACTOR_ID')
+  }
+
   return {
     host,
     port,
@@ -66,5 +75,6 @@ export function loadConfig(
       repositoryRoot,
       'PROJECT_OS_BACKUP_ROOT',
     ),
+    localActorId,
   }
 }

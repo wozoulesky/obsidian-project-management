@@ -13,6 +13,9 @@ import type {
 import { ZodError } from 'zod'
 import type { AppContext } from './context.js'
 import { errorEnvelope, successEnvelope } from './envelope.js'
+import { actorRoutes } from './routes/actors.js'
+import { projectRoutes } from './routes/projects.js'
+import { taskRoutes } from './routes/tasks.js'
 
 const apiPrefix = '/api/v1'
 const requestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/
@@ -55,6 +58,7 @@ const publicDomainStatuses: Readonly<Record<string, number>> = {
   INPUT_INVALID: 400,
   PROJECT_DATE_INVALID: 400,
   PROJECT_DATE_RANGE_INVALID: 400,
+  PAGINATION_CURSOR_INVALID: 400,
   REQUIREMENT_PROJECT_MISMATCH: 400,
   SETTINGS_INVALID: 400,
   TASK_ASSIGNEE_MISMATCH: 400,
@@ -455,7 +459,12 @@ export function createApp(options: CreateAppOptions) {
     }
   })
 
-  for (const routeModule of options.routeModules ?? []) {
+  for (const routeModule of [
+    actorRoutes,
+    projectRoutes,
+    taskRoutes,
+    ...(options.routeModules ?? []),
+  ]) {
     routeModule.register(router, () => options.context)
   }
   app.use(apiPrefix, router)

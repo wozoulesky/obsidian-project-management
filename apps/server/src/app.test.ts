@@ -50,6 +50,7 @@ const publicDomainErrorCases = [
   ['DASHBOARD_ACTIVITY_LIMIT_INVALID', 400],
   ['IMPORT_INVALID', 400],
   ['PROJECT_DATE_RANGE_INVALID', 400],
+  ['PAGINATION_CURSOR_INVALID', 400],
   ['REQUIREMENT_PROJECT_MISMATCH', 400],
   ['SETTINGS_INVALID', 400],
   ['TASK_DATE_RANGE_INVALID', 400],
@@ -368,6 +369,7 @@ describe('configuration', () => {
       port: 4310,
       databasePath: join(repositoryRoot, 'data', 'project_manage.db'),
       backupRoot: join(repositoryRoot, 'data', 'backups'),
+      localActorId: 'actor_local_owner',
     })
   })
 
@@ -381,11 +383,26 @@ describe('configuration', () => {
     )
   })
 
+  it('supports an explicit controlled local actor id', () => {
+    const repositoryRoot = resolve('fixture-repository')
+
+    expect(loadConfig({
+      PROJECT_OS_LOCAL_ACTOR_ID: 'actor_desktop_owner',
+    }, repositoryRoot).localActorId).toBe('actor_desktop_owner')
+  })
+
   it.each([
     [{ PROJECT_OS_HOST: '0.0.0.0' }, 'PROJECT_OS_HOST'],
     [{ PROJECT_OS_PORT: '0' }, 'PROJECT_OS_PORT'],
     [{ PROJECT_OS_PORT: '65536' }, 'PROJECT_OS_PORT'],
     [{ PROJECT_OS_PORT: '4310.5' }, 'PROJECT_OS_PORT'],
+    [{ PROJECT_OS_LOCAL_ACTOR_ID: '' }, 'PROJECT_OS_LOCAL_ACTOR_ID'],
+    [{
+      PROJECT_OS_LOCAL_ACTOR_ID: `actor_${'x'.repeat(123)}`,
+    }, 'PROJECT_OS_LOCAL_ACTOR_ID'],
+    [{
+      PROJECT_OS_LOCAL_ACTOR_ID: 'actor local owner',
+    }, 'PROJECT_OS_LOCAL_ACTOR_ID'],
   ])('rejects invalid configuration %j', (environment, field) => {
     expect(() => loadConfig(environment, resolve('fixture-repository')))
       .toThrow(`Invalid server configuration: ${field}`)
@@ -396,6 +413,7 @@ describe('production context', () => {
   it('constructs all services, including token support, and closes idempotently', () => {
     const context = testContext()
 
+    expect(context.localActorId).toBe('actor_local_owner')
     expect(Object.keys(context.services).sort()).toEqual([
       'activities',
       'actors',

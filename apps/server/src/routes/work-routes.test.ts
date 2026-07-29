@@ -1,0 +1,584 @@
+import {
+  mkdtempSync,
+  rmSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  apiErrorEnvelopeSchema,
+  apiSuccessEnvelopeSchema,
+  persistedActorSchema,
+  persistedProjectMemberSchema,
+  persistedProjectSchema,
+  persistedTaskSchema,
+} from '@project-os/contracts'
+import { seedDatabase } from '@project-os/core'
+import request from 'supertest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
+import { createApp } from '../app.js'
+import {
+  createAppContext,
+  defaultSeedDocument,
+  type AppContext,
+} from '../context.js'
+
+const contexts: AppContext[] = []
+const directories: string[] = []
+
+function createContext(seed = true): AppContext {
+  const directory = mkdtempSync(join(tmpdir(), 'project-os-work-routes-'))
+  const context = createAppContext({
+    databasePath: join(directory, 'test.db'),
+    backupRoot: join(directory, 'backups'),
+  })
+  directories.push(directory)
+  contexts.push(context)
+  if (seed) {
+    seedDatabase(context.database, defaultSeedDocument)
+  }
+  return context
+}
+
+function createApi(context = createContext()) {
+  return {
+    context,
+    api: request(createApp({ context })),
+  }
+}
+
+function expectRequestEnvelope(response: request.Response): void {
+  expect(response.headers['x-request-id']).toBeTypeOf('string')
+  expect(response.body.meta.request_id)
+    .toBe(response.headers['x-request-id'])
+}
+
+async function createHuman(
+  api: ReturnType<typeof request>,
+  name: string,
+  role: 'owner' | 'member' = 'member',
+) {
+  const response = await api.post('/api/v1/actors').send({
+    name,
+    role,
+    capabilities: ['web'],
+  }).expect(201)
+  return persistedActorSchema.parse(response.body.data)
+}
+
+async function createProject(
+  api: ReturnType<typeof request>,
+  ownerId: string,
+  name = 'Atlas',
+) {
+  const response = await api.post('/api/v1/projects').send({
+    name,
+    description: '',
+    ownerId,
+    startDate: '2026-07-29',
+    dueDate: '2026-08-31',
+  }).expect(201)
+  return persistedProjectSchema.parse(response.body.data)
+}
+
+async function createTask(
+  api: ReturnType<typeof request>,
+  projectId: string,
+  assigneeId: string,
+  title = 'Expose API',
+) {
+  const response = await api
+    .post(`/api/v1/projects/${projectId}/tasks`)
+    .send({
+      title,
+      description: '',
+      assigneeId,
+      startDate: '2026-07-29',
+      dueDate: '2026-08-01',
+      priority: 'P1',
+    })
+    .expect(201)
+  return persistedTaskSchema.parse(response.body.data)
+}
+
+afterEach(() => {
+  for (const context of contexts.splice(0)) {
+    context.close()
+  }
+  for (const directory of directories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+describe('actor routes', () => {
+  it('creates only human actors and returns persisted output in the envelope', async () => {
+    const { api } = createApi()
+
+    const first = await api.post('/api/v1/actors')
+      .set('X-Request-Id', 'actor-create-1')
+      .send({
+        name: 'Lin',
+        role: 'owner',
+        capabilities: ['planning'],
+      })
+      .expect(201)
+    const second = await api.post('/api/v1/actors').send({
+      name: 'Qiao',
+      role: 'member',
+    }).expect(201)
+
+    expect(
+      apiSuccessEnvelopeSchema(persistedActorSchema).parse(first.body),
+    ).toEqual(first.body)
+    expect(first.body.data).toMatchObject({
+      name: 'Lin',
+      kind: 'human',
+      role: 'owner',
+      status: 'active',
+      client: null,
+      capabilities: ['planning'],
+      version: 1,
+    })
+    expect(second.body.data.id).not.toBe(first.body.data.id)
+    expectRequestEnvelope(first)
+  })
+
+  it('lists, gets, updates, and deactivates actors with version semantics', async () => {
+    const { api } = createApi()
+    const actor = await createHuman(api, 'Lin')
+
+    const listed = await api
+      .get('/api/v1/actors?kind=human&status=active&limit=50')
+      .expect(200)
+    const fetched = await api.get(`/api/v1/actors/${actor.id}`).expect(200)
+    const updated = await api.patch(`/api/v1/actors/${actor.id}`).send({
+      name: 'Lin Updated',
+      capabilities: ['planning'],
+      version: actor.version,
+    }).expect(200)
+    const staleDeactivate = await api
+      .post(`/api/v1/actors/${actor.id}/deactivate`)
+      .send({ version: actor.version })
+      .expect(409)
+    const missingDeactivateVersion = await api
+      .post(`/api/v1/actors/${actor.id}/deactivate`)
+      .send({})
+      .expect(400)
+    const deactivated = await api
+      .post(`/api/v1/actors/${actor.id}/deactivate`)
+      .send({ version: updated.body.data.version })
+      .expect(200)
+
+    expect(listed.body.data.items.some(
+      ({ id }: { id: string }) => id === actor.id,
+    )).toBe(true)
+    expect(listed.body.data.next_cursor).toBeNull()
+    expect(fetched.body.data.id).toBe(actor.id)
+    expect(updated.body.data).toMatchObject({
+      name: 'Lin Updated',
+      version: 2,
+    })
+    expect(staleDeactivate.body.error.code)
+      .toBe('ACTOR_VERSION_CONFLICT')
+    expect(missingDeactivateVersion.body.error.code).toBe('VALIDATION_ERROR')
+    expect(deactivated.body.data).toMatchObject({
+      status: 'inactive',
+      version: 3,
+    })
+  })
+
+  it('rejects agent registration, impersonation fields, nulls, and unknown fields', async () => {
+    const { api } = createApi()
+    const cases = [
+      {
+        name: 'Agent',
+        kind: 'agent',
+        role: 'dev-agent',
+        client: 'fake-client',
+      },
+      {
+        name: 'Impersonator',
+        role: 'member',
+        actorId: 'agent_spoofed',
+      },
+      {
+        name: 'Source spoof',
+        role: 'member',
+        source: 'mcp',
+      },
+      { name: null, role: 'member' },
+      { name: 'Unknown', role: 'member', unknown: true },
+    ]
+
+    for (const body of cases) {
+      const response = await api.post('/api/v1/actors')
+        .send(body)
+        .expect(400)
+      expect(apiErrorEnvelopeSchema.parse(response.body)).toEqual(response.body)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    }
+  })
+
+  it('uses opaque, filter-bound pagination and rejects invalid or expired cursors', async () => {
+    const { api } = createApi()
+    const firstActor = await createHuman(api, 'A Actor')
+    await createHuman(api, 'B Actor')
+
+    const firstPage = await api
+      .get('/api/v1/actors?kind=human&status=active&limit=1')
+      .expect(200)
+    const cursor = firstPage.body.data.next_cursor as string
+    const secondPage = await api
+      .get(`/api/v1/actors?kind=human&status=active&limit=1&cursor=${cursor}`)
+      .expect(200)
+    const wrongFilter = await api
+      .get(`/api/v1/actors?kind=human&status=inactive&cursor=${cursor}`)
+      .expect(400)
+    const invalid = await api
+      .get('/api/v1/actors?cursor=not-a-cursor')
+      .expect(400)
+
+    expect(firstPage.body.data.items).toHaveLength(1)
+    expect(firstPage.body.data.items[0].id).toBe(firstActor.id)
+    expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(secondPage.body.data.items[0].name).toBe('B Actor')
+    expect(wrongFilter.body.error.code).toBe('PAGINATION_CURSOR_INVALID')
+    expect(invalid.body.error.code).toBe('PAGINATION_CURSOR_INVALID')
+
+    await api.post(`/api/v1/actors/${firstActor.id}/deactivate`)
+      .send({ version: firstActor.version })
+      .expect(200)
+    const expired = await api
+      .get(`/api/v1/actors?kind=human&status=active&cursor=${cursor}`)
+      .expect(400)
+    expect(expired.body.error.code).toBe('PAGINATION_CURSOR_INVALID')
+  })
+})
+
+describe('project routes', () => {
+  it('creates a human, creates projects, and filters them by primary owner', async () => {
+    const { api } = createApi()
+    const owner = await createHuman(api, 'Lin', 'owner')
+    const first = await createProject(api, owner.id, 'Atlas')
+    const second = await createProject(api, owner.id, 'Borealis')
+
+    const result = await api
+      .get(`/api/v1/projects?owner_id=${owner.id}&limit=50`)
+      .expect(200)
+
+    expect(result.body.data.items.map(
+      ({ id }: { id: string }) => id,
+    )).toEqual([first.id, second.id])
+    expect(first.code).not.toBe(second.code)
+    expect(result.body.data.next_cursor).toBeNull()
+    expect(
+      apiSuccessEnvelopeSchema(z.object({
+        items: z.array(persistedProjectSchema),
+        next_cursor: z.string().nullable(),
+      }).strict()).parse(result.body),
+    ).toEqual(result.body)
+  })
+
+  it('gets and updates a project with optimistic versioning', async () => {
+    const { api } = createApi()
+    const owner = await createHuman(api, 'Lin', 'owner')
+    const project = await createProject(api, owner.id)
+
+    const fetched = await api.get(`/api/v1/projects/${project.id}`).expect(200)
+    const updated = await api.patch(`/api/v1/projects/${project.id}`).send({
+      name: 'Atlas 2',
+      status: 'in_progress',
+      progress: 20,
+      version: project.version,
+    }).expect(200)
+    const stale = await api.patch(`/api/v1/projects/${project.id}`).send({
+      progress: 40,
+      version: project.version,
+    }).expect(409)
+
+    expect(fetched.body.data.id).toBe(project.id)
+    expect(updated.body.data).toMatchObject({
+      name: 'Atlas 2',
+      status: 'in_progress',
+      progress: 20,
+      version: 2,
+    })
+    expect(stale.body.error.code).toBe('PROJECT_VERSION_CONFLICT')
+  })
+
+  it('adds and lists only member memberships', async () => {
+    const { api } = createApi()
+    const owner = await createHuman(api, 'Lin', 'owner')
+    const member = await createHuman(api, 'Qiao')
+    const project = await createProject(api, owner.id)
+
+    const added = await api.post(`/api/v1/projects/${project.id}/members`)
+      .send({ actorId: member.id })
+      .expect(201)
+    const listed = await api
+      .get(`/api/v1/projects/${project.id}/members`)
+      .expect(200)
+
+    expect(persistedProjectMemberSchema.parse(added.body.data)).toMatchObject({
+      projectId: project.id,
+      actorId: member.id,
+      membershipRole: 'member',
+    })
+    expect(listed.body.data.items.map(
+      ({ membershipRole }: { membershipRole: string }) => membershipRole,
+    ).sort()).toEqual(['member', 'owner'])
+    expect(listed.body.data.items.every(
+      (item: unknown) => persistedProjectMemberSchema.safeParse(item).success,
+    )).toBe(true)
+  })
+
+  it('maps missing and inactive owners to stable client errors', async () => {
+    const { api } = createApi()
+    const inactive = await createHuman(api, 'Inactive')
+    await api.post(`/api/v1/actors/${inactive.id}/deactivate`)
+      .send({ version: inactive.version })
+      .expect(200)
+
+    const missing = await api.post('/api/v1/projects').send({
+      name: 'Missing owner',
+      ownerId: 'actor_missing',
+    }).expect(404)
+    const deactivated = await api.post('/api/v1/projects').send({
+      name: 'Inactive owner',
+      ownerId: inactive.id,
+    }).expect(400)
+
+    expect(missing.body.error.code).toBe('ACTOR_NOT_FOUND')
+    expect(deactivated.body.error.code).toBe('ACTOR_INACTIVE')
+  })
+})
+
+describe('task routes', () => {
+  it('creates tasks from the project path and returns unique task codes', async () => {
+    const { api } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const project = await createProject(api, owner.id)
+    const first = await createTask(api, project.id, owner.id, 'First task')
+    const second = await createTask(api, project.id, owner.id, 'Second task')
+
+    expect(first.projectId).toBe(project.id)
+    expect(first.code).not.toBe(second.code)
+    expect(first.version).toBe(1)
+  })
+
+  it('lists project tasks and global tasks without slicing before filters', async () => {
+    const { api } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const firstProject = await createProject(api, owner.id, 'First')
+    const secondProject = await createProject(api, owner.id, 'Second')
+    const first = await createTask(api, firstProject.id, owner.id, 'First task')
+    const second = await createTask(api, secondProject.id, owner.id, 'Second task')
+
+    const projectTasks = await api
+      .get(`/api/v1/projects/${secondProject.id}/tasks?limit=1`)
+      .expect(200)
+    const globalTasks = await api
+      .get(`/api/v1/tasks?project_id=${firstProject.id}&assignee_id=${owner.id}&status=not_started&limit=1`)
+      .expect(200)
+
+    expect(projectTasks.body.data.items.map(
+      ({ id }: { id: string }) => id,
+    )).toEqual([second.id])
+    expect(globalTasks.body.data.items.map(
+      ({ id }: { id: string }) => id,
+    )).toEqual([first.id])
+  })
+
+  it('gets and updates a task with strict version validation', async () => {
+    const { api } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const project = await createProject(api, owner.id)
+    const task = await createTask(api, project.id, owner.id)
+
+    const fetched = await api.get(`/api/v1/tasks/${task.id}`).expect(200)
+    const updated = await api.patch(`/api/v1/tasks/${task.id}`).send({
+      description: 'REST route complete',
+      version: task.version,
+    }).expect(200)
+    const missingVersion = await api.patch(`/api/v1/tasks/${task.id}`).send({
+      description: 'No version',
+    }).expect(400)
+
+    expect(fetched.body.data.id).toBe(task.id)
+    expect(updated.body.data).toMatchObject({
+      description: 'REST route complete',
+      version: 2,
+    })
+    expect(missingVersion.body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('submits progress only through submitProgress and rejects stale or missing versions', async () => {
+    const { api } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const project = await createProject(api, owner.id)
+    const task = await createTask(api, project.id, owner.id)
+
+    const updated = await api.post(`/api/v1/tasks/${task.id}/progress`).send({
+      progress: 80,
+      status: 'in_progress',
+      note: 'API complete',
+      version: task.version,
+    }).expect(200)
+    const stale = await api.post(`/api/v1/tasks/${task.id}/progress`).send({
+      progress: 100,
+      status: 'done',
+      note: 'stale',
+      version: task.version,
+    }).expect(409)
+    const missing = await api.post(`/api/v1/tasks/${task.id}/progress`).send({
+      progress: 100,
+      status: 'done',
+      note: 'missing version',
+    }).expect(400)
+    const impersonated = await api
+      .post(`/api/v1/tasks/${task.id}/progress`)
+      .send({
+        progress: 100,
+        status: 'done',
+        note: 'spoofed agent',
+        version: updated.body.data.version,
+        actorId: 'agent_spoofed',
+      })
+      .expect(400)
+    const tasks = await api
+      .get(`/api/v1/tasks?project_id=${project.id}`)
+      .expect(200)
+
+    expect(updated.body.data).toMatchObject({
+      id: task.id,
+      progress: 80,
+      status: 'in_progress',
+      version: 2,
+    })
+    expect(stale.body.error.code).toBe('TASK_VERSION_CONFLICT')
+    expect(missing.body.error.code).toBe('VALIDATION_ERROR')
+    expect(impersonated.body.error.code).toBe('VALIDATION_ERROR')
+    expect(tasks.body.data.items).toHaveLength(1)
+  })
+
+  it('rejects path project overrides and actor/source impersonation', async () => {
+    const { api } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const project = await createProject(api, owner.id)
+    const cases = [
+      { projectId: 'project_spoofed' },
+      { actorId: 'agent_spoofed' },
+      { source: 'mcp' },
+    ]
+
+    for (const extra of cases) {
+      const response = await api
+        .post(`/api/v1/projects/${project.id}/tasks`)
+        .send({
+          title: 'Spoofed',
+          assigneeId: owner.id,
+          startDate: '2026-07-29',
+          dueDate: '2026-08-01',
+          priority: 'P1',
+          ...extra,
+        })
+        .expect(400)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    }
+  })
+
+  it('maps inactive assignees to a stable client error', async () => {
+    const { api } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const assignee = await createHuman(api, 'Inactive assignee')
+    const project = await createProject(api, owner.id)
+    await api.post(`/api/v1/actors/${assignee.id}/deactivate`)
+      .send({ version: assignee.version })
+      .expect(200)
+
+    const response = await api
+      .post(`/api/v1/projects/${project.id}/tasks`)
+      .send({
+        title: 'Cannot assign',
+        assigneeId: assignee.id,
+        startDate: '2026-07-29',
+        dueDate: '2026-08-01',
+        priority: 'P1',
+      })
+      .expect(400)
+
+    expect(response.body.error.code).toBe('ACTOR_INACTIVE')
+  })
+})
+
+describe('strict request boundaries and live context', () => {
+  it('rejects unknown, repeated, null, invalid limit, and oversized id inputs', async () => {
+    const { api } = createApi()
+    const cases = [
+      '/api/v1/actors?unknown=value',
+      '/api/v1/actors?status=active&status=inactive',
+      '/api/v1/actors?kind=unknown',
+      '/api/v1/actors?limit=0',
+      '/api/v1/actors?limit=201',
+      '/api/v1/actors?limit=1.5',
+      `/api/v1/actors/${'x'.repeat(257)}`,
+    ]
+
+    for (const path of cases) {
+      const response = await api.get(path).expect(400)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    }
+
+    const maximum = await api.get('/api/v1/actors?limit=200').expect(200)
+    expect(maximum.body.data.next_cursor).toBeNull()
+
+    const nullBody = await api.post('/api/v1/projects')
+      .send({ name: 'Null dates', ownerId: null })
+      .expect(400)
+    expect(nullBody.body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns a stable client error when the configured local actor is missing', async () => {
+    const { api } = createApi(createContext(false))
+
+    const response = await api.post('/api/v1/actors').send({
+      name: 'Cannot write',
+      role: 'member',
+    }).expect(404)
+
+    expect(response.body.error.code).toBe('ACTOR_NOT_FOUND')
+  })
+
+  it('returns a stable client error when the configured local actor is inactive', async () => {
+    const { api } = createApi()
+    const localActor = defaultSeedDocument.actors[0]!
+    await api.post(`/api/v1/actors/${localActor.id}/deactivate`)
+      .send({ version: localActor.version })
+      .expect(200)
+
+    const response = await api.post('/api/v1/actors').send({
+      name: 'Cannot write',
+      role: 'member',
+    }).expect(400)
+
+    expect(response.body.error.code).toBe('ACTOR_INACTIVE')
+  })
+
+  it('uses the restored database for subsequent route requests', async () => {
+    const { api, context } = createApi()
+    const backupPath = await context.services.backups.create('routes.sqlite')
+    const discarded = await createHuman(api, 'Discarded after backup')
+
+    const beforeRestore = await api.get('/api/v1/actors').expect(200)
+    context.services.backups.restore(backupPath)
+    const afterRestore = await api.get('/api/v1/actors').expect(200)
+
+    expect(beforeRestore.body.data.items.some(
+      ({ id }: { id: string }) => id === discarded.id,
+    )).toBe(true)
+    expect(afterRestore.body.data.items.some(
+      ({ id }: { id: string }) => id === discarded.id,
+    )).toBe(false)
+    expect(afterRestore.body.data.items).toHaveLength(1)
+  })
+})

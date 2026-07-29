@@ -36,12 +36,14 @@ export type AppServices = {
 export type AppContext = {
   readonly database: DatabaseSync
   readonly services: AppServices
+  readonly localActorId: string
   close(): void
 }
 
 export type AppContextOptions = {
   databasePath: string
   backupRoot: string
+  localActorId?: string
 }
 
 const seedTimestamp = '2026-07-29T00:00:00.000Z'
@@ -181,6 +183,7 @@ export function createAppContext(options: AppContextOptions): AppContext {
       return lifecycle.getDatabase()
     },
     services,
+    localActorId: options.localActorId ?? ownerId,
     close() {
       lifecycle.closeDatabase()
     },
