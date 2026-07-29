@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 import {
   mkdtempSync,
+  mkdirSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,6 +25,11 @@ import {
   defaultSeedDocument,
 } from './context.js'
 import type { AppContext } from './context.js'
+import {
+  createProjectOsSkillArchive,
+  createSkillConfigSnippet,
+  validateSkillPackageEntry,
+} from './skill-package.js'
 
 const contexts: AppContext[] = []
 const directories: string[] = []
@@ -77,11 +84,15 @@ describe('Project OS Skill package routes', () => {
 
     const entries = unzipSync(first.body as Uint8Array)
     const names = Object.keys(entries)
-    expect(names).toContain('project-os/SKILL.md')
-    expect(names).toContain('project-os/agents/openai.yaml')
-    expect(names).toContain('project-os/references/codex-config.md')
-    expect(names).toContain('project-os/scripts/verify-connection.mjs')
-    expect(names).toEqual([...names].sort())
+    expect(names).toEqual([
+      'project-os/SKILL.md',
+      'project-os/agents/openai.yaml',
+      'project-os/references/claude-code-config.md',
+      'project-os/references/codex-config.md',
+      'project-os/references/kimi-code-config.md',
+      'project-os/references/tool-reference.md',
+      'project-os/scripts/verify-connection.mjs',
+    ])
     expect(names.every((name) => (
       name.startsWith('project-os/')
       && !name.includes('..')
@@ -105,6 +116,112 @@ describe('Project OS Skill package routes', () => {
     expect(content).not.toMatch(/pos_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+/)
     expect(content).not.toMatch(/Bearer\s+[A-Za-z0-9._~-]+/)
   })
+
+  it('creates a PowerShell-safe single-line Claude command for spaced paths', () => {
+    const root = "C:\\Program Files\\O'Brien Project"
+
+    const snippet = createSkillConfigSnippet('claude-code', root)
+
+    expect(snippet).not.toContain('\\\n')
+    expect(snippet).not.toContain('\r')
+    expect(snippet).not.toContain('\n')
+    expect(snippet).toBe(
+      "claude mcp add --transport stdio --env "
+      + "'PROJECT_OS_DB=C:/Program Files/O''Brien Project/"
+      + "data/project_manage.db' project-os -- node "
+      + "'C:/Program Files/O''Brien Project/apps/mcp/dist/stdio.js'",
+    )
+  })
+
+  it('uses the same generated snippets in the exported setup references', () => {
+    const entries = unzipSync(createProjectOsSkillArchive())
+    const references = {
+      codex: Buffer.from(
+        entries['project-os/references/codex-config.md']!,
+      ).toString('utf8'),
+      'claude-code': Buffer.from(
+        entries['project-os/references/claude-code-config.md']!,
+      ).toString('utf8'),
+      'kimi-code': Buffer.from(
+        entries['project-os/references/kimi-code-config.md']!,
+      ).toString('utf8'),
+    }
+
+    for (const client of [
+      'codex',
+      'claude-code',
+      'kimi-code',
+    ] as const) {
+      expect(references[client]).toContain(
+        createSkillConfigSnippet(client),
+      )
+    }
+  })
+
+  it('runs the exported verifier outside the repository without dependencies', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-skill-extract-'))
+    directories.push(directory)
+    const entries = unzipSync(createProjectOsSkillArchive())
+    for (const [name, bytes] of Object.entries(entries)) {
+      const destination = join(directory, ...name.split('/'))
+      mkdirSync(join(destination, '..'), { recursive: true })
+      writeFileSync(destination, bytes)
+    }
+    const databasePath = join(directory, 'verification.sqlite')
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      PROJECT_OS_DB: databasePath,
+    }
+    delete environment.PROJECT_OS_AGENT_ID
+
+    const output = await import('node:child_process').then(
+      ({ execFileSync }) => execFileSync(
+        process.execPath,
+        [join(
+          directory,
+          'project-os',
+          'scripts',
+          'verify-connection.mjs',
+        )],
+        {
+          encoding: 'utf8',
+          env: environment,
+          timeout: 15_000,
+        },
+      ),
+    )
+
+    expect(JSON.parse(output)).toMatchObject({
+      ok: true,
+      mode: 'contract-only',
+      transport: 'stdio',
+      toolCount: 22,
+      checks: ['listTools'],
+      writeSmoke: false,
+    })
+  })
+
+  it.each([
+    ['project-os/.env', 'SAFE=value'],
+    ['project-os/debug-credentials.txt', 'SAFE=value'],
+    ['project-os/references/config.md', 'token = "abcdefghijklmnop"'],
+    ['project-os/references/config.md', 'Bearer eyJabcdefghijklmnop'],
+    ['project-os/references/config.md', '-----BEGIN PRIVATE KEY-----'],
+    ['project-os/references/config.md', '{{PROJECT_OS_DB}}'],
+    [
+      'project-os/references/config.md',
+      'C:/Users/demo/AppData/Local/Temp/project-os.db',
+    ],
+    ['project-os/../escape.md', 'safe'],
+  ])(
+    'rejects unsafe packaged entry %s before compression',
+    (name, content) => {
+      expect(() => validateSkillPackageEntry(
+        name,
+        new TextEncoder().encode(content),
+      )).toThrow(/unsafe|invalid/i)
+    },
+  )
 
   it.each([
     ['codex', '[mcp_servers.project-os]'],

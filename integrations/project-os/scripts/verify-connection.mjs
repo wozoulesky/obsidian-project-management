@@ -1,14 +1,11 @@
 #!/usr/bin/env node
 
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import {
-  StdioClientTransport,
-  getDefaultEnvironment,
-} from '@modelcontextprotocol/sdk/client/stdio.js'
 
+const packagedProjectRoot = '{{PROJECT_OS_ROOT}}'
 const approvedTools = [
   'activity_log',
   'agent_list',
@@ -43,8 +40,12 @@ function valueAfter(arguments_, index, flag) {
 }
 
 function parseOptions(arguments_) {
+  const bundledRoot = packagedProjectRoot.startsWith('{{')
+    ? undefined
+    : packagedProjectRoot
   const defaultRoot = resolve(
-    fileURLToPath(new URL('../../..', import.meta.url)),
+    bundledRoot
+      ?? fileURLToPath(new URL('../../..', import.meta.url)),
   )
   const options = {
     root: process.env.PROJECT_OS_ROOT ?? defaultRoot,
@@ -112,6 +113,152 @@ function usage() {
   ].join('\n')
 }
 
+class StdioJsonRpcClient {
+  #buffer = ''
+  #child
+  #nextId = 1
+  #pending = new Map()
+  #stderr = ''
+
+  constructor(options) {
+    this.#child = spawn(process.execPath, [options.entry], {
+      env: {
+        ...process.env,
+        PROJECT_OS_DB: options.database,
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+    this.#child.stdout.setEncoding('utf8')
+    this.#child.stderr.setEncoding('utf8')
+    this.#child.stdout.on('data', (chunk) => this.#read(chunk))
+    this.#child.stderr.on('data', (chunk) => {
+      this.#stderr += chunk
+    })
+    this.#child.on('error', (error) => this.#rejectPending(error))
+    this.#child.on('exit', (code) => {
+      if (this.#pending.size > 0) {
+        const detail = this.#stderr.trim()
+        this.#rejectPending(new Error(
+          `MCP stdio server exited with code ${code}`
+          + (detail === '' ? '' : `: ${detail}`),
+        ))
+      }
+    })
+  }
+
+  #read(chunk) {
+    this.#buffer += chunk
+    while (true) {
+      const newline = this.#buffer.indexOf('\n')
+      if (newline < 0) return
+      const line = this.#buffer.slice(0, newline).replace(/\r$/, '')
+      this.#buffer = this.#buffer.slice(newline + 1)
+      if (line === '') continue
+      let message
+      try {
+        message = JSON.parse(line)
+      } catch {
+        this.#rejectPending(new Error('MCP server returned invalid JSON'))
+        continue
+      }
+      if (
+        message === null
+        || typeof message !== 'object'
+        || !('id' in message)
+      ) {
+        continue
+      }
+      const pending = this.#pending.get(message.id)
+      if (pending === undefined) continue
+      this.#pending.delete(message.id)
+      clearTimeout(pending.timeout)
+      if ('error' in message) {
+        pending.reject(new Error(
+          typeof message.error?.message === 'string'
+            ? message.error.message
+            : 'MCP request failed',
+        ))
+      } else {
+        pending.resolve(message.result)
+      }
+    }
+  }
+
+  #rejectPending(error) {
+    for (const pending of this.#pending.values()) {
+      clearTimeout(pending.timeout)
+      pending.reject(error)
+    }
+    this.#pending.clear()
+  }
+
+  #write(message) {
+    this.#child.stdin.write(`${JSON.stringify(message)}\n`)
+  }
+
+  request(method, params = {}) {
+    const id = this.#nextId
+    this.#nextId += 1
+    return new Promise((resolve_, reject) => {
+      const timeout = setTimeout(() => {
+        this.#pending.delete(id)
+        reject(new Error(`MCP request timed out: ${method}`))
+      }, 10_000)
+      this.#pending.set(id, { reject, resolve: resolve_, timeout })
+      this.#write({
+        jsonrpc: '2.0',
+        id,
+        method,
+        params,
+      })
+    })
+  }
+
+  notification(method, params = {}) {
+    this.#write({
+      jsonrpc: '2.0',
+      method,
+      params,
+    })
+  }
+
+  async connect() {
+    await this.request('initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: {
+        name: 'project-os-skill-verifier',
+        version: '0.1.0',
+      },
+    })
+    this.notification('notifications/initialized')
+  }
+
+  listTools() {
+    return this.request('tools/list')
+  }
+
+  callTool(name, arguments_) {
+    return this.request('tools/call', {
+      name,
+      arguments: arguments_,
+    })
+  }
+
+  async close() {
+    if (this.#child.exitCode !== null) return
+    const exited = new Promise((resolve_) => {
+      this.#child.once('exit', resolve_)
+    })
+    this.#child.kill()
+    await Promise.race([
+      exited,
+      new Promise((resolve_) => setTimeout(resolve_, 2_000)),
+    ])
+  }
+}
+
 function assertSuccess(name, result) {
   if (result.isError) {
     const detail = result.structuredContent === undefined
@@ -123,10 +270,7 @@ function assertSuccess(name, result) {
 }
 
 async function call(client, name, arguments_) {
-  return assertSuccess(name, await client.callTool({
-    name,
-    arguments: arguments_,
-  }))
+  return assertSuccess(name, await client.callTool(name, arguments_))
 }
 
 async function verify(options) {
@@ -137,22 +281,9 @@ async function verify(options) {
     )
   }
 
-  const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: [options.entry],
-    env: {
-      ...getDefaultEnvironment(),
-      PROJECT_OS_DB: options.database,
-    },
-    stderr: 'pipe',
-  })
-  const client = new Client({
-    name: 'project-os-skill-verifier',
-    version: '0.1.0',
-  })
-
+  const client = new StdioJsonRpcClient(options)
   try {
-    await client.connect(transport)
+    await client.connect()
     const discovered = (await client.listTools()).tools
       .map(({ name }) => name)
       .sort()

@@ -1,11 +1,9 @@
 import {
   lstatSync,
-  readdirSync,
   readFileSync,
 } from 'node:fs'
 import {
   dirname,
-  relative,
   resolve,
   sep,
 } from 'node:path'
@@ -27,11 +25,14 @@ const sourceRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../..',
 )
-const includedRoots = [
+const includedFiles = [
   'SKILL.md',
-  'agents',
-  'references',
-  'scripts',
+  'agents/openai.yaml',
+  'references/claude-code-config.md',
+  'references/codex-config.md',
+  'references/kimi-code-config.md',
+  'references/tool-reference.md',
+  'scripts/verify-connection.mjs',
 ] as const
 const knownExampleRoots = [
   'E:/project_manage',
@@ -43,7 +44,14 @@ function compareEntryNames(left: string, right: string): number {
 }
 
 function normalizedPath(path: string): string {
-  return path.split(sep).join('/')
+  return path.replaceAll('\\', '/').split(sep).join('/')
+}
+
+function normalizedProjectRoot(root: string): string {
+  return /^[A-Za-z]:[\\/]/
+    .test(root)
+    ? normalizedPath(root).replace(/\/+$/, '')
+    : normalizedPath(resolve(root))
 }
 
 function pathsFor(root: string): {
@@ -51,12 +59,19 @@ function pathsFor(root: string): {
   mcpEntry: string
   projectRoot: string
 } {
-  const projectRoot = normalizedPath(resolve(root))
+  const projectRoot = normalizedProjectRoot(root)
   return {
     projectRoot,
     mcpEntry: `${projectRoot}/apps/mcp/dist/stdio.js`,
     database: `${projectRoot}/data/project_manage.db`,
   }
+}
+
+function powershellLiteral(value: string): string {
+  if (/[\r\n\u0000]/.test(value)) {
+    throw new Error('PowerShell configuration path is invalid')
+  }
+  return `'${value.replaceAll("'", "''")}'`
 }
 
 export function createSkillConfigSnippet(
@@ -68,16 +83,15 @@ export function createSkillConfigSnippet(
     return [
       '[mcp_servers.project-os]',
       'command = "node"',
-      `args = ["${paths.mcpEntry}"]`,
-      `env = { PROJECT_OS_DB = "${paths.database}" }`,
+      `args = [${JSON.stringify(paths.mcpEntry)}]`,
+      `env = { PROJECT_OS_DB = ${JSON.stringify(paths.database)} }`,
     ].join('\n')
   }
   if (client === 'claude-code') {
-    return [
-      'claude mcp add --transport stdio',
-      `  --env PROJECT_OS_DB=${paths.database}`,
-      `  project-os -- node ${paths.mcpEntry}`,
-    ].join(' \\\n')
+    return 'claude mcp add --transport stdio '
+      + `--env ${powershellLiteral(`PROJECT_OS_DB=${paths.database}`)} `
+      + 'project-os -- node '
+      + powershellLiteral(paths.mcpEntry)
   }
   return JSON.stringify({
     mcpServers: {
@@ -92,32 +106,42 @@ export function createSkillConfigSnippet(
   }, null, 2)
 }
 
-function collectFiles(
-  integrationRoot: string,
-  candidate: string,
-): string[] {
-  const resolvedRoot = resolve(integrationRoot)
-  const resolvedCandidate = resolve(candidate)
-  const withinRoot = (
-    resolvedCandidate === resolvedRoot
-    || resolvedCandidate.startsWith(`${resolvedRoot}${sep}`)
-  )
-  if (!withinRoot) {
-    throw new Error('Skill package entry escaped its source directory')
+function configReference(
+  client: SkillConfigClient,
+  projectRoot: string,
+): string {
+  const titles: Record<SkillConfigClient, string> = {
+    codex: 'Codex',
+    'claude-code': 'Claude Code',
+    'kimi-code': 'Kimi Code',
   }
-
-  const stat = lstatSync(resolvedCandidate)
-  if (stat.isSymbolicLink()) {
-    throw new Error('Skill package cannot include symbolic links')
+  const formats: Record<SkillConfigClient, string> = {
+    codex: 'toml',
+    'claude-code': 'powershell',
+    'kimi-code': 'json',
   }
-  if (stat.isFile()) return [resolvedCandidate]
-  if (!stat.isDirectory()) return []
-  return readdirSync(resolvedCandidate, { withFileTypes: true })
-    .sort((left, right) => compareEntryNames(left.name, right.name))
-    .flatMap((entry) => collectFiles(
-      resolvedRoot,
-      resolve(resolvedCandidate, entry.name),
-    ))
+  const destinations: Record<SkillConfigClient, string> = {
+    codex: 'Add this entry to the Codex MCP configuration.',
+    'claude-code':
+      'Run this single PowerShell command to register the stdio server.',
+    'kimi-code':
+      'Save this as `.kimi-code/mcp.json` in the client project.',
+  }
+  return [
+    `# ${titles[client]} configuration`,
+    '',
+    'Build Project OS first. This generated copy points to the Project OS',
+    'runtime that exported the Skill and contains no bearer token or secret.',
+    '',
+    destinations[client],
+    '',
+    `\`\`\`${formats[client]}`,
+    createSkillConfigSnippet(client, projectRoot),
+    '```',
+    '',
+    'Restart the client after changing its MCP configuration.',
+    '',
+  ].join('\n')
 }
 
 function substituteRuntimePaths(
@@ -126,55 +150,91 @@ function substituteRuntimePaths(
 ): string {
   const paths = pathsFor(projectRoot)
   let output = content
-    .replaceAll('{{PROJECT_OS_ROOT}}', paths.projectRoot)
-    .replaceAll('{{PROJECT_OS_MCP_ENTRY}}', paths.mcpEntry)
-    .replaceAll('{{PROJECT_OS_DB}}', paths.database)
   for (const exampleRoot of knownExampleRoots) {
     output = output.replaceAll(exampleRoot, paths.projectRoot)
   }
   return output
+    .replaceAll('{{PROJECT_OS_ROOT}}', paths.projectRoot)
+    .replaceAll('{{PROJECT_OS_MCP_ENTRY}}', paths.mcpEntry)
+    .replaceAll('{{PROJECT_OS_DB}}', paths.database)
+}
+
+function packagedContent(
+  relativePath: typeof includedFiles[number],
+  projectRoot: string,
+  source: string,
+): string {
+  if (relativePath === 'references/codex-config.md') {
+    return configReference('codex', projectRoot)
+  }
+  if (relativePath === 'references/claude-code-config.md') {
+    return configReference('claude-code', projectRoot)
+  }
+  if (relativePath === 'references/kimi-code-config.md') {
+    return configReference('kimi-code', projectRoot)
+  }
+  return substituteRuntimePaths(source, projectRoot)
+}
+
+export function validateSkillPackageEntry(
+  entryName: string,
+  content: Uint8Array,
+): void {
+  if (
+    !entryName.startsWith('project-os/')
+    || entryName.includes('\\')
+    || entryName.split('/').some((segment) => (
+      segment === ''
+      || segment === '.'
+      || segment === '..'
+    ))
+    || /(?:^|\/)(?:\.env(?:\.|$)|node_modules|debug[^/]*)/i.test(entryName)
+    || /\.(?:tmp|temp|log)$/i.test(entryName)
+  ) {
+    throw new Error('Skill package entry path is invalid or unsafe')
+  }
+
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(content)
+  if (
+    /{{[A-Z0-9_]+}}/.test(text)
+    || /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/.test(text)
+    || /\bpos_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+\b/.test(text)
+    || /\bBearer\s+(?:eyJ|pos_|[A-Za-z0-9_-]{24,}\.)/i.test(text)
+    || /\b(?:token|secret|api[_-]?key|password)\s*[:=]\s*["']?[A-Za-z0-9._~-]{12,}/i
+      .test(text)
+    || /(?:\/tmp\/|\/var\/tmp\/|AppData\/Local\/Temp\/)/i.test(
+      normalizedPath(text),
+    )
+  ) {
+    throw new Error('Skill package entry contains unsafe content')
+  }
 }
 
 export function createProjectOsSkillArchive(
   projectRoot = sourceRoot,
 ): Uint8Array {
   const integrationRoot = resolve(projectRoot, 'integrations/project-os')
-  const files = includedRoots
-    .flatMap((entry) => collectFiles(
-      integrationRoot,
-      resolve(integrationRoot, entry),
-    ))
-    .sort((left, right) => (
-      compareEntryNames(
-        normalizedPath(relative(integrationRoot, left)),
-        normalizedPath(relative(integrationRoot, right)),
-      )
-    ))
-
   const entries: Record<string, Uint8Array> = {}
-  for (const file of files) {
-    const entryName = `project-os/${
-      normalizedPath(relative(integrationRoot, file))
-    }`
+  for (const relativePath of [...includedFiles].sort(compareEntryNames)) {
+    const file = resolve(integrationRoot, relativePath)
     if (
-      entryName.includes('..')
-      || entryName.includes('\\')
-      || !entryName.startsWith('project-os/')
+      !file.startsWith(`${integrationRoot}${sep}`)
+      || lstatSync(file).isSymbolicLink()
     ) {
-      throw new Error('Skill package entry name is invalid')
+      throw new Error('Skill package source path is invalid or unsafe')
     }
-    entries[entryName] = strToU8(substituteRuntimePaths(
-      readFileSync(file, 'utf8'),
+    const entryName = `project-os/${relativePath}`
+    const content = strToU8(packagedContent(
+      relativePath,
       projectRoot,
+      readFileSync(file, 'utf8'),
     ))
+    validateSkillPackageEntry(entryName, content)
+    entries[entryName] = content
   }
 
   return zipSync(entries, {
     level: 9,
     mtime: new Date(1980, 0, 1, 0, 0, 0, 0),
   })
-}
-
-export function projectOsSkillRoot(): string {
-  return sourceRoot
 }

@@ -58,4 +58,5 @@ only discovery of the exact tool contract. Default verification does not call
 authenticated tools because those calls update Agent activity. Use
 `--write-smoke` only when registering or touching a smoke-test Agent is
 explicitly acceptable. An optional `--agent-id <id>` is accepted only together
-with that write flag.
+with that write flag. The verifier uses only Node.js built-in modules, so an
+exported Skill does not require `npm install`.
