@@ -45,6 +45,10 @@ export type ActivityListFilter = {
   limit?: number
 }
 
+export type NewerActivityListFilter = Omit<ActivityListFilter, 'after'> & {
+  after: string
+}
+
 type ActivityInsert = {
   actorId: string
   projectId?: string | null
@@ -205,6 +209,96 @@ export class ActivityService {
       LIMIT ?
     `).all(...values, pagination.limit) as unknown as ActivityRow[]
 
+    return rows.map(mapActivity)
+  }
+
+  listNewer(filter: NewerActivityListFilter): PersistedActivity[] {
+    const cursorId = filter.after
+    const pagination = paginationSchema.parse({
+      cursor: cursorId,
+      limit: filter.limit,
+    })
+    const source = filter.source === undefined
+      ? undefined
+      : activitySourceSchema.parse(filter.source)
+    const cursor = this.database.prepare(`
+      SELECT
+        id,
+        actor_id,
+        project_id,
+        source,
+        entity_id,
+        created_at
+      FROM activities
+      WHERE id = ?
+    `).get(cursorId) as {
+      id: string
+      actor_id: string
+      project_id: string | null
+      source: ActivitySource
+      entity_id: string
+      created_at: string
+    } | undefined
+    if (
+      cursor === undefined
+      || (
+        filter.entityId !== undefined
+        && cursor.entity_id !== filter.entityId
+      )
+      || (
+        filter.actorId !== undefined
+        && cursor.actor_id !== filter.actorId
+      )
+      || (
+        filter.projectId !== undefined
+        && cursor.project_id !== filter.projectId
+      )
+      || (source !== undefined && cursor.source !== source)
+    ) {
+      throw new DomainError(
+        'ACTIVITY_CURSOR_INVALID',
+        'Activity cursor does not exist or match the filters',
+        { cursor: cursorId },
+      )
+    }
+
+    const clauses = [`
+      (
+        activities.created_at > ?
+        OR (
+          activities.created_at = ?
+          AND activities.id > ?
+        )
+      )
+    `]
+    const values: SQLInputValue[] = [
+      cursor.created_at,
+      cursor.created_at,
+      cursor.id,
+    ]
+    if (filter.entityId !== undefined) {
+      clauses.push('activities.entity_id = ?')
+      values.push(filter.entityId)
+    }
+    if (filter.actorId !== undefined) {
+      clauses.push('activities.actor_id = ?')
+      values.push(filter.actorId)
+    }
+    if (filter.projectId !== undefined) {
+      clauses.push('activities.project_id = ?')
+      values.push(filter.projectId)
+    }
+    if (source !== undefined) {
+      clauses.push('activities.source = ?')
+      values.push(source)
+    }
+
+    const rows = this.database.prepare(`
+      ${activitySelect}
+      WHERE ${clauses.join(' AND ')}
+      ORDER BY activities.created_at, activities.id
+      LIMIT ?
+    `).all(...values, pagination.limit) as unknown as ActivityRow[]
     return rows.map(mapActivity)
   }
 

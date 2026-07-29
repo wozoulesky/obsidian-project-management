@@ -551,6 +551,131 @@ describe('TaskService', () => {
   })
 })
 
+describe('REST pagination service primitives', () => {
+  it('pushes requirement composite keyset and limit into SQLite', () => {
+    const context = setup()
+    const first = context.requirements.create({
+      projectId: context.project.id,
+      title: 'First',
+      priority: 'P1',
+    }, context.owner.id, 'web')
+    const second = context.requirements.create({
+      projectId: context.project.id,
+      title: 'Second',
+      priority: 'P1',
+    }, context.owner.id, 'web')
+    context.requirements.create({
+      projectId: context.project.id,
+      title: 'Third',
+      priority: 'P1',
+    }, context.owner.id, 'web')
+
+    expect(context.requirements.list({
+      projectId: context.project.id,
+      after: {
+        projectId: first.projectId,
+        code: first.code,
+        id: first.id,
+      },
+      limit: 1,
+    })).toEqual([second])
+  })
+
+  it('pushes defect composite keyset and limit into SQLite', () => {
+    const context = setup()
+    const first = context.defects.create({
+      projectId: context.project.id,
+      title: 'First',
+      severity: 'normal',
+      assigneeId: context.owner.id,
+    }, context.owner.id, 'web')
+    const second = context.defects.create({
+      projectId: context.project.id,
+      title: 'Second',
+      severity: 'normal',
+      assigneeId: context.owner.id,
+    }, context.owner.id, 'web')
+    context.defects.create({
+      projectId: context.project.id,
+      title: 'Third',
+      severity: 'normal',
+      assigneeId: context.owner.id,
+    }, context.owner.id, 'web')
+
+    expect(context.defects.list({
+      projectId: context.project.id,
+      after: {
+        projectId: first.projectId,
+        code: first.code,
+        id: first.id,
+      },
+      limit: 1,
+    })).toEqual([second])
+  })
+
+  it('lists only newer filtered activities in stable ascending keyset order', () => {
+    const context = setup()
+    const timestamp = '2026-07-29T10:00:00.000Z'
+    const insertedAnchor = recordActivity(context.database, {
+      actorId: context.owner.id,
+      projectId: context.project.id,
+      source: 'web',
+      operation: 'task.update',
+      entityType: 'task',
+      entityId: 'task_anchor',
+      action: 'Anchor',
+      createdAt: timestamp,
+    })
+    const insertedCandidates = [
+      recordActivity(context.database, {
+        actorId: context.owner.id,
+        projectId: context.project.id,
+        source: 'mcp',
+        operation: 'task.update',
+        entityType: 'task',
+        entityId: 'task_newer_1',
+        action: 'Newer one',
+        createdAt: timestamp,
+      }),
+      recordActivity(context.database, {
+        actorId: context.owner.id,
+        projectId: context.project.id,
+        source: 'mcp',
+        operation: 'task.update',
+        entityType: 'task',
+        entityId: 'task_newer_2',
+        action: 'Newer two',
+        createdAt: timestamp,
+      }),
+    ]
+    context.database.prepare(
+      'UPDATE activities SET id = ? WHERE id = ?',
+    ).run('activity_100', insertedAnchor.id)
+    context.database.prepare(
+      'UPDATE activities SET id = ? WHERE id = ?',
+    ).run('activity_200', insertedCandidates[0]!.id)
+    context.database.prepare(
+      'UPDATE activities SET id = ? WHERE id = ?',
+    ).run('activity_300', insertedCandidates[1]!.id)
+
+    expect(context.activities.listNewer({
+      after: 'activity_100',
+      projectId: context.project.id,
+      limit: 1,
+    }).map((activity) => activity.id)).toEqual(['activity_200'])
+    expect(context.activities.listNewer({
+      after: 'activity_200',
+      projectId: context.project.id,
+    }).map((activity) => activity.id)).toEqual(['activity_300'])
+    expect(() => context.activities.listNewer({
+      after: 'activity_100',
+      source: 'mcp',
+    })).toThrowError(expect.objectContaining({
+      code: 'ACTIVITY_CURSOR_INVALID',
+    }))
+  })
+})
+
 describe('RequirementService', () => {
   it.each([
     ['description', { description: null }],

@@ -19,6 +19,10 @@ import {
 } from './routes/actors.js'
 import { projectRoutes } from './routes/projects.js'
 import { taskRoutes } from './routes/tasks.js'
+import { activityRoutes } from './routes/activities.js'
+import { dashboardRoutes } from './routes/dashboard.js'
+import { defectRoutes } from './routes/defects.js'
+import { requirementRoutes } from './routes/requirements.js'
 
 const apiPrefix = '/api/v1'
 const requestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/
@@ -485,6 +489,10 @@ export function createApp(options: CreateAppOptions) {
     actorRoutes,
     projectRoutes,
     taskRoutes,
+    requirementRoutes,
+    defectRoutes,
+    dashboardRoutes,
+    activityRoutes,
     ...(options.routeModules ?? []),
   ]) {
     routeModule.register(router, () => options.context)

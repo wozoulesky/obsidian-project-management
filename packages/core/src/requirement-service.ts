@@ -65,6 +65,12 @@ export type UpdateRequirementInput = {
 export type RequirementListFilter = {
   projectId?: string
   status?: RequirementStatus
+  after?: {
+    projectId: string
+    code: string
+    id: string
+  }
+  limit?: number
 }
 
 const createRequirementInputSchema = persistedRequirementSchema.pick({
@@ -231,13 +237,58 @@ export class RequirementService {
       clauses.push('status = ?')
       values.push(requirementStatusSchema.parse(filter.status))
     }
+    if (filter.after !== undefined) {
+      if (
+        filter.after.projectId.length === 0
+        || filter.after.code.length === 0
+        || filter.after.id.length === 0
+      ) {
+        throw new DomainError(
+          'INPUT_INVALID',
+          'Requirement list keyset is invalid',
+        )
+      }
+      clauses.push(`
+        (
+          project_id > ?
+          OR (
+            project_id = ?
+            AND (
+              code > ?
+              OR (code = ? AND id > ?)
+            )
+          )
+        )
+      `)
+      values.push(
+        filter.after.projectId,
+        filter.after.projectId,
+        filter.after.code,
+        filter.after.code,
+        filter.after.id,
+      )
+    }
+    if (
+      filter.limit !== undefined
+      && (!Number.isInteger(filter.limit) || filter.limit < 1)
+    ) {
+      throw new DomainError(
+        'INPUT_INVALID',
+        'Requirement list limit is invalid',
+      )
+    }
     const where = clauses.length === 0
       ? ''
       : `WHERE ${clauses.join(' AND ')}`
+    const limit = filter.limit === undefined ? '' : 'LIMIT ?'
+    if (filter.limit !== undefined) {
+      values.push(filter.limit)
+    }
     const rows = this.database.prepare(`
       ${requirementSelect}
       ${where}
       ORDER BY project_id, code, id
+      ${limit}
     `).all(...values) as unknown as RequirementRow[]
     return rows.map((row) => this.mapRequirement(row))
   }
