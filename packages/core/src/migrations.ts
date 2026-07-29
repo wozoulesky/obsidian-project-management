@@ -6,8 +6,36 @@ type Migration = {
   sql: string
 }
 
+export function validateMigrationVersions(
+  versions: readonly number[],
+): number {
+  let previousVersion = 0
+  let latestVersion = 0
+
+  for (const version of versions) {
+    if (
+      !Number.isInteger(version)
+      || version <= 0
+      || version <= previousVersion
+    ) {
+      throw new DomainError(
+        'DATABASE_MIGRATIONS_INVALID',
+        'Database migrations must have unique, strictly ascending versions',
+        { previousVersion, version },
+      )
+    }
+
+    previousVersion = version
+    latestVersion = Math.max(latestVersion, version)
+  }
+
+  return latestVersion
+}
+
 const datePattern =
   '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+const timestampMinutePattern =
+  `${datePattern}T[0-9][0-9]:[0-9][0-9]`
 const timestampBasePattern =
   `${datePattern}T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]`
 
@@ -30,6 +58,13 @@ function canonicalUtcTimestamp(column: string): string {
   const fraction = `substr(${column}, 21, length(${column}) - 21)`
 
   return `(
+    (
+      length(${column}) = 17
+      AND ${column} GLOB '${timestampMinutePattern}Z'
+      AND datetime(${column}) IS NOT NULL
+      AND strftime('%Y-%m-%dT%H:%MZ', ${column}) = ${column}
+    )
+    OR
     (
       length(${column}) = 20
       AND ${column} GLOB '${timestampBasePattern}Z'
@@ -393,6 +428,10 @@ const migrations: readonly Migration[] = [
   },
 ]
 
+const latestKnownVersion = validateMigrationVersions(
+  migrations.map((migration) => migration.version),
+)
+
 export function runMigrations(database: DatabaseSync): void {
   database.exec('BEGIN IMMEDIATE')
 
@@ -405,7 +444,6 @@ export function runMigrations(database: DatabaseSync): void {
       ) STRICT;
     `)
 
-    const latestKnownVersion = migrations.at(-1)?.version ?? 0
     const databaseVersion = database
       .prepare('SELECT MAX(version) AS version FROM schema_migrations')
       .get()?.version

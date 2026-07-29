@@ -10,7 +10,10 @@ import { persistedActorSchema } from '@project-os/contracts'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createTestDatabase, openDatabase } from './database.js'
 import { DomainError } from './errors.js'
-import { runMigrations } from './migrations.js'
+import {
+  runMigrations,
+  validateMigrationVersions,
+} from './migrations.js'
 
 const approvedTables = [
   'access_tokens',
@@ -332,6 +335,16 @@ describe('database bootstrap', () => {
       }),
     )
   })
+
+  it('rejects duplicate or out-of-order migration definitions', () => {
+    expect(() => validateMigrationVersions([1, 1])).toThrow(
+      /strictly ascending/i,
+    )
+    expect(() => validateMigrationVersions([2, 1])).toThrow(
+      /strictly ascending/i,
+    )
+    expect(validateMigrationVersions([1, 3])).toBe(3)
+  })
 })
 
 describe('canonical SQLite dates', () => {
@@ -363,6 +376,7 @@ describe('canonical SQLite dates', () => {
   it.each([
     'garbageZ',
     '2026-07-29T08:00:00+08:00',
+    '2026-02-30T08:00:00.1Z',
   ])('rejects non-canonical UTC timestamp %s on inserts and updates', (value) => {
     const database = createTestDatabase()
     opened.push(database)
@@ -421,6 +435,7 @@ describe('canonical SQLite dates', () => {
   })
 
   it.each([
+    '2026-07-29T08:00Z',
     '2026-07-29T08:00:00Z',
     '2026-07-29T08:00:00.1Z',
     '2026-07-29T08:00:00.123Z',
@@ -527,6 +542,50 @@ describe('JSON text-array persistence', () => {
       }).not.toThrow()
     },
   )
+
+  it('rejects non-string array elements through every update trigger', () => {
+    const database = createTestDatabase()
+    opened.push(database)
+    insertActor(database, { capabilitiesJson: '["planning"]' })
+    insertProject(database)
+    insertTask(database, { dependencyIdsJson: '["task-0"]' })
+    insertRequirement(database, '["Accepted"]')
+    insertDefect(database, '["Open page"]')
+
+    const invalidArray = '["valid", 1]'
+    const updates = [
+      {
+        sql: 'UPDATE actors SET capabilities_json = ? WHERE id = ?',
+        id: 'actor-1',
+      },
+      {
+        sql: 'UPDATE tasks SET dependency_ids_json = ? WHERE id = ?',
+        id: 'task-1',
+      },
+      {
+        sql: `
+          UPDATE requirements
+          SET acceptance_criteria_json = ?
+          WHERE id = ?
+        `,
+        id: 'requirement-1',
+      },
+      {
+        sql: `
+          UPDATE defects
+          SET reproduction_steps_json = ?
+          WHERE id = ?
+        `,
+        id: 'defect-1',
+      },
+    ]
+
+    for (const update of updates) {
+      expect(() => {
+        database.prepare(update.sql).run(invalidArray, update.id)
+      }).toThrow(/must contain only text values/i)
+    }
+  })
 })
 
 describe('DomainError', () => {
