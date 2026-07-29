@@ -198,7 +198,14 @@ describe('Project OS MCP identity and project tools', () => {
     })
 
     expect(failed.isError).toBe(true)
-    expect(failed.structuredContent).toBeUndefined()
+    expect(structured(failed)).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Tool execution failed',
+      details: {},
+    })
+    expect(JSON.stringify(failed)).not.toMatch(
+      /forced read touch failure|sqlite|trigger/i,
+    )
     expect(new ActorService(database).get(agentId)).toEqual(actorBefore)
   })
 

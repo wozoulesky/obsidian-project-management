@@ -53,6 +53,23 @@ export function inputInvalidResult(): CallToolResult {
   }
 }
 
+export function internalErrorResult(): CallToolResult {
+  const structuredContent = {
+    code: 'INTERNAL_ERROR',
+    message: 'Tool execution failed',
+    details: {},
+  }
+
+  return {
+    isError: true,
+    content: [{
+      type: 'text',
+      text: JSON.stringify(structuredContent),
+    }],
+    structuredContent,
+  }
+}
+
 export function handleToolCall(
   operation: () => CallToolResult,
 ): CallToolResult {
@@ -62,6 +79,6 @@ export function handleToolCall(
     if (error instanceof DomainError) {
       return domainErrorResult(error)
     }
-    throw error
+    return internalErrorResult()
   }
 }
