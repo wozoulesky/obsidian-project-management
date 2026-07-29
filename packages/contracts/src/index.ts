@@ -432,7 +432,7 @@ export type Paginated<T> = {
 
 export const apiEnvelopeMetaSchema = z.object({
   request_id: z.string().min(1),
-})
+}).strict()
 export type ApiEnvelopeMeta = z.infer<typeof apiEnvelopeMetaSchema>
 
 export function apiSuccessEnvelopeSchema<DataSchema extends z.ZodType>(
@@ -442,7 +442,7 @@ export function apiSuccessEnvelopeSchema<DataSchema extends z.ZodType>(
     data: dataSchema,
     error: z.null(),
     meta: apiEnvelopeMetaSchema,
-  })
+  }).strict()
 }
 
 export type ApiSuccessEnvelope<T> = {
@@ -457,7 +457,7 @@ export const apiErrorEnvelopeSchema = z.object({
     code: z.string().min(1),
     message: z.string().min(1),
     details: z.record(z.string(), z.unknown()),
-  }),
+  }).strict(),
   meta: apiEnvelopeMetaSchema,
-})
+}).strict()
 export type ApiErrorEnvelope = z.infer<typeof apiErrorEnvelopeSchema>

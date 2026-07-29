@@ -231,5 +231,26 @@ describe('API envelopes', () => {
         meta: { request_id: 'request-1' },
       }).success,
     ).toBe(false)
+    expect(
+      successSchema.safeParse({
+        data: 'ok',
+        error: null,
+        meta: { request_id: 'request-1', trace: 'not-public' },
+        stack: 'not-public',
+      }).success,
+    ).toBe(false)
+    expect(
+      contracts.apiErrorEnvelopeSchema.safeParse({
+        data: null,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Missing',
+          details: {},
+          stack: 'not-public',
+        },
+        meta: { request_id: 'request-2' },
+        trace: 'not-public',
+      }).success,
+    ).toBe(false)
   })
 })

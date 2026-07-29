@@ -49,11 +49,18 @@ export async function startServer(config: ServerConfig) {
   const close = () => {
     closing ??= new Promise<void>((resolveClose, rejectClose) => {
       server!.close((error) => {
-        context.close()
-        if (error === undefined) {
-          resolveClose()
-        } else {
+        let closeError: unknown
+        try {
+          context.close()
+        } catch (caught) {
+          closeError = caught
+        }
+        if (error !== undefined) {
           rejectClose(error)
+        } else if (closeError !== undefined) {
+          rejectClose(closeError)
+        } else {
+          resolveClose()
         }
       })
     })

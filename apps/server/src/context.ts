@@ -126,23 +126,50 @@ class LocalDatabaseLifecycle implements DatabaseLifecycle {
   }
 }
 
+function liveService<Service extends object>(
+  factory: () => Service,
+): Service {
+  return new Proxy({} as Service, {
+    get(_target, property) {
+      return (...args: unknown[]) => {
+        const service = factory()
+        const member = Reflect.get(service, property, service) as unknown
+        if (typeof member !== 'function') {
+          return member
+        }
+        return Reflect.apply(member, service, args) as unknown
+      }
+    },
+  })
+}
+
 export function createAppContext(options: AppContextOptions): AppContext {
   const lifecycle = new LocalDatabaseLifecycle(options.databasePath)
-  const database = lifecycle.getDatabase()
   let services: AppServices
   try {
+    const backups = new BackupService(lifecycle, options.backupRoot)
     services = {
-      activities: new ActivityService(database),
-      actors: new ActorService(database),
-      backups: new BackupService(lifecycle, options.backupRoot),
-      dashboard: new DashboardService(database),
-      defects: new DefectService(database),
-      exports: new ExportService(database),
-      projects: new ProjectService(database),
-      requirements: new RequirementService(database),
-      settings: new SettingsService(database),
-      tasks: new TaskService(database),
-      tokens: new TokenService(database),
+      activities: liveService(() =>
+        new ActivityService(lifecycle.getDatabase())),
+      actors: liveService(() =>
+        new ActorService(lifecycle.getDatabase())),
+      backups,
+      dashboard: liveService(() =>
+        new DashboardService(lifecycle.getDatabase())),
+      defects: liveService(() =>
+        new DefectService(lifecycle.getDatabase())),
+      exports: liveService(() =>
+        new ExportService(lifecycle.getDatabase())),
+      projects: liveService(() =>
+        new ProjectService(lifecycle.getDatabase())),
+      requirements: liveService(() =>
+        new RequirementService(lifecycle.getDatabase())),
+      settings: liveService(() =>
+        new SettingsService(lifecycle.getDatabase())),
+      tasks: liveService(() =>
+        new TaskService(lifecycle.getDatabase())),
+      tokens: liveService(() =>
+        new TokenService(lifecycle.getDatabase())),
     }
   } catch (error) {
     lifecycle.closeDatabase()
