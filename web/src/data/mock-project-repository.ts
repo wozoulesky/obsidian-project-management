@@ -1,8 +1,10 @@
 import type {
   ActivityEvent,
+  Actor,
   CreateProjectInput,
   DashboardSnapshot,
   Project,
+  ProjectMember,
   Requirement,
   RequirementStatus,
   Task,
@@ -10,7 +12,10 @@ import type {
   TaskProgressInput,
 } from './domain'
 import { createFixtureSeed } from './fixtures'
-import type { ProjectRepository } from './project-repository'
+import {
+  createProjectTaskInputSchema,
+  type ProjectRepository,
+} from './project-repository'
 
 const clone = <T>(value: T): T => structuredClone(value)
 const inactiveDefectStatuses = new Set([
@@ -58,6 +63,17 @@ export function createMockProjectRepository(): ProjectRepository {
     updatedAt: '2026-07-28T04:00:00.000Z',
     version: 1,
   }
+  const actorState = Object.values(seed.actors).map((actor) => ({
+    ...actor,
+    status: actor.status ?? 'active',
+  }))
+  const memberState: ProjectMember[] = actorState.map((actor) => ({
+    projectId: 'atlas',
+    actorId: actor.id,
+    membershipRole:
+      actor.id === projectState[0]!.ownerId ? 'owner' : 'member',
+    joinedAt: '2026-07-01T00:00:00.000Z',
+  }))
   let activitySequence = activityState.length
 
   const nextActivityId = () => {
@@ -72,6 +88,11 @@ export function createMockProjectRepository(): ProjectRepository {
     }
     return task
   }
+  const getActor = (actorId: string): Actor => {
+    const actor = actorState.find(({ id }) => id === actorId)
+    if (!actor) throw new Error(`Actor not found: ${actorId}`)
+    return actor
+  }
   const deriveRequirementProgress = (
     requirement: Requirement,
   ): Requirement => ({
@@ -83,11 +104,23 @@ export function createMockProjectRepository(): ProjectRepository {
 
   return {
     async listActors() {
-      return clone(Object.values(seed.actors))
+      return clone(actorState)
     },
 
     async listProjects() {
       return clone(projectState)
+    },
+
+    async getProject(projectId) {
+      const project = projectState.find(({ id }) => id === projectId)
+      if (!project) throw new Error(`Project not found: ${projectId}`)
+      return clone(project)
+    },
+
+    async listProjectMembers(projectId) {
+      return clone(
+        memberState.filter((member) => member.projectId === projectId),
+      )
     },
 
     async createProject(input: CreateProjectInput) {
@@ -104,7 +137,53 @@ export function createMockProjectRepository(): ProjectRepository {
         version: 1,
       }
       projectState.push(project)
+      memberState.push({
+        projectId: project.id,
+        actorId: project.ownerId,
+        membershipRole: 'owner',
+        joinedAt: now,
+      })
       return clone(project)
+    },
+
+    async createTask(projectId, input) {
+      if (!projectState.some(({ id }) => id === projectId)) {
+        throw new Error(`Project not found: ${projectId}`)
+      }
+      const validated = createProjectTaskInputSchema.parse(input)
+      const actor = getActor(validated.assigneeId)
+      if (
+        actor.status !== 'active'
+        || !memberState.some(
+          (member) =>
+            member.projectId === projectId
+            && member.actorId === actor.id,
+        )
+      ) {
+        throw new Error('Task assignee must be an active project member')
+      }
+      const now = new Date().toISOString()
+      const task: Task = {
+        id: `task-${taskState.length + 1}`,
+        code: `TASK-${String(taskState.length + 1).padStart(3, '0')}`,
+        projectId,
+        title: validated.title,
+        description: validated.description ?? '',
+        assignee: actor,
+        assigneeId: actor.id,
+        startDate: validated.startDate,
+        dueDate: validated.dueDate,
+        priority: validated.priority,
+        status: 'not_started',
+        progress: 0,
+        milestoneId: validated.milestoneId ?? '',
+        dependencyIds: [],
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      }
+      taskState.push(task)
+      return clone(task)
     },
 
     async listAllTasks() {
@@ -163,8 +242,9 @@ export function createMockProjectRepository(): ProjectRepository {
     },
 
     async listTasks(projectId) {
-      void projectId
-      return clone(taskState)
+      return clone(
+        taskState.filter((task) => (task.projectId ?? 'atlas') === projectId),
+      )
     },
 
     async updateTaskProgress(taskId, input: TaskProgressInput) {

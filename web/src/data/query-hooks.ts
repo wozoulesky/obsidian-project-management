@@ -18,7 +18,10 @@ import type {
   TaskProgressInput,
 } from './domain'
 import { createMockProjectRepository } from './mock-project-repository'
-import type { ProjectRepository } from './project-repository'
+import type {
+  CreateProjectTaskInput,
+  ProjectRepository,
+} from './project-repository'
 
 export const projectRepository = createMockProjectRepository()
 export const projectId = 'atlas'
@@ -61,6 +64,10 @@ export const projectQueryKeys = {
   activities: ['activities'] as const,
   allTasks: ['tasks', 'all'] as const,
   projects: ['projects'] as const,
+  projectFor: (selectedProjectId: string) =>
+    ['projects', selectedProjectId] as const,
+  projectMembersFor: (selectedProjectId: string) =>
+    ['projects', selectedProjectId, 'members'] as const,
   settings: ['settings'] as const,
   dashboardPrefixFor: (selectedProjectId: string) =>
     ['dashboard', selectedProjectId] as const,
@@ -172,6 +179,24 @@ export function useProjects() {
   })
 }
 
+export function useProject(selectedProjectId: string) {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.projectFor(selectedProjectId),
+    queryFn: () => context.repository.getProject(selectedProjectId),
+    enabled: selectedProjectId !== '',
+  })
+}
+
+export function useProjectMembers(selectedProjectId: string) {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.projectMembersFor(selectedProjectId),
+    queryFn: () => context.repository.listProjectMembers(selectedProjectId),
+    enabled: selectedProjectId !== '',
+  })
+}
+
 export function useActors() {
   const context = useProjectRepository()
   return useQuery({
@@ -203,6 +228,32 @@ export function useCreateProject() {
       ])
     },
   })
+}
+
+export function useCreateTask(selectedProjectId: string) {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: (input: CreateProjectTaskInput) =>
+      context.repository.createTask(selectedProjectId, input),
+    onSuccess: async () => {
+      await invalidateKeys(queryClient, [
+        projectQueryKeys.projects,
+        projectQueryKeys.tasksFor(selectedProjectId),
+        projectQueryKeys.allTasks,
+        projectQueryKeys.ganttFor(selectedProjectId),
+        ['dashboard'],
+        projectQueryKeys.activities,
+      ])
+    },
+  })
+}
+
+export function useProjectTasks(selectedProjectId: string) {
+  const context = useProjectRepository()
+  return useQuery(
+    createTaskQueryOptions(context.repository, selectedProjectId)(),
+  )
 }
 
 export function useTasks() {

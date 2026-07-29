@@ -2376,6 +2376,97 @@
   font-size: 0.75rem;
 }
 
+.project-detail__back {
+  display: inline-block;
+  margin-bottom: var(--space-2);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.project-detail__overview {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr);
+  gap: var(--space-4);
+}
+
+.project-detail__overview > section,
+.project-detail__tasks {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.project-detail__overview h2,
+.project-detail__tasks h2 {
+  font-size: 1rem;
+}
+
+.project-detail__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.project-detail__facts div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.project-detail__facts dt,
+.project-detail__members small,
+.project-detail__tasks small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.project-detail__facts dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.project-detail__facts progress {
+  max-width: 8rem;
+  accent-color: var(--primary);
+}
+
+.project-detail__members,
+.project-detail__tasks ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-detail__members li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.project-detail__tasks li {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) repeat(4, auto);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.project-detail__tasks li div {
+  display: grid;
+  gap: 0.125rem;
+}
+
 @media (max-width: 42rem) {
   .project-page {
     padding: var(--space-4);
@@ -2389,5 +2480,14 @@
 
   .project-dialog__dates {
     grid-template-columns: 1fr;
+  }
+
+  .project-detail__overview,
+  .project-detail__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .project-detail__tasks li {
+    grid-template-columns: 1fr 1fr;
   }
 }

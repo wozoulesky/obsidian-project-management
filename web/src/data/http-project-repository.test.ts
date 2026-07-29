@@ -198,6 +198,96 @@ describe('HTTP project repository', () => {
     })
   })
 
+  it('loads project detail and members through URL-encoded endpoints', async () => {
+    const project = {
+      id: 'project/one',
+      code: 'PRJ-001',
+      name: 'Atlas',
+      description: '',
+      ownerId: 'actor-1',
+      startDate: null,
+      dueDate: null,
+      status: 'not_started',
+      progress: 0,
+      createdAt: '2026-07-29T00:00:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+      version: 1,
+    }
+    const member = {
+      projectId: project.id,
+      actorId: project.ownerId,
+      membershipRole: 'owner',
+      joinedAt: '2026-07-29T00:00:00.000Z',
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(success(project)))
+      .mockResolvedValueOnce(jsonResponse(success({ items: [member] })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.getProject(project.id)).resolves.toEqual(project)
+    await expect(repository.listProjectMembers(project.id)).resolves.toEqual([
+      member,
+    ])
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      '/api/projects/project%2Fone',
+      '/api/projects/project%2Fone/members',
+    ])
+  })
+
+  it('creates a task through the strict project-scoped endpoint contract', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(success(task), 201),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+    const input = {
+      title: task.title,
+      description: task.description,
+      assigneeId: task.assigneeId,
+      startDate: task.startDate,
+      dueDate: task.dueDate,
+      priority: task.priority,
+      milestoneId: task.milestoneId,
+    }
+
+    await expect(repository.createTask('project/one', input)).resolves.toEqual(
+      task,
+    )
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      '/api/projects/project%2Fone/tasks',
+    )
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
+    expect(JSON.parse(String(
+      (fetchMock.mock.calls[0]?.[1] as RequestInit).body,
+    ))).toEqual(input)
+  })
+
+  it('rejects invalid and extra task creation fields before transport', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+    const base = {
+      title: task.title,
+      assigneeId: task.assigneeId,
+      startDate: task.startDate,
+      dueDate: task.dueDate,
+      priority: task.priority,
+    }
+
+    await expect(repository.createTask('project-1', {
+      ...base,
+      startDate: '2026-07-31',
+      dueDate: '2026-07-30',
+    })).rejects.toThrow('Task start date must not be after its due date')
+    await expect(repository.createTask('project-1', {
+      ...base,
+      projectId: 'must-not-be-in-body',
+    } as typeof base)).rejects.toThrow()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('follows cursor pages and URL-encodes a project-scoped task list', async () => {
     const fetchMock = vi
       .fn()

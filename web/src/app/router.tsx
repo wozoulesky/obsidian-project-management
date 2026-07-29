@@ -39,6 +39,12 @@ const ProjectPage = lazy(() =>
   })),
 )
 
+const ProjectDetailPage = lazy(() =>
+  import('../features/projects/ProjectDetailPage').then((module) => ({
+    default: module.ProjectDetailPage,
+  })),
+)
+
 const ActorPage = lazy(() =>
   import('../features/actors/ActorPage').then((module) => ({
     default: module.ActorPage,
@@ -156,6 +162,21 @@ export function AppRoutes() {
             }
           >
             <ProjectPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/projects/:id"
+        element={
+          <Suspense
+            fallback={
+              <PageLoadingFallback
+                className="route-shell"
+                label="正在加载项目详情…"
+              />
+            }
+          >
+            <ProjectDetailPage />
           </Suspense>
         }
       />

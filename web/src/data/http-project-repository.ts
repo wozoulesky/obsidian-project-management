@@ -5,6 +5,7 @@ import {
   persistedActorSchema,
   persistedAppSettingsSchema,
   persistedDefectSchema,
+  persistedProjectMemberSchema,
   persistedProjectSchema,
   persistedRequirementSchema,
   persistedTaskSchema,
@@ -17,6 +18,7 @@ import type {
   ActivityPage,
   ProjectRepository,
 } from './project-repository'
+import { createProjectTaskInputSchema } from './project-repository'
 
 const cursorPageSchema = <Output>(itemSchema: z.ZodType<Output>) =>
   z.object({
@@ -97,12 +99,38 @@ export function createHttpProjectRepository(
     listActors: () => allPages(client, '/actors', persistedActorSchema),
     listProjects: () =>
       allPages(client, '/projects', persistedProjectSchema),
+    getProject(projectId) {
+      return client.request(
+        `/projects/${encodeURIComponent(projectId)}`,
+        persistedProjectSchema,
+      )
+    },
+    async listProjectMembers(projectId) {
+      const response = await client.request(
+        `/projects/${encodeURIComponent(projectId)}/members`,
+        z.object({
+          items: z.array(persistedProjectMemberSchema),
+        }).strict(),
+      )
+      return response.items
+    },
     createProject(input) {
       const body = createProjectInputSchema.strict().parse(input)
       return client.request('/projects', persistedProjectSchema, {
         method: 'POST',
         ...jsonBody(body),
       })
+    },
+    async createTask(projectId, input) {
+      const body = createProjectTaskInputSchema.parse(input)
+      return await client.request(
+        `/projects/${encodeURIComponent(projectId)}/tasks`,
+        persistedTaskSchema,
+        {
+          method: 'POST',
+          ...jsonBody(body),
+        },
+      )
     },
     listAllTasks: () => allPages(client, '/tasks', persistedTaskSchema),
 

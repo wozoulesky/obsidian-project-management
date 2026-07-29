@@ -36,6 +36,56 @@ describe('mock project repository', () => {
     expect(allTasks.every((task) => task.projectId === 'atlas')).toBe(true)
   })
 
+  it('gets project membership and persists a project-scoped task', async () => {
+    const repository = createMockProjectRepository()
+    const project = await repository.getProject('atlas')
+    const members = await repository.listProjectMembers(project.id)
+
+    expect(members).toContainEqual(expect.objectContaining({
+      actorId: project.ownerId,
+      membershipRole: 'owner',
+    }))
+
+    const created = await repository.createTask(project.id, {
+      title: 'Project detail task',
+      assigneeId: project.ownerId,
+      startDate: '2026-07-29',
+      dueDate: '2026-07-30',
+      priority: 'P1',
+    })
+
+    expect(created).toMatchObject({
+      projectId: project.id,
+      title: 'Project detail task',
+      assigneeId: project.ownerId,
+      status: 'not_started',
+      progress: 0,
+    })
+    await expect(repository.listTasks(project.id)).resolves.toContainEqual(
+      created,
+    )
+  })
+
+  it('rejects unknown assignees and invalid task dates', async () => {
+    const repository = createMockProjectRepository()
+    const input = {
+      title: 'Invalid assignment',
+      assigneeId: actors.lin.id,
+      startDate: '2026-07-31',
+      dueDate: '2026-07-30',
+      priority: 'P1' as const,
+    }
+
+    await expect(repository.createTask('atlas', input)).rejects.toThrow(
+      'Task start date must not be after its due date',
+    )
+    await expect(repository.createTask('atlas', {
+      ...input,
+      startDate: '2026-07-29',
+      assigneeId: 'not-a-member',
+    })).rejects.toThrow('Actor not found: not-a-member')
+  })
+
   it('keeps dashboard metrics derived from coherent fixture collections', async () => {
     const repository = createMockProjectRepository()
 

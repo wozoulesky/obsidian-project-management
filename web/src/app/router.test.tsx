@@ -9,6 +9,7 @@ afterEach(cleanup)
 describe('AppRoutes', () => {
   it.each([
     ['/projects', '全部项目'],
+    ['/projects/atlas', 'Atlas'],
     ['/actors', '负责人'],
     ['/settings', '设置'],
   ])('renders the accessible %s route shell', async (route, heading) => {

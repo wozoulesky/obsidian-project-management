@@ -7,6 +7,7 @@ import {
   projectQueryKeys,
   projectRepository,
   useCreateProject,
+  useCreateTask,
   useCreateTaskFromDefect,
   useUpdateRequirementStatus,
   useUpdateTaskDates,
@@ -57,6 +58,31 @@ describe('repository query invalidation', () => {
 
     expect(isInvalidated(projectQueryKeys.projects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.actors)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
+  })
+
+  it('invalidates project detail, counts, tasks, gantt, dashboard, and activity after task creation', async () => {
+    const { queryClient, wrapper, isInvalidated } = createHarness()
+    queryClient.setQueryData(projectQueryKeys.projects, { seeded: true })
+    queryClient.setQueryData(projectQueryKeys.projectFor('atlas'), {
+      seeded: true,
+    })
+    const { result } = renderHook(() => useCreateTask('atlas'), { wrapper })
+
+    await act(() => result.current.mutateAsync({
+      title: 'Project task',
+      assigneeId: 'human-lin',
+      startDate: '2026-07-29',
+      dueDate: '2026-07-30',
+      priority: 'P1',
+    }))
+
+    expect(isInvalidated(projectQueryKeys.projectFor('atlas'))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.projects)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.tasksFor('atlas'))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
+    expect(isInvalidated(projectQueryKeys.ganttFor('atlas'))).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
     expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
   })
