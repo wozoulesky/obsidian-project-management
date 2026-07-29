@@ -5,7 +5,7 @@ import {
   validateExportDocument,
 } from '@project-os/core'
 import type { ExportDocument } from '@project-os/core'
-import type { Router } from 'express'
+import type { RequestHandler, Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import type { AppRouteModule } from '../app.js'
@@ -80,6 +80,37 @@ const upload = multer({
   },
 })
 
+const singleImportUpload = upload.single('file')
+const expectedMultipartErrors = new Set([
+  'Malformed content type',
+  'Malformed part header',
+  'Multipart: Boundary not found',
+  'Unexpected end of file',
+  'Unexpected end of form',
+])
+
+function expectedMultipartError(error: unknown): boolean {
+  return error instanceof Error
+    && (
+      expectedMultipartErrors.has(error.message)
+      || error.message.startsWith('Unsupported content type:')
+    )
+}
+
+const parseImportUpload: RequestHandler = (request, response, next) => {
+  singleImportUpload(request, response, (error) => {
+    if (
+      error === undefined
+      || error instanceof multer.MulterError
+      || error instanceof DomainError
+    ) {
+      next(error)
+      return
+    }
+    next(expectedMultipartError(error) ? importInvalid() : error)
+  })
+}
+
 function parseUpload(file: Express.Multer.File | undefined): unknown {
   if (file === undefined || file.size === 0) {
     throw importInvalid()
@@ -105,7 +136,7 @@ export const dataTransferRoutes: AppRouteModule = {
 
     router.post(
       '/import',
-      upload.single('file'),
+      parseImportUpload,
       (request, response) => {
         const document = parseUpload(request.file)
         const parsed = exportDocumentSchema.safeParse(document)

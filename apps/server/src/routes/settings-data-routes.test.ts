@@ -494,6 +494,47 @@ describe('export and import routes', () => {
 
   it.each([
     {
+      name: 'missing boundary',
+      contentType: 'multipart/form-data',
+      body: 'not-a-valid-multipart-body',
+    },
+    {
+      name: 'truncated body',
+      contentType: 'multipart/form-data; boundary=project-os-test-boundary',
+      body: [
+        '--project-os-test-boundary\r\n',
+        'Content-Disposition: form-data; name="file"; filename="data.json"\r\n',
+        'Content-Type: application/json\r\n\r\n',
+        '{"schemaVersion":1',
+      ].join(''),
+    },
+  ])(
+    'classifies raw multipart with $name as a stable import error',
+    async ({ contentType, body }) => {
+      const { app } = fixture()
+
+      const response = await request(app)
+        .post('/api/v1/import')
+        .set('Content-Type', contentType)
+        .send(body)
+
+      expect(response.status).toBe(400)
+      expect(response.body).toEqual({
+        data: null,
+        error: {
+          code: 'IMPORT_INVALID',
+          message: 'Import document is invalid',
+          details: {},
+        },
+        meta: {
+          request_id: response.headers['x-request-id'],
+        },
+      })
+    },
+  )
+
+  it.each([
+    {
       name: 'inactive status',
       mutate(actor: Record<string, unknown>) {
         actor.status = 'inactive'
@@ -612,6 +653,31 @@ describe('export and import routes', () => {
       details: {},
     })
     expect(JSON.stringify(response.body)).not.toContain('internal-secret')
+  })
+
+  it('does not misclassify an import service failure as malformed multipart', async () => {
+    const { app, context } = fixture()
+    const document = context.services.exports.exportJson()
+    context.services.exports = {
+      exportJson: () => document,
+      importJson: () => {
+        throw new Error('injected import service failure')
+      },
+    } as never
+
+    const response = await request(app)
+      .post('/api/v1/import')
+      .attach('file', Buffer.from(JSON.stringify(document)), {
+        filename: 'valid.json',
+        contentType: 'application/json',
+      })
+
+    expect(response.status).toBe(500)
+    expect(response.body.error).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: {},
+    })
   })
 
   it('applies host and origin protections before data transfer routes', async () => {
