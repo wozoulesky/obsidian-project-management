@@ -529,10 +529,9 @@ function remoteApiAuthentication(options: {
   ): void => {
     if (
       !required
-      || request.path === `${apiPrefix}/health`
       || (
-        request.path !== apiPrefix
-        && !request.path.startsWith(`${apiPrefix}/`)
+        request.method === 'GET'
+        && /^\/health\/?$/i.test(request.path)
       )
     ) {
       next()
@@ -598,7 +597,7 @@ export function createApp(options: CreateAppOptions): ProjectOsApp {
     allowedOrigins: options.allowedOrigins ?? [],
     bindingHost,
   }))
-  app.use(remoteApiAuthentication({
+  app.use(apiPrefix, remoteApiAuthentication({
     bindingHost,
     context: options.context,
   }))

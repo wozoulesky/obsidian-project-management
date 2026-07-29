@@ -701,6 +701,25 @@ describe('production context', () => {
           body: JSON.stringify({ name: 'anonymous-escalation' }),
         },
       )
+      const caseBypassIssue = await fetch(
+        `http://127.0.0.1:${address.port}/API/V1/TOKENS`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'case-bypass' }),
+        },
+      )
+      const mixedTrailingIssue = await fetch(
+        `http://127.0.0.1:${address.port}/aPi/V1/ToKeNs/`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer pos_invalid',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: 'mixed-trailing-bypass' }),
+        },
+      )
       const invalidImport = await fetch(
         `http://127.0.0.1:${address.port}/api/v1/import`,
         {
@@ -727,6 +746,27 @@ describe('production context', () => {
           body: JSON.stringify({ name: 'authorized-child' }),
         },
       )
+      const mixedAuthorizedIssue = await fetch(
+        `http://127.0.0.1:${address.port}/ApI/v1/ToKeNs/`,
+        {
+          method: 'POST',
+          headers: {
+            ...authorization,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: 'authorized-mixed-child' }),
+        },
+      )
+      const caseHealth = await fetch(
+        `http://127.0.0.1:${address.port}/API/V1/HeAlTh/`,
+      )
+      const postHealth = await fetch(
+        `http://127.0.0.1:${address.port}/API/V1/HEALTH`,
+        { method: 'POST' },
+      )
+      const fakeHealth = await fetch(
+        `http://127.0.0.1:${address.port}/API/V1/HEALTH/extra`,
+      )
       const authorizedImport = await fetch(
         `http://127.0.0.1:${address.port}/api/v1/import`,
         {
@@ -738,6 +778,8 @@ describe('production context', () => {
         missingProjects.text(),
         invalidSettings.text(),
         anonymousIssue.text(),
+        caseBypassIssue.text(),
+        mixedTrailingIssue.text(),
         invalidImport.text(),
       ])
 
@@ -745,10 +787,16 @@ describe('production context', () => {
       expect(missingProjects.status).toBe(401)
       expect(invalidSettings.status).toBe(401)
       expect(anonymousIssue.status).toBe(401)
+      expect(caseBypassIssue.status).toBe(401)
+      expect(mixedTrailingIssue.status).toBe(401)
       expect(invalidImport.status).toBe(401)
       expect(projects.status).toBe(200)
       expect(settings.status).toBe(200)
       expect(issued.status).toBe(201)
+      expect(mixedAuthorizedIssue.status).toBe(201)
+      expect(caseHealth.status).toBe(200)
+      expect(postHealth.status).toBe(401)
+      expect(fakeHealth.status).toBe(401)
       expect(authorizedImport.status).toBe(400)
       expect(unauthorizedBodies.join('\n')).not.toMatch(
         /pos_[A-Za-z0-9_-]{24}_[A-Za-z0-9_-]{43}/,
