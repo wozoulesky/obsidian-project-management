@@ -3,6 +3,7 @@ export {
   withImmediateTransaction,
 } from './activity-service.js'
 export type {
+  ActivityCursorFilter,
   ActivityListFilter,
   NewerActivityListFilter,
 } from './activity-service.js'

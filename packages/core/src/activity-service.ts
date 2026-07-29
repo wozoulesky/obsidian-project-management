@@ -49,6 +49,11 @@ export type NewerActivityListFilter = Omit<ActivityListFilter, 'after'> & {
   after: string
 }
 
+export type ActivityCursorFilter = Omit<
+  ActivityListFilter,
+  'after' | 'limit'
+>
+
 type ActivityInsert = {
   actorId: string
   projectId?: string | null
@@ -223,21 +228,21 @@ export class ActivityService {
       : activitySourceSchema.parse(filter.source)
     const cursor = this.database.prepare(`
       SELECT
+        rowid AS sequence,
         id,
         actor_id,
         project_id,
         source,
-        entity_id,
-        created_at
+        entity_id
       FROM activities
       WHERE id = ?
     `).get(cursorId) as {
+      sequence: number
       id: string
       actor_id: string
       project_id: string | null
       source: ActivitySource
       entity_id: string
-      created_at: string
     } | undefined
     if (
       cursor === undefined
@@ -262,20 +267,8 @@ export class ActivityService {
       )
     }
 
-    const clauses = [`
-      (
-        activities.created_at > ?
-        OR (
-          activities.created_at = ?
-          AND activities.id > ?
-        )
-      )
-    `]
-    const values: SQLInputValue[] = [
-      cursor.created_at,
-      cursor.created_at,
-      cursor.id,
-    ]
+    const clauses = ['activities.rowid > ?']
+    const values: SQLInputValue[] = [cursor.sequence]
     if (filter.entityId !== undefined) {
       clauses.push('activities.entity_id = ?')
       values.push(filter.entityId)
@@ -296,10 +289,45 @@ export class ActivityService {
     const rows = this.database.prepare(`
       ${activitySelect}
       WHERE ${clauses.join(' AND ')}
-      ORDER BY activities.created_at, activities.id
+      ORDER BY activities.rowid ASC
       LIMIT ?
     `).all(...values, pagination.limit) as unknown as ActivityRow[]
     return rows.map(mapActivity)
+  }
+
+  latestCursor(filter: ActivityCursorFilter = {}): string | null {
+    const source = filter.source === undefined
+      ? undefined
+      : activitySourceSchema.parse(filter.source)
+    const clauses: string[] = []
+    const values: SQLInputValue[] = []
+    if (filter.entityId !== undefined) {
+      clauses.push('entity_id = ?')
+      values.push(filter.entityId)
+    }
+    if (filter.actorId !== undefined) {
+      clauses.push('actor_id = ?')
+      values.push(filter.actorId)
+    }
+    if (filter.projectId !== undefined) {
+      clauses.push('project_id = ?')
+      values.push(filter.projectId)
+    }
+    if (source !== undefined) {
+      clauses.push('source = ?')
+      values.push(source)
+    }
+    const where = clauses.length === 0
+      ? ''
+      : `WHERE ${clauses.join(' AND ')}`
+    const row = this.database.prepare(`
+      SELECT id
+      FROM activities
+      ${where}
+      ORDER BY rowid DESC
+      LIMIT 1
+    `).get(...values) as { id: string } | undefined
+    return row?.id ?? null
   }
 
 }

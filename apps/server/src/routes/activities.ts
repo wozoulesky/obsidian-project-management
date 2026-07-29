@@ -7,6 +7,7 @@ import type { Router } from 'express'
 import { z } from 'zod'
 import type { AppRouteModule } from '../app.js'
 import {
+  callService,
   internalOperation,
   parseResponse,
   routeIdSchema,
@@ -28,8 +29,7 @@ export const activityRoutes: AppRouteModule = {
     router.get('/activities', (request, response) => {
       const query = querySchema.parse(request.query)
       const context = getContext()
-      const filters = {
-        limit: query.limit,
+      const cursorFilters = {
         ...(query.project_id === undefined
           ? {}
           : { projectId: query.project_id }),
@@ -38,6 +38,10 @@ export const activityRoutes: AppRouteModule = {
           ? {}
           : { entityId: query.entity_id }),
         ...(query.source === undefined ? {} : { source: query.source }),
+      }
+      const filters = {
+        ...cursorFilters,
+        limit: query.limit,
       }
       const raw = internalOperation(() => query.after === undefined
         ? context.services.activities.list(filters as ActivityListFilter)
@@ -48,10 +52,16 @@ export const activityRoutes: AppRouteModule = {
       const items = raw.slice(0, query.limit).map(
         (item) => parseResponse(persistedActivitySchema, item),
       )
+      const initialCursor = query.after === undefined
+        ? callService(
+          routeIdSchema.nullable(),
+          () => context.services.activities.latestCursor(cursorFilters),
+        )
+        : null
       sendSuccess(response, {
         items,
         next_cursor: query.after === undefined
-          ? items[0]?.id ?? null
+          ? initialCursor
           : items.at(-1)?.id ?? query.after,
       })
     })

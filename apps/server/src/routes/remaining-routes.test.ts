@@ -395,13 +395,13 @@ describe('activity routes', () => {
     }
     setActivityKey(
       first.id,
-      'activity_poll_100',
+      'activity_poll_ffff',
       '2026-07-29T10:00:00.000Z',
     )
     setActivityKey(
       second.id,
-      'activity_poll_200',
-      '2026-07-29T10:00:00.000Z',
+      'activity_poll_0000',
+      '2026-07-28T10:00:00.000Z',
     )
     const unrelated = context.services.tasks.create({
       projectId: project.id,
@@ -422,9 +422,9 @@ describe('activity routes', () => {
     ).expect(200)
     expect(initial.body.data.items.map(
       ({ id }: { id: string }) => id,
-    )).toEqual(['activity_poll_200', 'activity_poll_100'])
+    )).toEqual(['activity_poll_ffff', 'activity_poll_0000'])
     const anchor = initial.body.data.next_cursor as string
-    expect(anchor).toBe('activity_poll_200')
+    expect(anchor).toBe('activity_poll_0000')
 
     const immediate = await api.get(
       `/api/v1/activities?after=${anchor}&project_id=${project.id}&source=mcp`,
@@ -452,23 +452,31 @@ describe('activity routes', () => {
     }, owner.id, 'mcp')
     setActivityKey(
       newerOne.id,
-      'activity_poll_300',
-      '2026-07-29T12:00:00.000Z',
+      'activity_poll_zzzz',
+      '2026-07-27T12:00:00.000Z',
     )
     setActivityKey(
       newerTwo.id,
-      'activity_poll_400',
-      '2026-07-29T12:00:00.000Z',
+      'activity_poll_aaaa',
+      '2026-07-27T12:00:00.000Z',
     )
 
-    const polled = await api.get(
-      `/api/v1/activities?after=${anchor}&project_id=${project.id}&source=mcp`,
+    const firstBatch = await api.get(
+      `/api/v1/activities?after=${anchor}&project_id=${project.id}&source=mcp&limit=1`,
     ).expect(200)
-    expect(polled.body.data.items.map(
+    expect(firstBatch.body.data.items.map(
       ({ id }: { id: string }) => id,
-    )).toEqual(['activity_poll_300', 'activity_poll_400'])
-    const nextCursor = polled.body.data.next_cursor as string
-    expect(nextCursor).toBe('activity_poll_400')
+    )).toEqual(['activity_poll_zzzz'])
+    const firstCursor = firstBatch.body.data.next_cursor as string
+    expect(firstCursor).toBe('activity_poll_zzzz')
+    const secondBatch = await api.get(
+      `/api/v1/activities?after=${firstCursor}&project_id=${project.id}&source=mcp&limit=1`,
+    ).expect(200)
+    expect(secondBatch.body.data.items.map(
+      ({ id }: { id: string }) => id,
+    )).toEqual(['activity_poll_aaaa'])
+    const nextCursor = secondBatch.body.data.next_cursor as string
+    expect(nextCursor).toBe('activity_poll_aaaa')
     const empty = await api.get(
       `/api/v1/activities?after=${nextCursor}&project_id=${project.id}&source=mcp`,
     ).expect(200)

@@ -613,7 +613,7 @@ describe('REST pagination service primitives', () => {
     })).toEqual([second])
   })
 
-  it('lists only newer filtered activities in stable ascending keyset order', () => {
+  it('paginates filtered newer activities by insertion sequence', () => {
     const context = setup()
     const timestamp = '2026-07-29T10:00:00.000Z'
     const insertedAnchor = recordActivity(context.database, {
@@ -648,27 +648,54 @@ describe('REST pagination service primitives', () => {
         createdAt: timestamp,
       }),
     ]
-    context.database.prepare(
-      'UPDATE activities SET id = ? WHERE id = ?',
-    ).run('activity_100', insertedAnchor.id)
-    context.database.prepare(
-      'UPDATE activities SET id = ? WHERE id = ?',
-    ).run('activity_200', insertedCandidates[0]!.id)
-    context.database.prepare(
-      'UPDATE activities SET id = ? WHERE id = ?',
-    ).run('activity_300', insertedCandidates[1]!.id)
+    context.database.prepare(`
+      UPDATE activities
+      SET id = ?, created_at = ?
+      WHERE id = ?
+    `).run(
+      'activity_ffff',
+      timestamp,
+      insertedAnchor.id,
+    )
+    context.database.prepare(`
+      UPDATE activities
+      SET id = ?, created_at = ?
+      WHERE id = ?
+    `).run(
+      'activity_0001',
+      timestamp,
+      insertedCandidates[0]!.id,
+    )
+    context.database.prepare(`
+      UPDATE activities
+      SET id = ?, created_at = ?
+      WHERE id = ?
+    `).run(
+      'activity_0000',
+      '2026-07-28T10:00:00.000Z',
+      insertedCandidates[1]!.id,
+    )
 
     expect(context.activities.listNewer({
-      after: 'activity_100',
+      after: 'activity_ffff',
       projectId: context.project.id,
       limit: 1,
-    }).map((activity) => activity.id)).toEqual(['activity_200'])
+    }).map((activity) => activity.id)).toEqual(['activity_0001'])
     expect(context.activities.listNewer({
-      after: 'activity_200',
+      after: 'activity_0001',
       projectId: context.project.id,
-    }).map((activity) => activity.id)).toEqual(['activity_300'])
+      limit: 1,
+    }).map((activity) => activity.id)).toEqual(['activity_0000'])
+    expect(context.activities.listNewer({
+      after: 'activity_0000',
+      projectId: context.project.id,
+      limit: 1,
+    })).toEqual([])
+    expect(context.activities.latestCursor({
+      projectId: context.project.id,
+    })).toBe('activity_0000')
     expect(() => context.activities.listNewer({
-      after: 'activity_100',
+      after: 'activity_ffff',
       source: 'mcp',
     })).toThrowError(expect.objectContaining({
       code: 'ACTIVITY_CURSOR_INVALID',
