@@ -14,7 +14,9 @@ import {
   handleToolCall,
   successResult,
 } from '../tool-result.js'
-import { bestEffortTouch } from '../tool-execution.js'
+import {
+  touchAfterRead,
+} from '../tool-execution.js'
 
 const agentIdSchema = projectMemberSchema.shape.actorId.describe(
   'Persisted Agent ID returned by agent_register',
@@ -120,8 +122,8 @@ export function registerIdentityTools(
       openWorldHint: false,
     },
   }, ({ agent_id: agentId }) => handleToolCall(() => {
-    const actor = requireAgent(actors, agentId)
-    bestEffortTouch(actors, agentId)
+    requireAgent(actors, agentId)
+    const actor = actors.touch(agentId)
     return successResult(
       `Active Project OS Agent: ${actor.name} (${actor.role}).`,
       presentAgent(actor),
@@ -146,7 +148,7 @@ export function registerIdentityTools(
       ...(status === undefined ? {} : { status }),
       ...(limit === undefined ? {} : { limit }),
     })
-    bestEffortTouch(actors, agentId)
+    touchAfterRead(actors, agentId)
     return successResult(
       `Found ${agents.length} Project OS Agent(s).`,
       { agents: agents.map(presentAgent) },

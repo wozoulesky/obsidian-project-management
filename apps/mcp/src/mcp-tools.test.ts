@@ -156,11 +156,12 @@ describe('Project OS MCP identity and project tools', () => {
 
   it('resumes an active identity and lists registered agents', async () => {
     const registered = await register('dev-agent')
-    const agentId = registered.agent_id
+    const agentId = registered.agent_id as string
 
     const whoami = await harness.call('agent_whoami', {
       agent_id: agentId,
     })
+    const actorAfterWhoami = new ActorService(database).get(agentId)
     const list = await harness.call('agent_list', {
       agent_id: agentId,
       status: 'active',
@@ -170,12 +171,35 @@ describe('Project OS MCP identity and project tools', () => {
       agent_id: agentId,
       role: 'dev-agent',
       client: 'codex',
+      version: actorAfterWhoami.version,
+      last_active_at: actorAfterWhoami.lastActiveAt,
     })
     expect(structured(list).agents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ agent_id: agentId }),
       ]),
     )
+  })
+
+  it('returns an MCP error instead of read data when the caller touch fails', async () => {
+    const registered = await register()
+    const agentId = registered.agent_id as string
+    const actorBefore = new ActorService(database).get(agentId)
+    database.exec(`
+      CREATE TRIGGER fail_read_actor_touch
+      BEFORE UPDATE OF last_active_at ON actors
+      BEGIN
+        SELECT RAISE(ABORT, 'forced read touch failure');
+      END
+    `)
+
+    const failed = await harness.call('agent_list', {
+      agent_id: agentId,
+    })
+
+    expect(failed.isError).toBe(true)
+    expect(failed.structuredContent).toBeUndefined()
+    expect(new ActorService(database).get(agentId)).toEqual(actorBefore)
   })
 
   it('creates, reads, lists and updates projects through shared services', async () => {
@@ -375,6 +399,31 @@ describe('Project OS MCP identity and project tools', () => {
         operation: 'task.create',
       }),
     ])
+  })
+
+  it('takes the activity log snapshot before recording its read touch', async () => {
+    const registered = await register()
+    const agentId = registered.agent_id as string
+
+    const result = await harness.call('activity_log', {
+      agent_id: agentId,
+      limit: 200,
+    })
+    const returned = structured(result).items as Array<{
+      id: string
+    }>
+    const persisted = new ActivityService(database).list({ limit: 200 })
+    const returnedIds = new Set(returned.map(({ id }) => id))
+    const touchActivities = persisted.filter(({ id }) =>
+      !returnedIds.has(id))
+
+    expect(persisted).toHaveLength(returned.length + 1)
+    expect(touchActivities).toHaveLength(1)
+    expect(touchActivities[0]).toMatchObject({
+      actorId: agentId,
+      operation: 'actor.update',
+      source: 'mcp',
+    })
   })
 
   it('returns AGENT_PERMISSION_DENIED for a dev requirement write', async () => {

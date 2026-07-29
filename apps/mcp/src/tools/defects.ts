@@ -18,8 +18,8 @@ import {
   successResult,
 } from '../tool-result.js'
 import {
-  bestEffortTouch,
   runAtomicWrite,
+  touchAfterRead,
 } from '../tool-execution.js'
 import { requireAgent } from './identity.js'
 
@@ -191,7 +191,7 @@ export function registerDefectTools(
           }),
       ...(limit === undefined ? {} : { limit }),
     })
-    bestEffortTouch(services.actors, agentId)
+    touchAfterRead(services.actors, agentId)
     return successResult(`Found ${items.length} defect(s).`, { items })
   }))
 

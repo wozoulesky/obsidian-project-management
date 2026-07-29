@@ -12,13 +12,9 @@ export function runAtomicWrite<T>(
   })
 }
 
-export function bestEffortTouch(
+export function touchAfterRead(
   actors: ActorService,
   agentId: string,
 ): void {
-  try {
-    actors.touch(agentId)
-  } catch {
-    // A successful read stays successful if its advisory activity touch fails.
-  }
+  actors.touch(agentId)
 }

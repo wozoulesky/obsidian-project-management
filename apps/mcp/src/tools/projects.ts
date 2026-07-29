@@ -19,8 +19,8 @@ import {
   successResult,
 } from '../tool-result.js'
 import {
-  bestEffortTouch,
   runAtomicWrite,
+  touchAfterRead,
 } from '../tool-execution.js'
 import { requireAgent } from './identity.js'
 
@@ -146,7 +146,7 @@ export function registerProjectTools(
   }) => handleToolCall(() => {
     authorize(services, agentId, 'project.read')
     const project = services.projects.get(projectId)
-    bestEffortTouch(services.actors, agentId)
+    touchAfterRead(services.actors, agentId)
     return successResult(
       `Project ${project.code}: ${project.name}.`,
       { project },
@@ -181,7 +181,7 @@ export function registerProjectTools(
         : { after: { code: afterCode, id: afterId } }),
       ...(limit === undefined ? {} : { limit }),
     })
-    bestEffortTouch(services.actors, agentId)
+    touchAfterRead(services.actors, agentId)
     return successResult(
       `Found ${projects.length} Project OS project(s).`,
       { projects },

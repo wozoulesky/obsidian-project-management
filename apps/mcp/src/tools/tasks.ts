@@ -18,8 +18,8 @@ import {
   successResult,
 } from '../tool-result.js'
 import {
-  bestEffortTouch,
   runAtomicWrite,
+  touchAfterRead,
 } from '../tool-execution.js'
 import { requireAgent } from './identity.js'
 
@@ -169,7 +169,7 @@ export function registerTaskTools(
   }, ({ agent_id: agentId, task_id: taskId }) => handleToolCall(() => {
     authorizeRead(services, agentId)
     const task = services.tasks.get(taskId)
-    bestEffortTouch(services.actors, agentId)
+    touchAfterRead(services.actors, agentId)
     return successResult(`Task ${task.code}: ${task.title}.`, { task })
   }))
 
@@ -213,7 +213,7 @@ export function registerTaskTools(
           }),
       ...(limit === undefined ? {} : { limit }),
     })
-    bestEffortTouch(services.actors, agentId)
+    touchAfterRead(services.actors, agentId)
     return successResult(`Found ${items.length} task(s).`, { items })
   }))
 
