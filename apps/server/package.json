@@ -11,11 +11,13 @@
   "dependencies": {
     "@project-os/contracts": "0.0.0",
     "@project-os/core": "0.0.0",
+    "@project-os/mcp": "0.0.0",
     "express": "^5.1.0",
     "multer": "^2.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@types/express": "^5.0.3",
     "@types/multer": "^2.2.0",
     "@types/node": "^24.13.2",

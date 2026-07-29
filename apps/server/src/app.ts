@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto'
 import {
   DomainError,
 } from '@project-os/core'
+import {
+  createStreamableHttpHandler,
+} from '@project-os/mcp'
 import express from 'express'
 import type {
   ErrorRequestHandler,
@@ -160,6 +163,7 @@ export type AppRouteModule = {
 
 export type CreateAppOptions = {
   context: AppContext
+  mcpBindingHost?: string
   routeModules?: readonly AppRouteModule[]
 }
 
@@ -489,6 +493,36 @@ export function createApp(options: CreateAppOptions) {
     next()
   })
   app.use(securityHeaders)
+
+  const mcp = createStreamableHttpHandler({
+    services: options.context.services,
+    bindingHost: options.mcpBindingHost ?? '127.0.0.1',
+    verifyBearer(token) {
+      return options.context.services.tokens.verify(token)
+    },
+  })
+  const handleMcp = (
+    request: Request,
+    response: Response,
+    next: NextFunction,
+  ) => {
+    void mcp.handle(request, response, request.body).catch(next)
+  }
+  app.post('/mcp', express.json({ limit: '1mb' }), handleMcp)
+  app.get('/mcp', handleMcp)
+  app.delete('/mcp', handleMcp)
+  app.all('/mcp', (_request, response) => {
+    response.setHeader('Allow', 'POST, GET, DELETE')
+    response.status(405).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Method not allowed',
+      },
+      id: null,
+    })
+  })
+
   app.use(express.json({ limit: '100kb' }))
 
   const router = express.Router()
