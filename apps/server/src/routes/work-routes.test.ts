@@ -26,11 +26,15 @@ import {
 const contexts: AppContext[] = []
 const directories: string[] = []
 
-function createContext(seed = true): AppContext {
+function createContext(
+  seed = true,
+  localActorId?: string,
+): AppContext {
   const directory = mkdtempSync(join(tmpdir(), 'project-os-work-routes-'))
   const context = createAppContext({
     databasePath: join(directory, 'test.db'),
     backupRoot: join(directory, 'backups'),
+    ...(localActorId === undefined ? {} : { localActorId }),
   })
   directories.push(directory)
   contexts.push(context)
@@ -562,6 +566,100 @@ describe('strict request boundaries and live context', () => {
     }).expect(400)
 
     expect(response.body.error.code).toBe('ACTOR_INACTIVE')
+  })
+
+  it('rejects an active agent configured as the local Web actor before any write', async () => {
+    const agentId = 'actor_configured_agent'
+    const context = createContext(true, agentId)
+    context.database.prepare(`
+      INSERT INTO actors (
+        id, name, kind, role, status, client, capabilities_json,
+        registered_at, last_active_at, version
+      ) VALUES (?, ?, 'agent', 'dev-agent', 'active', ?, '[]', ?, ?, 1)
+    `).run(
+      agentId,
+      'Configured Agent',
+      'test-client',
+      '2026-07-29T00:00:00.000Z',
+      '2026-07-29T00:00:00.000Z',
+    )
+    const api = request(createApp({ context }))
+    const owner = defaultSeedDocument.actors[0]!
+    const project = defaultSeedDocument.projects[0]!
+    const task = context.services.tasks.create({
+      projectId: project.id,
+      title: 'Existing task',
+      assigneeId: owner.id,
+      startDate: '2026-07-29',
+      dueDate: '2026-08-01',
+      priority: 'P1',
+    }, owner.id, 'web')
+    const countsBefore = {
+      actors: context.database.prepare(
+        'SELECT COUNT(*) AS count FROM actors',
+      ).get(),
+      projects: context.database.prepare(
+        'SELECT COUNT(*) AS count FROM projects',
+      ).get(),
+      tasks: context.database.prepare(
+        'SELECT COUNT(*) AS count FROM tasks',
+      ).get(),
+      activities: context.database.prepare(
+        'SELECT COUNT(*) AS count FROM activities',
+      ).get(),
+    }
+
+    const responses = await Promise.all([
+      api.post('/api/v1/actors').send({
+        name: 'Blocked actor',
+        role: 'member',
+      }),
+      api.post('/api/v1/projects').send({
+        name: 'Blocked project',
+        ownerId: owner.id,
+      }),
+      api.post(`/api/v1/projects/${project.id}/tasks`).send({
+        title: 'Blocked task',
+        assigneeId: owner.id,
+        startDate: '2026-07-29',
+        dueDate: '2026-08-01',
+        priority: 'P1',
+      }),
+      api.post(`/api/v1/tasks/${task.id}/progress`).send({
+        progress: 50,
+        status: 'in_progress',
+        note: 'Blocked progress',
+        version: task.version,
+      }),
+    ])
+
+    for (const response of responses) {
+      expect(response.status).toBe(400)
+      expect(response.body.error).toEqual({
+        code: 'LOCAL_ACTOR_INVALID',
+        message: 'Configured local actor must be an active human',
+        details: { actorId: agentId },
+      })
+    }
+    expect({
+      actors: context.database.prepare(
+        'SELECT COUNT(*) AS count FROM actors',
+      ).get(),
+      projects: context.database.prepare(
+        'SELECT COUNT(*) AS count FROM projects',
+      ).get(),
+      tasks: context.database.prepare(
+        'SELECT COUNT(*) AS count FROM tasks',
+      ).get(),
+      activities: context.database.prepare(
+        'SELECT COUNT(*) AS count FROM activities',
+      ).get(),
+    }).toEqual(countsBefore)
+    expect(context.services.tasks.get(task.id)).toMatchObject({
+      progress: 0,
+      status: 'not_started',
+      version: task.version,
+    })
   })
 
   it('uses the restored database for subsequent route requests', async () => {

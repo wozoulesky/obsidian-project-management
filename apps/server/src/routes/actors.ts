@@ -152,6 +152,13 @@ export function requestActorId(context: AppContext): string {
       { actorId: actor.id },
     )
   }
+  if (actor.kind !== 'human') {
+    throw new DomainError(
+      'LOCAL_ACTOR_INVALID',
+      'Configured local actor must be an active human',
+      { actorId: actor.id },
+    )
+  }
   return actor.id
 }
 
