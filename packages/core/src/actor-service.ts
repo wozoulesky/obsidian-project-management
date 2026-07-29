@@ -342,11 +342,16 @@ export class ActorService {
         )
       }
 
-      const name = input.name ?? current.name
-      const capabilities = input.capabilities ?? current.capabilities
+      const name = input.name === undefined ? current.name : input.name
+      const capabilities = input.capabilities === undefined
+        ? current.capabilities
+        : input.capabilities
+      const requestedRole = input.role === undefined
+        ? current.role
+        : input.role
       const role = current.kind === 'human'
-        ? humanActorRoleSchema.parse(input.role ?? current.role)
-        : agentActorRoleSchema.parse(input.role ?? current.role)
+        ? humanActorRoleSchema.parse(requestedRole)
+        : agentActorRoleSchema.parse(requestedRole)
       validateActorData({
         name,
         kind: current.kind,

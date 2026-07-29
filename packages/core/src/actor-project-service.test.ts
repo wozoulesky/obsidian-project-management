@@ -174,6 +174,59 @@ describe('actor and project services', () => {
     expect(activities.list({ entityId: owner.id })).toHaveLength(activityCount)
   })
 
+  it.each([
+    ['name', { name: null }],
+    ['role', { role: null }],
+    ['capabilities', { capabilities: null }],
+  ])(
+    'rejects a null actor %s update before no-op detection',
+    (_field, patch) => {
+      const owner = actors.createHuman({
+        name: 'Lin',
+        role: 'owner',
+        capabilities: ['planning'],
+      })
+      const activityCount = activities.list({ entityId: owner.id }).length
+
+      expect(() => {
+        actors.update(
+          owner.id,
+          { ...patch, version: owner.version } as never,
+          owner.id,
+          'web',
+        )
+      }).toThrowError(expect.objectContaining({ name: 'ZodError' }))
+      expect(actors.get(owner.id)).toEqual(owner)
+      expect(activities.list({ entityId: owner.id }))
+        .toHaveLength(activityCount)
+    },
+  )
+
+  it('continues to treat undefined actor fields as not provided', () => {
+    const owner = actors.createHuman({
+      name: 'Lin',
+      role: 'owner',
+      capabilities: ['planning'],
+    })
+    const activityCount = activities.list({ entityId: owner.id }).length
+
+    const result = actors.update(
+      owner.id,
+      {
+        name: undefined,
+        role: undefined,
+        capabilities: undefined,
+        version: owner.version,
+      } as never,
+      owner.id,
+      'web',
+    )
+
+    expect(result).toEqual(owner)
+    expect(activities.list({ entityId: owner.id }))
+      .toHaveLength(activityCount)
+  })
+
   it('rejects agent identity conflicts with a stable domain error', () => {
     const admin = actors.createHuman({ name: 'Lin', role: 'owner' })
     const first = actors.registerAgent(
