@@ -1,12 +1,22 @@
 import { randomUUID } from 'node:crypto'
 import {
+  closeSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
+  openSync,
+  realpathSync,
   renameSync,
   rmSync,
 } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import {
+  dirname,
+  isAbsolute,
+  parse,
+  relative,
+  resolve,
+} from 'node:path'
 import {
   backup,
   DatabaseSync,
@@ -61,6 +71,91 @@ function isWithin(parent: string, child: string): boolean {
   return pathFromParent !== ''
     && !pathFromParent.startsWith('..')
     && !isAbsolute(pathFromParent)
+}
+
+function samePath(left: string, right: string): boolean {
+  return process.platform === 'win32'
+    ? left.toLowerCase() === right.toLowerCase()
+    : left === right
+}
+
+function pathExistsWithoutFollowing(path: string): boolean {
+  try {
+    lstatSync(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function assertNoLinkComponents(path: string): void {
+  const absolute = resolve(path)
+  const root = parse(absolute).root
+  const parts = relative(root, absolute).split(/[\\/]/).filter(Boolean)
+  let current = root
+
+  for (const part of parts) {
+    current = resolve(current, part)
+    try {
+      if (lstatSync(current).isSymbolicLink()) {
+        throw pathInvalid()
+      }
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw error
+      }
+      if (
+        typeof error === 'object'
+        && error !== null
+        && 'code' in error
+        && error.code === 'ENOENT'
+      ) {
+        continue
+      }
+      throw pathInvalid()
+    }
+  }
+}
+
+function ensureSafeDirectory(root: string, directory: string): void {
+  const pathFromRoot = relative(root, directory)
+  if (
+    pathFromRoot.startsWith('..')
+    || isAbsolute(pathFromRoot)
+  ) {
+    throw pathInvalid()
+  }
+
+  let current = root
+  const parts = pathFromRoot.split(/[\\/]/).filter(Boolean)
+  for (const part of parts) {
+    current = resolve(current, part)
+    if (!pathExistsWithoutFollowing(current)) {
+      try {
+        mkdirSync(current)
+      } catch {
+        throw pathInvalid()
+      }
+    }
+    let status
+    try {
+      status = lstatSync(current)
+    } catch {
+      throw pathInvalid()
+    }
+    if (!status.isDirectory() || status.isSymbolicLink()) {
+      throw pathInvalid()
+    }
+    let real
+    try {
+      real = realpathSync(current)
+    } catch {
+      throw pathInvalid()
+    }
+    if (!samePath(real, current) || !isWithin(root, real)) {
+      throw pathInvalid()
+    }
+  }
 }
 
 function removeGenerated(path: string): void {
@@ -148,7 +243,19 @@ export class BackupService {
     backupDirectory: string,
   ) {
     this.activePath = resolve(lifecycle.databasePath)
-    this.root = resolve(backupDirectory)
+    const requestedRoot = resolve(backupDirectory)
+    assertNoLinkComponents(requestedRoot)
+    try {
+      mkdirSync(requestedRoot, { recursive: true })
+    } catch {
+      throw pathInvalid()
+    }
+    assertNoLinkComponents(requestedRoot)
+    try {
+      this.root = realpathSync(requestedRoot)
+    } catch {
+      throw pathInvalid()
+    }
   }
 
   async create(
@@ -166,12 +273,28 @@ export class BackupService {
     const destination = resolve(this.root, filename)
     if (
       !isWithin(this.root, destination)
-      || destination === this.activePath
-      || existsSync(destination)
+      || samePath(destination, this.activePath)
+      || pathExistsWithoutFollowing(destination)
     ) {
       throw pathInvalid()
     }
-    mkdirSync(dirname(destination), { recursive: true })
+    ensureSafeDirectory(this.root, dirname(destination))
+    assertNoLinkComponents(dirname(destination))
+    let descriptor: number
+    try {
+      descriptor = openSync(destination, 'wx')
+      closeSync(descriptor)
+      assertNoLinkComponents(destination)
+      if (
+        !lstatSync(destination).isFile()
+        || !samePath(realpathSync(dirname(destination)), dirname(destination))
+      ) {
+        throw pathInvalid()
+      }
+    } catch {
+      removeGenerated(destination)
+      throw pathInvalid()
+    }
 
     try {
       await backup(this.lifecycle.getDatabase(), destination)
@@ -206,8 +329,25 @@ export class BackupService {
       throw backupInvalid()
     }
     const candidate = resolve(candidatePath)
-    if (candidate === this.activePath || !existsSync(candidate)) {
+    if (!pathExistsWithoutFollowing(candidate)) {
       throw backupInvalid()
+    }
+    try {
+      assertNoLinkComponents(candidate)
+      const status = lstatSync(candidate)
+      const realCandidate = realpathSync(candidate)
+      if (
+        status.isSymbolicLink()
+        || !status.isFile()
+        || samePath(realCandidate, realpathSync(this.activePath))
+      ) {
+        throw pathInvalid()
+      }
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw error
+      }
+      throw pathInvalid()
     }
 
     const nonce = randomUUID()

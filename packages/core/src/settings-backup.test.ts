@@ -1,9 +1,11 @@
 import {
   copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
@@ -18,7 +20,11 @@ import {
 } from './backup-service.js'
 import { openDatabase } from './database.js'
 import { DomainError } from './errors.js'
-import { ExportService } from './export-service.js'
+import {
+  ExportService,
+  validateExportDocument,
+} from './export-service.js'
+import type { ExportDocument } from './export-service.js'
 import {
   createLegacyFixtureSeedDocument,
   seedDatabase,
@@ -56,7 +62,7 @@ function insertOwner(database: DatabaseSync, id = 'actor_owner'): void {
   `).run(id, 'Owner', timestamp)
 }
 
-function fixtureDocument(name = 'Atlas') {
+function fixtureDocument(name = 'Atlas'): ExportDocument {
   const owner = {
     id: 'actor_owner',
     name: 'Owner',
@@ -185,10 +191,51 @@ describe('settings, tokens, export, backup, and seed', () => {
       'actor_owner',
       'web',
     )
-    expect(updated).toMatchObject({ theme: 'dark', version: 1 })
+    expect(updated).toMatchObject({ theme: 'dark', version: 2 })
     expect(settings.get()).toEqual(updated)
     expect(new ActivityService(database).list({ entityId: 'app' }))
       .toHaveLength(1)
+    database.close()
+  })
+
+  it('optimistically locks the virtual default before the first persisted update', () => {
+    const database = openDatabase(join(temporaryDirectory, 'settings.sqlite'))
+    insertOwner(database)
+    const settings = new SettingsService(database)
+    const initial = settings.get()
+
+    expect(() => settings.update(
+      { ...initial, theme: 'dark', version: 99 },
+      'actor_owner',
+      'web',
+    )).toThrowError(expect.objectContaining({
+      code: 'SETTINGS_VERSION_CONFLICT',
+    }))
+    expect(() => settings.update(
+      { ...initial, theme: 'dark', version: null } as never,
+      'actor_owner',
+      'web',
+    )).toThrowError(expect.objectContaining({ code: 'SETTINGS_INVALID' }))
+    const missingVersion = { ...initial } as Record<string, unknown>
+    delete missingVersion.version
+    expect(() => settings.update(
+      missingVersion as never,
+      'actor_owner',
+      'web',
+    )).toThrowError(expect.objectContaining({ code: 'SETTINGS_INVALID' }))
+    expect(database.prepare('SELECT COUNT(*) AS count FROM settings').get())
+      .toEqual({ count: 0 })
+    expect(new ActivityService(database).list()).toHaveLength(0)
+
+    expect(settings.update(initial, 'actor_owner', 'web')).toEqual(initial)
+    expect(database.prepare('SELECT COUNT(*) AS count FROM settings').get())
+      .toEqual({ count: 0 })
+    const updated = settings.update(
+      { ...initial, theme: 'dark' },
+      'actor_owner',
+      'web',
+    )
+    expect(updated.version).toBe(2)
     database.close()
   })
 
@@ -409,6 +456,149 @@ describe('settings, tokens, export, backup, and seed', () => {
     database.close()
   })
 
+  it('rejects an import that omits an activity actor or project anchor', () => {
+    const database = openDatabase(join(temporaryDirectory, 'anchors.sqlite'))
+    const exports = new ExportService(database)
+    exports.importJson(fixtureDocument())
+    database.prepare(`
+      INSERT INTO activities (
+        id, actor_id, project_id, source, operation, entity_type,
+        entity_id, action, note, details_json, created_at
+      ) VALUES (?, ?, ?, 'web', 'project.update', 'project', ?, ?, NULL, '{}', ?)
+    `).run(
+      'activity_anchor',
+      'actor_owner',
+      'project_atlas',
+      'project_atlas',
+      'Anchored project',
+      timestamp,
+    )
+    const before = exports.exportJson()
+    const emptyGraph = {
+      ...fixtureDocument(),
+      actors: [],
+      projects: [],
+      projectMembers: [],
+      tasks: [],
+      requirements: [],
+      defects: [],
+    }
+
+    expect(() => exports.importJson(emptyGraph)).toThrowError(
+      expect.objectContaining({ code: 'IMPORT_INVALID' }),
+    )
+    expect({
+      ...exports.exportJson(),
+      exportedAt: before.exportedAt,
+    }).toEqual(before)
+    expect(() => validateExportDocument(exports.exportJson())).not.toThrow()
+    database.close()
+  })
+
+  it('keeps audit rows and tokens while producing exactly the imported graph', () => {
+    const database = openDatabase(join(temporaryDirectory, 'exact.sqlite'))
+    const exports = new ExportService(database)
+    exports.importJson(fixtureDocument())
+    database.prepare(`
+      INSERT INTO activities (
+        id, actor_id, project_id, source, operation, entity_type,
+        entity_id, action, note, details_json, created_at
+      ) VALUES (?, ?, ?, 'web', 'project.update', 'project', ?, ?, NULL, '{}', ?)
+    `).run(
+      'activity_anchor',
+      'actor_owner',
+      'project_atlas',
+      'project_atlas',
+      'Anchored project',
+      timestamp,
+    )
+    const token = new TokenService(database).issue('preserved')
+    const incoming = fixtureDocument('Imported exact graph')
+
+    exports.importJson(incoming, 'actor_owner', 'web')
+
+    const actual = exports.exportJson()
+    expect({ ...actual, exportedAt: incoming.exportedAt }).toEqual(incoming)
+    expect(new TokenService(database).verify(token.token)).toBe(true)
+    expect(new ActivityService(database).list()).toHaveLength(2)
+    expect(() => validateExportDocument(actual)).not.toThrow()
+    database.close()
+  })
+
+  it('replaces an anchored project whose former owner is not imported', () => {
+    const database = openDatabase(join(temporaryDirectory, 'owner-swap.sqlite'))
+    const exports = new ExportService(database)
+    const initial = fixtureDocument()
+    const auditor: ExportDocument['actors'][number] = {
+      id: 'actor_auditor',
+      name: 'Auditor',
+      kind: 'human',
+      role: 'member' as const,
+      status: 'active',
+      client: null,
+      capabilities: [],
+      registeredAt: timestamp,
+      lastActiveAt: null,
+      version: 1,
+    }
+    initial.actors.push(auditor)
+    initial.projectMembers.push({
+      projectId: 'project_atlas',
+      actorId: auditor.id,
+      membershipRole: 'member',
+      joinedAt: timestamp,
+    })
+    exports.importJson(initial)
+    database.prepare(`
+      INSERT INTO activities (
+        id, actor_id, project_id, source, operation, entity_type,
+        entity_id, action, note, details_json, created_at
+      ) VALUES (?, ?, ?, 'web', 'project.update', 'project', ?, ?, NULL, '{}', ?)
+    `).run(
+      'activity_auditor',
+      auditor.id,
+      'project_atlas',
+      'project_atlas',
+      'Audited project',
+      timestamp,
+    )
+    const incoming = structuredClone(initial)
+    incoming.actors = [auditor]
+    incoming.projects[0]!.ownerId = auditor.id
+    incoming.projectMembers = [{
+      projectId: 'project_atlas',
+      actorId: auditor.id,
+      membershipRole: 'owner',
+      joinedAt: timestamp,
+    }]
+    incoming.tasks[0]!.assigneeId = auditor.id
+    incoming.tasks[0]!.assignee = auditor
+    incoming.defects[0]!.assigneeId = auditor.id
+    incoming.defects[0]!.assignee = auditor
+
+    exports.importJson(incoming, auditor.id, 'web')
+
+    const actual = exports.exportJson()
+    expect({ ...actual, exportedAt: incoming.exportedAt }).toEqual(incoming)
+    expect(actual.actors.some(({ id }) => id === 'actor_owner')).toBe(false)
+    database.close()
+  })
+
+  it('rejects import.run actors that are absent from the incoming graph', () => {
+    const database = openDatabase(join(temporaryDirectory, 'actor-import.sqlite'))
+    const exports = new ExportService(database)
+    exports.importJson(fixtureDocument())
+    const before = exports.exportJson()
+
+    expect(() => exports.importJson(before, 'missing_actor', 'web'))
+      .toThrowError(expect.objectContaining({ code: 'IMPORT_INVALID' }))
+    expect({
+      ...exports.exportJson(),
+      exportedAt: before.exportedAt,
+    }).toEqual(before)
+    database.close()
+  })
+
   it('creates a WAL-consistent backup and restores it through an explicit lifecycle', async () => {
     const databasePath = join(temporaryDirectory, 'active.sqlite')
     const backupDirectory = join(temporaryDirectory, 'backups')
@@ -527,6 +717,56 @@ describe('settings, tokens, export, backup, and seed', () => {
     lifecycle.database.close()
   })
 
+  it('rejects a backup destination that escapes through a directory link', async ({
+    skip,
+  }) => {
+    const databasePath = join(temporaryDirectory, 'active.sqlite')
+    const backupRoot = join(temporaryDirectory, 'backups')
+    const outside = join(temporaryDirectory, 'outside')
+    const linkedDirectory = join(backupRoot, 'linked')
+    mkdirSync(backupRoot)
+    mkdirSync(outside)
+    try {
+      symlinkSync(outside, linkedDirectory, process.platform === 'win32'
+        ? 'junction'
+        : 'dir')
+    } catch {
+      skip()
+      return
+    }
+    const lifecycle = createLifecycle(databasePath)
+    const backups = new BackupService(lifecycle, backupRoot)
+
+    await expect(backups.create('linked/escape.sqlite')).rejects.toMatchObject({
+      code: 'BACKUP_PATH_INVALID',
+    })
+    expect(existsSync(join(outside, 'escape.sqlite'))).toBe(false)
+    lifecycle.database.close()
+  })
+
+  it('rejects a restore candidate that is itself a symbolic link', async ({
+    skip,
+  }) => {
+    const databasePath = join(temporaryDirectory, 'active.sqlite')
+    const backupRoot = join(temporaryDirectory, 'backups')
+    const lifecycle = createLifecycle(databasePath)
+    const backups = new BackupService(lifecycle, backupRoot)
+    const candidate = await backups.create('candidate.sqlite')
+    const linkedCandidate = join(temporaryDirectory, 'linked-candidate.sqlite')
+    try {
+      symlinkSync(candidate, linkedCandidate, 'file')
+    } catch {
+      lifecycle.database.close()
+      skip()
+      return
+    }
+
+    expect(() => backups.restore(linkedCandidate)).toThrowError(
+      expect.objectContaining({ code: 'BACKUP_PATH_INVALID' }),
+    )
+    lifecycle.database.close()
+  })
+
   it('seeds only an entirely empty database and is idempotent', () => {
     const database = openDatabase(join(temporaryDirectory, 'seed.sqlite'))
     const document = fixtureDocument()
@@ -547,6 +787,72 @@ describe('settings, tokens, export, backup, and seed', () => {
     expect(database.prepare('SELECT COUNT(*) AS count FROM actors').get())
       .toEqual({ count: 1 })
     database.close()
+  })
+
+  it('does not seed over settings, tokens, or activity audit anchors', () => {
+    const cases = [
+      {
+        name: 'settings',
+        prepare(database: DatabaseSync) {
+          database.prepare(`
+            INSERT INTO settings (key, value_json, updated_at, version)
+            VALUES ('app', ?, ?, 7)
+          `).run(JSON.stringify({
+            theme: 'dark',
+            background: 'solid',
+            accent: 'purple',
+            density: 'compact',
+          }), timestamp)
+        },
+      },
+      {
+        name: 'token',
+        prepare(database: DatabaseSync) {
+          database.prepare(`
+            INSERT INTO access_tokens (
+              id, name, token_hash, created_at, last_used_at, revoked_at, version
+            ) VALUES ('token_existing', 'existing', 'digest', ?, NULL, NULL, 1)
+          `).run(timestamp)
+        },
+      },
+      {
+        name: 'activity',
+        prepare(database: DatabaseSync) {
+          insertOwner(database, 'activity_actor')
+          database.prepare(`
+            INSERT INTO activities (
+              id, actor_id, project_id, source, operation, entity_type,
+              entity_id, action, note, details_json, created_at
+            ) VALUES (
+              'activity_existing', 'activity_actor', NULL, 'web',
+              'actor.create', 'actor', 'activity_actor', 'Existing',
+              NULL, '{}', ?
+            )
+          `).run(timestamp)
+        },
+      },
+    ]
+
+    for (const testCase of cases) {
+      const database = openDatabase(
+        join(temporaryDirectory, `seed-${testCase.name}.sqlite`),
+      )
+      testCase.prepare(database)
+      expect(seedDatabase(database, fixtureDocument())).toBe(false)
+      expect(database.prepare('SELECT COUNT(*) AS count FROM projects').get())
+        .toEqual({ count: 0 })
+      if (testCase.name === 'settings') {
+        expect(database.prepare(
+          "SELECT version FROM settings WHERE key = 'app'",
+        ).get()).toEqual({ version: 7 })
+      }
+      if (testCase.name === 'token') {
+        expect(database.prepare(
+          "SELECT name FROM access_tokens WHERE id = 'token_existing'",
+        ).get()).toEqual({ name: 'existing' })
+      }
+      database.close()
+    }
   })
 
   it('adapts legacy fixtures into a default project without browser imports', () => {

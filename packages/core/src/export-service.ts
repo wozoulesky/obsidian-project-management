@@ -512,6 +512,22 @@ export function replacePrimaryData(
   database: DatabaseSync,
   document: ExportDocument,
 ): void {
+  database.prepare(
+    'DROP TABLE IF EXISTS temp.project_os_import_actor_ids',
+  ).run()
+  database.prepare(`
+    CREATE TEMP TABLE project_os_import_actor_ids (
+      id TEXT PRIMARY KEY
+    ) STRICT
+  `).run()
+  const importedActorIdInsert = database.prepare(`
+    INSERT INTO project_os_import_actor_ids (id)
+    VALUES (?)
+  `)
+  for (const actor of document.actors) {
+    importedActorIdInsert.run(actor.id)
+  }
+
   database.prepare('DELETE FROM defects').run()
   database.prepare('DELETE FROM requirement_tasks').run()
   database.prepare('DELETE FROM requirements').run()
@@ -525,7 +541,21 @@ export function replacePrimaryData(
   `).run()
   database.prepare(`
     DELETE FROM actors
-    WHERE id NOT IN (SELECT actor_id FROM activities)
+    WHERE id NOT IN (SELECT id FROM project_os_import_actor_ids)
+      AND id NOT IN (SELECT actor_id FROM activities)
+      AND id NOT IN (SELECT owner_id FROM projects)
+  `).run()
+  database.prepare(`
+    UPDATE actors
+    SET client = '__project_os_import__' || id
+    WHERE kind = 'agent'
+  `).run()
+  database.prepare(`
+    UPDATE projects
+    SET code = '__project_os_import__' || id
+    WHERE id IN (
+      SELECT project_id FROM activities WHERE project_id IS NOT NULL
+    )
   `).run()
 
   const actorInsert = database.prepare(`
@@ -593,6 +623,13 @@ export function replacePrimaryData(
       project.version,
     )
   }
+  database.prepare(`
+    DELETE FROM actors
+    WHERE id NOT IN (SELECT id FROM project_os_import_actor_ids)
+  `).run()
+  database.prepare(
+    'DROP TABLE temp.project_os_import_actor_ids',
+  ).run()
 
   const memberInsert = database.prepare(`
     INSERT INTO project_members (
@@ -746,6 +783,31 @@ export class ExportService {
     let validatedSource: ActivitySource
     try {
       validatedSource = activitySourceSchema.parse(source)
+    } catch {
+      throw importInvalid()
+    }
+
+    try {
+      const actorIds = new Set(document.actors.map(({ id }) => id))
+      const projectIds = new Set(document.projects.map(({ id }) => id))
+      if (actorId !== undefined && !actorIds.has(actorId)) {
+        throw importInvalid()
+      }
+      const anchors = this.database.prepare(`
+        SELECT DISTINCT actor_id, project_id
+        FROM activities
+      `).all() as {
+        actor_id: string
+        project_id: string | null
+      }[]
+      if (anchors.some((anchor) =>
+        !actorIds.has(anchor.actor_id)
+        || (
+          anchor.project_id !== null
+          && !projectIds.has(anchor.project_id)
+        ))) {
+        throw importInvalid()
+      }
     } catch {
       throw importInvalid()
     }

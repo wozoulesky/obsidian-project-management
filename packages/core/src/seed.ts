@@ -245,7 +245,10 @@ export function seedDatabase(
         + (SELECT COUNT(*) FROM tasks)
         + (SELECT COUNT(*) FROM requirements)
         + (SELECT COUNT(*) FROM requirement_tasks)
-        + (SELECT COUNT(*) FROM defects) AS count
+        + (SELECT COUNT(*) FROM defects)
+        + (SELECT COUNT(*) FROM settings)
+        + (SELECT COUNT(*) FROM access_tokens)
+        + (SELECT COUNT(*) FROM activities) AS count
     `).get() as { count: number }
 
       if (counts.count !== 0) {

@@ -108,7 +108,7 @@ export class SettingsService {
           ? { ...defaultSettings }
           : parseSettings(row.value_json, row.updated_at, row.version)
 
-        if (row !== undefined && validated.version !== current.version) {
+        if (validated.version !== current.version) {
           throw new DomainError(
             'SETTINGS_VERSION_CONFLICT',
             'Settings changed since they were read',
@@ -129,7 +129,7 @@ export class SettingsService {
           accent: validated.accent,
           density: validated.density,
           updatedAt: new Date().toISOString(),
-          version: row === undefined ? 1 : current.version + 1,
+          version: current.version + 1,
         }
         const valueJson = JSON.stringify({
           theme: updated.theme,
