@@ -14,6 +14,9 @@ import type {
 } from './create-server.js'
 
 type Session = {
+  activeRequests: number
+  closing?: Promise<void>
+  lastActiveAt: number
   server: ReturnType<typeof createProjectOsMcpServer>
   transport: StreamableHTTPServerTransport
 }
@@ -26,6 +29,9 @@ export type StreamableHttpHandlerOptions = {
   services: ProjectOsMcpServices
   bindingHost: string
   verifyBearer(token: string): boolean
+  cleanupIntervalMs?: number
+  maxSessions?: number
+  sessionIdleTtlMs?: number
   onError?: (error: unknown) => void
 }
 
@@ -88,8 +94,23 @@ export function createStreamableHttpHandler(
   options: StreamableHttpHandlerOptions,
 ): StreamableHttpHandler {
   const sessions = new Map<string, Session>()
+  const allSessions = new Set<Session>()
   const bearerRequired = !isLoopbackBindingHost(options.bindingHost)
+  const maxSessions = options.maxSessions ?? 100
+  const sessionIdleTtlMs = options.sessionIdleTtlMs ?? 15 * 60_000
+  const cleanupIntervalMs = options.cleanupIntervalMs
+    ?? Math.min(60_000, sessionIdleTtlMs)
+  if (!Number.isSafeInteger(maxSessions) || maxSessions < 1) {
+    throw new RangeError('maxSessions must be a positive integer')
+  }
+  if (!Number.isSafeInteger(sessionIdleTtlMs) || sessionIdleTtlMs < 1) {
+    throw new RangeError('sessionIdleTtlMs must be a positive integer')
+  }
+  if (!Number.isSafeInteger(cleanupIntervalMs) || cleanupIntervalMs < 1) {
+    throw new RangeError('cleanupIntervalMs must be a positive integer')
+  }
   let closed = false
+  let cleanup: Promise<void> | undefined
 
   const authenticate = (
     request: HttpRequest,
@@ -110,14 +131,18 @@ export function createStreamableHttpHandler(
   }
 
   const closeSession = async (session: Session): Promise<void> => {
-    const sessionId = session.transport.sessionId
-    if (
-      sessionId !== undefined
-      && sessions.get(sessionId) === session
-    ) {
-      sessions.delete(sessionId)
-    }
-    await session.server.close()
+    session.closing ??= (async () => {
+      const sessionId = session.transport.sessionId
+      if (
+        sessionId !== undefined
+        && sessions.get(sessionId) === session
+      ) {
+        sessions.delete(sessionId)
+      }
+      allSessions.delete(session)
+      await session.server.close()
+    })()
+    await session.closing
   }
 
   const createSession = async (): Promise<Session> => {
@@ -129,7 +154,13 @@ export function createStreamableHttpHandler(
       },
     })
     const server = createProjectOsMcpServer(options.services)
-    session = { server, transport }
+    session = {
+      activeRequests: 0,
+      lastActiveAt: Date.now(),
+      server,
+      transport,
+    }
+    allSessions.add(session)
     server.server.onclose = () => {
       const sessionId = transport.sessionId
       if (
@@ -138,12 +169,38 @@ export function createStreamableHttpHandler(
       ) {
         sessions.delete(sessionId)
       }
+      allSessions.delete(session)
     }
-    await server.connect(
-      transport as Parameters<typeof server.connect>[0],
-    )
+    try {
+      await server.connect(
+        transport as Parameters<typeof server.connect>[0],
+      )
+    } catch (error) {
+      allSessions.delete(session)
+      throw error
+    }
     return session
   }
+
+  const sweepIdleSessions = async (): Promise<void> => {
+    if (closed || cleanup !== undefined) {
+      return cleanup
+    }
+    const cutoff = Date.now() - sessionIdleTtlMs
+    const idle = [...sessions.values()].filter((session) =>
+      session.activeRequests === 0
+      && session.lastActiveAt <= cutoff)
+    cleanup = Promise.allSettled(idle.map(closeSession))
+      .then(() => undefined)
+      .finally(() => {
+        cleanup = undefined
+      })
+    return cleanup
+  }
+  const cleanupTimer = setInterval(() => {
+    void sweepIdleSessions().catch(options.onError)
+  }, cleanupIntervalMs)
+  cleanupTimer.unref()
 
   return {
     get sessionCount() {
@@ -177,12 +234,22 @@ export function createStreamableHttpHandler(
           && sessionId === undefined
           && isInitializeRequest(parsedBody)
         ) {
+          if (allSessions.size >= maxSessions) {
+            jsonRpcError(response, 503, 'MCP session capacity reached')
+            return
+          }
           session = await createSession()
-          await session.transport.handleRequest(
-            request,
-            response,
-            parsedBody,
-          )
+          session.activeRequests += 1
+          try {
+            await session.transport.handleRequest(
+              request,
+              response,
+              parsedBody,
+            )
+          } finally {
+            session.activeRequests -= 1
+            session.lastActiveAt = Date.now()
+          }
           if (session.transport.sessionId === undefined) {
             await closeSession(session)
           }
@@ -198,11 +265,18 @@ export function createStreamableHttpHandler(
           return
         }
 
-        await session.transport.handleRequest(
-          request,
-          response,
-          method === 'POST' ? parsedBody : undefined,
-        )
+        session.lastActiveAt = Date.now()
+        session.activeRequests += 1
+        try {
+          await session.transport.handleRequest(
+            request,
+            response,
+            method === 'POST' ? parsedBody : undefined,
+          )
+        } finally {
+          session.activeRequests -= 1
+          session.lastActiveAt = Date.now()
+        }
       } catch (error) {
         options.onError?.(error)
         if (session !== undefined && session.transport.sessionId === undefined) {
@@ -218,7 +292,9 @@ export function createStreamableHttpHandler(
         return
       }
       closed = true
-      const active = [...sessions.values()]
+      clearInterval(cleanupTimer)
+      await cleanup
+      const active = [...allSessions]
       sessions.clear()
       await Promise.allSettled(
         active.map(async (session) => {

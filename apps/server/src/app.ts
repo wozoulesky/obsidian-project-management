@@ -4,10 +4,16 @@ import {
 } from '@project-os/core'
 import {
   createStreamableHttpHandler,
+  isLoopbackBindingHost,
+} from '@project-os/mcp'
+import type {
+  StreamableHttpHandler,
+  StreamableHttpHandlerOptions,
 } from '@project-os/mcp'
 import express from 'express'
 import type {
   ErrorRequestHandler,
+  Express,
   NextFunction,
   Request,
   Response,
@@ -162,9 +168,19 @@ export type AppRouteModule = {
 }
 
 export type CreateAppOptions = {
+  allowedHosts?: readonly string[]
+  allowedOrigins?: readonly string[]
   context: AppContext
+  mcpOptions?: Pick<
+    StreamableHttpHandlerOptions,
+    'cleanupIntervalMs' | 'maxSessions' | 'sessionIdleTtlMs'
+  >
   mcpBindingHost?: string
   routeModules?: readonly AppRouteModule[]
+}
+
+export type ProjectOsApp = Express & {
+  readonly mcp: StreamableHttpHandler
 }
 
 type HttpError = Error & {
@@ -410,51 +426,94 @@ function isLoopbackOrigin(origin: string): boolean {
   )
 }
 
-function securityHeaders(
-  request: Request,
-  response: Response,
-  next: NextFunction,
-): void {
-  response.setHeader('X-Content-Type-Options', 'nosniff')
-  response.setHeader('X-Frame-Options', 'DENY')
-  response.setHeader('Referrer-Policy', 'no-referrer')
-  response.setHeader(
-    'Content-Security-Policy',
-    "default-src 'none'; frame-ancestors 'none'",
-  )
-  const host = request.get('Host')
-  if (host === undefined || !isLoopbackAuthority(host)) {
-    next(new DomainError(
-      'HOST_FORBIDDEN',
-      'Request host is not allowed',
-    ))
-    return
+function authorityWithoutPort(authority: string): string | undefined {
+  const ipv6 = /^(\[[^\]]+\])(?::(\d{1,5}))?$/.exec(authority)
+  if (ipv6 !== null) {
+    return ipv6[2] === undefined || validPort(ipv6[2])
+      ? ipv6[1]?.toLowerCase()
+      : undefined
   }
-  const origin = request.get('Origin')
-  if (origin !== undefined) {
-    if (!isLoopbackOrigin(origin)) {
+  const hostname = /^([^:]+)(?::(\d{1,5}))?$/.exec(authority)
+  return (
+    hostname?.[2] === undefined
+    || validPort(hostname[2])
+  )
+    ? hostname?.[1]?.toLowerCase()
+    : undefined
+}
+
+function securityHeaders(options: {
+  allowedHosts: readonly string[]
+  allowedOrigins: readonly string[]
+  bindingHost: string
+}) {
+  const loopback = isLoopbackBindingHost(options.bindingHost)
+  const allowedHosts = new Set(
+    options.allowedHosts.map((host) => host.toLowerCase()),
+  )
+  const allowedOrigins = new Set(options.allowedOrigins)
+
+  return (
+    request: Request,
+    response: Response,
+    next: NextFunction,
+  ): void => {
+    response.setHeader('X-Content-Type-Options', 'nosniff')
+    response.setHeader('X-Frame-Options', 'DENY')
+    response.setHeader('Referrer-Policy', 'no-referrer')
+    response.setHeader(
+      'Content-Security-Policy',
+      "default-src 'none'; frame-ancestors 'none'",
+    )
+    const host = request.get('Host')
+    const hostAllowed = host !== undefined && (
+      loopback
+        ? isLoopbackAuthority(host)
+        : (
+            allowedHosts.has(host.toLowerCase())
+            || (
+              authorityWithoutPort(host) !== undefined
+              && allowedHosts.has(authorityWithoutPort(host)!)
+            )
+          )
+    )
+    if (!hostAllowed) {
       next(new DomainError(
-        'ORIGIN_FORBIDDEN',
-        'Request origin is not allowed',
+        'HOST_FORBIDDEN',
+        'Request host is not allowed',
       ))
       return
     }
-    response.setHeader('Access-Control-Allow-Origin', origin)
-    response.setHeader('Vary', 'Origin')
-    response.setHeader(
-      'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, X-Request-Id',
-    )
-    response.setHeader(
-      'Access-Control-Allow-Methods',
-      'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS',
-    )
-    if (request.method === 'OPTIONS') {
-      response.status(204).end()
-      return
+    const origin = request.get('Origin')
+    if (origin !== undefined) {
+      const originAllowed = loopback
+        ? isLoopbackOrigin(origin)
+        : allowedOrigins.has(origin)
+      if (!originAllowed) {
+        next(new DomainError(
+          'ORIGIN_FORBIDDEN',
+          'Request origin is not allowed',
+        ))
+        return
+      }
+      response.setHeader('Access-Control-Allow-Origin', origin)
+      response.setHeader('Vary', 'Origin')
+      response.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-Request-Id, '
+        + 'Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID',
+      )
+      response.setHeader(
+        'Access-Control-Allow-Methods',
+        'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS',
+      )
+      if (request.method === 'OPTIONS') {
+        response.status(204).end()
+        return
+      }
     }
+    next()
   }
-  next()
 }
 
 export const apiErrorHandler: ErrorRequestHandler = (
@@ -476,8 +535,9 @@ export const apiErrorHandler: ErrorRequestHandler = (
   ))
 }
 
-export function createApp(options: CreateAppOptions) {
-  const app = express()
+export function createApp(options: CreateAppOptions): ProjectOsApp {
+  const bindingHost = options.mcpBindingHost ?? '127.0.0.1'
+  const app = express() as ProjectOsApp
   app.disable('x-powered-by')
   app.use((request, response, next) => {
     const supplied = request.get('X-Request-Id')
@@ -492,14 +552,25 @@ export function createApp(options: CreateAppOptions) {
     response.setHeader('Cache-Control', 'no-store')
     next()
   })
-  app.use(securityHeaders)
+  app.use(securityHeaders({
+    allowedHosts: options.allowedHosts ?? [],
+    allowedOrigins: options.allowedOrigins ?? [],
+    bindingHost,
+  }))
 
   const mcp = createStreamableHttpHandler({
     services: options.context.services,
-    bindingHost: options.mcpBindingHost ?? '127.0.0.1',
+    bindingHost,
+    ...options.mcpOptions,
     verifyBearer(token) {
       return options.context.services.tokens.verify(token)
     },
+  })
+  Object.defineProperty(app, 'mcp', {
+    configurable: false,
+    enumerable: false,
+    value: mcp,
+    writable: false,
   })
   const handleMcp = (
     request: Request,

@@ -1,4 +1,7 @@
-import { Server } from 'node:http'
+import {
+  createServer,
+  Server,
+} from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
 import {
   mkdtempSync,
@@ -16,6 +19,8 @@ import {
   DomainError,
   seedDatabase,
 } from '@project-os/core'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import request from 'supertest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -367,6 +372,8 @@ describe('configuration', () => {
 
     expect(loadConfig({}, repositoryRoot)).toEqual({
       host: '127.0.0.1',
+      allowedHosts: [],
+      allowedOrigins: [],
       port: 4310,
       databasePath: join(repositoryRoot, 'data', 'project_manage.db'),
       backupRoot: join(repositoryRoot, 'data', 'backups'),
@@ -392,8 +399,33 @@ describe('configuration', () => {
     }, repositoryRoot).localActorId).toBe('actor_desktop_owner')
   })
 
+  it('supports an explicit remote binding with exact host and origin allowlists', () => {
+    expect(loadConfig({
+      PROJECT_OS_HOST: '0.0.0.0',
+      PROJECT_OS_ALLOWED_HOSTS:
+        'project-os.example:4310,api.project-os.example',
+      PROJECT_OS_ALLOWED_ORIGINS: 'https://console.project-os.example',
+    }, resolve('fixture-repository'))).toMatchObject({
+      host: '0.0.0.0',
+      allowedHosts: [
+        'project-os.example:4310',
+        'api.project-os.example',
+      ],
+      allowedOrigins: ['https://console.project-os.example'],
+    })
+  })
+
   it.each([
-    [{ PROJECT_OS_HOST: '0.0.0.0' }, 'PROJECT_OS_HOST'],
+    [{ PROJECT_OS_HOST: '0.0.0.0' }, 'PROJECT_OS_ALLOWED_HOSTS'],
+    [{
+      PROJECT_OS_HOST: '0.0.0.0',
+      PROJECT_OS_ALLOWED_HOSTS: 'bad host',
+    }, 'PROJECT_OS_ALLOWED_HOSTS'],
+    [{
+      PROJECT_OS_HOST: '0.0.0.0',
+      PROJECT_OS_ALLOWED_HOSTS: 'project-os.example',
+      PROJECT_OS_ALLOWED_ORIGINS: 'http://project-os.example/path',
+    }, 'PROJECT_OS_ALLOWED_ORIGINS'],
     [{ PROJECT_OS_PORT: '0' }, 'PROJECT_OS_PORT'],
     [{ PROJECT_OS_PORT: '65536' }, 'PROJECT_OS_PORT'],
     [{ PROJECT_OS_PORT: '4310.5' }, 'PROJECT_OS_PORT'],
@@ -590,6 +622,90 @@ describe('production context', () => {
     }
   })
 
+  it('propagates an explicit non-loopback runtime binding into MCP authentication', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-remote-'))
+    createdDirectories.push(directory)
+    const runtime = await startServer({
+      host: '0.0.0.0',
+      allowedHosts: ['127.0.0.1'],
+      allowedOrigins: [],
+      port: 0,
+      databasePath: join(directory, 'runtime.db'),
+      backupRoot: join(directory, 'backups'),
+    })
+    const address = runtime.server.address()
+    if (address === null || typeof address === 'string') {
+      throw new Error('Runtime has no TCP address')
+    }
+    const endpoint = `http://127.0.0.1:${address.port}/mcp`
+    const body = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'runtime-remote', version: '0.0.0' },
+      },
+    })
+    const token = runtime.context.services.tokens.issue('runtime-remote')
+
+    try {
+      const missing = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json, text/event-stream',
+          'Content-Type': 'application/json',
+        },
+        body,
+      })
+      const valid = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json, text/event-stream',
+          Authorization: `Bearer ${token.token}`,
+          'Content-Type': 'application/json',
+        },
+        body,
+      })
+
+      expect(address.address).toBe('0.0.0.0')
+      expect(missing.status).toBe(401)
+      expect(valid.status).toBe(200)
+    } finally {
+      await runtime.close()
+    }
+  })
+
+  it('closes MCP lifecycle resources and the database when listen fails', async () => {
+    const blocker = createServer()
+    await new Promise<void>((resolveListen) => {
+      blocker.listen(0, '127.0.0.1', resolveListen)
+    })
+    const address = blocker.address()
+    if (address === null || typeof address === 'string') {
+      throw new Error('Blocking listener has no TCP address')
+    }
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-start-fail-'))
+    createdDirectories.push(directory)
+    const closeDatabase = vi.spyOn(DatabaseSync.prototype, 'close')
+
+    try {
+      await expect(startServer({
+        host: '127.0.0.1',
+        port: address.port,
+        databasePath: join(directory, 'runtime.db'),
+        backupRoot: join(directory, 'backups'),
+      })).rejects.toMatchObject({ code: 'EADDRINUSE' })
+      expect(closeDatabase).toHaveBeenCalled()
+    } finally {
+      closeDatabase.mockRestore()
+      await new Promise<void>((resolveClose) => {
+        blocker.close(() => resolveClose())
+      })
+    }
+  })
+
   it('rejects close if context cleanup throws and still settles idempotently', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'project-os-close-'))
     createdDirectories.push(directory)
@@ -623,5 +739,44 @@ describe('production context', () => {
       runtime.context.close = originalClose
       originalClose()
     }
+  })
+
+  it('closes active MCP transports before the listener and database', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-mcp-close-'))
+    createdDirectories.push(directory)
+    const runtime = await startServer({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: join(directory, 'runtime.db'),
+      backupRoot: join(directory, 'backups'),
+    })
+    const address = runtime.server.address()
+    if (address === null || typeof address === 'string') {
+      throw new Error('Runtime has no TCP address')
+    }
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`http://127.0.0.1:${address.port}/mcp`),
+    )
+    const client = new Client({
+      name: 'active-runtime-client',
+      version: '0.0.0',
+    })
+
+    await client.connect(
+      transport as Parameters<typeof client.connect>[0],
+    )
+    expect((await client.listTools()).tools.length).toBeGreaterThan(20)
+
+    const outcome = await Promise.race([
+      runtime.close().then(() => 'closed'),
+      new Promise<string>((resolveTimeout) => {
+        setTimeout(() => resolveTimeout('timed out'), 1_000)
+      }),
+    ])
+
+    expect(outcome).toBe('closed')
+    expect(runtime.server.listening).toBe(false)
+    expect(() => runtime.context.database).toThrow('Database is unavailable')
+    await Promise.allSettled([client.close()])
   })
 })

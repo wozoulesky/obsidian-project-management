@@ -1,8 +1,12 @@
-import { createServer } from 'node:http'
+import {
+  createServer,
+  request as httpRequest,
+} from 'node:http'
 import type { Server } from 'node:http'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import {
@@ -19,7 +23,10 @@ import type { AppContext } from './context.js'
 
 const contexts: AppContext[] = []
 const directories: string[] = []
-const servers: Server[] = []
+const runtimes: Array<{
+  app: ReturnType<typeof createApp>
+  server: Server
+}> = []
 
 function testContext(): AppContext {
   const directory = mkdtempSync(join(tmpdir(), 'project-os-mcp-http-'))
@@ -32,12 +39,15 @@ function testContext(): AppContext {
   return context
 }
 
-async function listen(app: ReturnType<typeof createApp>) {
+async function listen(
+  app: ReturnType<typeof createApp>,
+  host = '127.0.0.1',
+) {
   const server = createServer(app)
-  servers.push(server)
+  runtimes.push({ app, server })
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => resolve())
+    server.listen(0, host, () => resolve())
   })
   const address = server.address()
   if (address === null || typeof address === 'string') {
@@ -49,8 +59,57 @@ async function listen(app: ReturnType<typeof createApp>) {
   }
 }
 
+async function postInitialize(
+  baseUrl: string,
+  options: {
+    headers?: Record<string, string>
+    id: number
+    name: string
+  },
+): Promise<{
+  headers: Record<string, string | string[] | undefined>
+  status: number
+}> {
+  const target = new URL(`${baseUrl}/mcp`)
+  const body = JSON.stringify({
+    jsonrpc: '2.0',
+    id: options.id,
+    method: 'initialize',
+    params: {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: options.name, version: '0.0.0' },
+    },
+  })
+  return new Promise((resolve, reject) => {
+    const request = httpRequest({
+      hostname: target.hostname,
+      port: target.port,
+      path: target.pathname,
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Length': Buffer.byteLength(body),
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    }, (response) => {
+      response.resume()
+      response.once('end', () => {
+        resolve({
+          headers: response.headers,
+          status: response.statusCode ?? 0,
+        })
+      })
+    })
+    request.once('error', reject)
+    request.end(body)
+  })
+}
+
 afterEach(async () => {
-  for (const server of servers.splice(0)) {
+  for (const { app, server } of runtimes.splice(0)) {
+    await app.mcp.close()
     await new Promise<void>((resolve) => {
       server.close(() => resolve())
       server.closeAllConnections()
@@ -132,84 +191,113 @@ describe('Streamable HTTP MCP route', () => {
   it('requires and verifies bearer tokens for non-loopback binding', async () => {
     const context = testContext()
     const issued = context.services.tokens.issue('remote-mcp')
-    const { baseUrl } = await listen(createApp({
+    const app = createApp({
       context,
       mcpBindingHost: '0.0.0.0',
-    }))
-
-    const missing = await fetch(`${baseUrl}/mcp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2025-06-18',
-          capabilities: {},
-          clientInfo: { name: 'unauthenticated', version: '0.0.0' },
-        },
-      }),
+      allowedHosts: ['project-os.test'],
+      allowedOrigins: ['https://console.project-os.test'],
     })
-    const invalid = await fetch(`${baseUrl}/mcp`, {
-      method: 'POST',
+    const { baseUrl } = await listen(app, '0.0.0.0')
+    const missing = await postInitialize(baseUrl, {
+      headers: {
+        Host: 'project-os.test',
+      },
+      id: 1,
+      name: 'unauthenticated',
+    })
+    const invalid = await postInitialize(baseUrl, {
       headers: {
         Authorization: 'Bearer pos_invalid',
-        'Content-Type': 'application/json',
+        Host: 'project-os.test',
       },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2025-06-18',
-          capabilities: {},
-          clientInfo: { name: 'invalid-token', version: '0.0.0' },
-        },
-      }),
+      id: 2,
+      name: 'invalid-token',
     })
-    const hostileOrigin = await fetch(`${baseUrl}/mcp`, {
-      method: 'POST',
+    const dnsRebind = await postInitialize(baseUrl, {
       headers: {
         Authorization: `Bearer ${issued.token}`,
-        'Content-Type': 'application/json',
-        Origin: 'https://example.com',
+        Host: 'evil.example',
       },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2025-06-18',
-          capabilities: {},
-          clientInfo: { name: 'hostile-origin', version: '0.0.0' },
-        },
-      }),
+      id: 3,
+      name: 'dns-rebind',
     })
-    const transport = new StreamableHTTPClientTransport(
-      new URL(`${baseUrl}/mcp`),
-      {
-        requestInit: {
-          headers: { Authorization: `Bearer ${issued.token}` },
-        },
+    const hostileOrigin = await postInitialize(baseUrl, {
+      headers: {
+        Authorization: `Bearer ${issued.token}`,
+        Host: 'project-os.test',
+        Origin: 'https://evil.example',
       },
-    )
-    const client = new Client({
-      name: 'authenticated-http-test',
-      version: '0.0.0',
+      id: 4,
+      name: 'hostile-origin',
+    })
+    const valid = await postInitialize(baseUrl, {
+      headers: {
+        Authorization: `Bearer ${issued.token}`,
+        Host: 'project-os.test',
+        Origin: 'https://console.project-os.test',
+      },
+      id: 5,
+      name: 'authenticated',
     })
 
     expect(missing.status).toBe(401)
     expect(invalid.status).toBe(401)
+    expect(dnsRebind.status).toBe(403)
     expect(hostileOrigin.status).toBe(403)
-    try {
-      await client.connect(
-        transport as Parameters<typeof client.connect>[0],
-      )
-      expect((await client.listTools()).tools.length).toBeGreaterThan(20)
-    } finally {
-      await client.close()
-    }
+    expect(valid.status).toBe(200)
     expect(context.services.tokens.list()[0]?.lastUsedAt).not.toBeNull()
+  })
+
+  it('bounds sessions and reclaims abandoned sessions after sliding idle TTL', async () => {
+    const app = createApp({
+      context: testContext(),
+      mcpOptions: {
+        cleanupIntervalMs: 5,
+        maxSessions: 1,
+        sessionIdleTtlMs: 80,
+      },
+    })
+    const { baseUrl } = await listen(app)
+    const first = await postInitialize(baseUrl, {
+      id: 10,
+      name: 'capacity-owner',
+    })
+    const sessionId = first.headers['mcp-session-id']
+    expect(sessionId).toBeTypeOf('string')
+    expect(app.mcp.sessionCount).toBe(1)
+    const second = await postInitialize(baseUrl, {
+      id: 11,
+      name: 'capacity-rejected',
+    })
+    expect(second.status).toBe(503)
+
+    await delay(45)
+    const touched = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+        'Mcp-Session-Id': sessionId as string,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'notifications/initialized',
+      }),
+    })
+    expect(touched.status).toBe(202)
+    await delay(45)
+    expect(app.mcp.sessionCount).toBe(1)
+
+    const deadline = Date.now() + 1_000
+    while (app.mcp.sessionCount !== 0 && Date.now() < deadline) {
+      await delay(10)
+    }
+    expect(app.mcp.sessionCount).toBe(0)
+    const abandoned = await fetch(`${baseUrl}/mcp`, {
+      headers: {
+        'Mcp-Session-Id': sessionId as string,
+      },
+    })
+    expect(abandoned.status).toBe(404)
   })
 })
