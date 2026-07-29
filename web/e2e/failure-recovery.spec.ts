@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright'
 import type { Page, Route } from '@playwright/test'
 
 import { expect, test } from './real-runtime'
@@ -29,12 +30,29 @@ async function expectFocusedAlert(page: Page, message: string) {
   await expect(alert).toBeFocused()
 }
 
-test('create project preserves its form and focuses a 503 summary', async ({
+async function expectNoSeriousOrCriticalViolations(page: Page) {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  expect(
+    results.violations
+      .filter(({ impact }) => impact === 'serious' || impact === 'critical')
+      .map(({ id, impact, nodes }) => ({
+        id,
+        impact,
+        targets: nodes.map(({ target }) => target.join(' ')),
+      })),
+  ).toEqual([])
+}
+
+test('dark create project refocuses the same 503 on every attempt', async ({
   page,
   runtime,
 }) => {
+  let attempts = 0
   await page.route('**/api/v1/projects', async (route) => {
     if (route.request().method() === 'POST') {
+      attempts += 1
       await fulfillError(
         route,
         503,
@@ -46,7 +64,9 @@ test('create project preserves its form and focuses a 503 summary', async ({
     await route.continue()
   })
 
-  await page.goto(new URL('/projects', runtime.baseURL).href)
+  await page.goto(new URL('/settings', runtime.baseURL).href)
+  await page.getByLabel('深色').check()
+  await page.getByRole('link', { name: '项目' }).click()
   await page.getByRole('button', { name: '新建项目' }).click()
   const dialog = page.getByRole('dialog', { name: '新建项目' })
   await dialog.getByLabel('项目名称').fill('保留失败草稿')
@@ -57,6 +77,25 @@ test('create project preserves its form and focuses a 503 summary', async ({
   await dialog.getByRole('button', { name: '创建项目' }).click()
 
   await expectFocusedAlert(page, '项目服务暂时不可用')
+  await expectNoSeriousOrCriticalViolations(page)
+  await expect(dialog.getByLabel('项目名称')).toHaveValue('保留失败草稿')
+  await expect(dialog.getByLabel('主要负责人')).toHaveValue(
+    runtime.seed.ownerId,
+  )
+  await expect(dialog.getByLabel('项目描述')).toHaveValue(
+    '503 后仍可继续编辑',
+  )
+  await expect(
+    page.getByRole('article', { name: '保留失败草稿' }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('status').filter({ hasText: '创建成功' }),
+  ).toHaveCount(0)
+
+  await dialog.getByLabel('项目名称').focus()
+  await dialog.getByRole('button', { name: '创建项目' }).click()
+  await expectFocusedAlert(page, '项目服务暂时不可用')
+  expect(attempts).toBe(2)
   await expect(dialog.getByLabel('项目名称')).toHaveValue('保留失败草稿')
   await expect(dialog.getByLabel('主要负责人')).toHaveValue(
     runtime.seed.ownerId,

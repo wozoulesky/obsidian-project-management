@@ -2603,7 +2603,7 @@
 .project-card__facts .is-critical,
 .project-dialog__field-error,
 .project-dialog__panel [role="alert"] {
-  color: color-mix(in srgb, var(--critical) 75%, var(--rail));
+  color: color-mix(in srgb, var(--critical) 75%, var(--text-primary));
 }
 
 .project-card__progress {

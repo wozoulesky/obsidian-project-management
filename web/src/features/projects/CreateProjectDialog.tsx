@@ -72,6 +72,7 @@ export function CreateProjectDialog({
       setErrors(nextErrors)
       return
     }
+    setErrors({})
     try {
       await createProject.mutateAsync({
         name,

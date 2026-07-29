@@ -96,3 +96,18 @@ test('dark compact project workflows remain accessible', async ({ page }) => {
   ).toBeVisible()
   await expectNoSeriousOrCriticalViolations(page)
 })
+
+test('dark create project validation errors remain accessible', async ({
+  page,
+}) => {
+  await page.goto('/settings')
+  await page.getByLabel('深色').check()
+  await page.getByRole('link', { name: '项目' }).click()
+  await page.getByRole('button', { name: '新建项目' }).click()
+  const dialog = page.getByRole('dialog', { name: '新建项目' })
+  await dialog.getByRole('button', { name: '创建项目' }).click()
+
+  await expect(dialog.getByText('请输入项目名称')).toBeVisible()
+  await expect(dialog.getByText('请选择有效负责人')).toBeVisible()
+  await expectNoSeriousOrCriticalViolations(page)
+})
