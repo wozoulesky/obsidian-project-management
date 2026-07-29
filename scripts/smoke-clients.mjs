@@ -188,6 +188,7 @@ function runBounded(command, arguments_, options = {}) {
         detached: process.platform !== 'win32',
         shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
+        windowsVerbatimArguments: options.windowsVerbatimArguments ?? false,
         windowsHide: true,
       })
     } catch (error) {
@@ -229,12 +230,44 @@ function runBounded(command, arguments_, options = {}) {
   })
 }
 
+const cmdMetaCharacters = /([()\][%!^"`<>&|;, *?])/g
+
+function escapeCmdCommand(value) {
+  return value.replace(cmdMetaCharacters, '^$1')
+}
+
+function escapeCmdArgument(value, doubleEscapeMetaCharacters) {
+  let escaped = String(value)
+  escaped = escaped.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"')
+  escaped = escaped.replace(/(?=(\\+?)?)\1$/, '$1$1')
+  escaped = `"${escaped}"`
+  escaped = escaped.replace(cmdMetaCharacters, '^$1')
+  if (doubleEscapeMetaCharacters) {
+    escaped = escaped.replace(cmdMetaCharacters, '^$1')
+  }
+  return escaped
+}
+
 function executableInvocation(executable, arguments_, environment) {
   const extension = extname(executable).toLowerCase()
-  if (
-    process.platform !== 'win32'
-    || !['.cmd', '.bat', '.ps1'].includes(extension)
-  ) {
+  if (process.platform !== 'win32' || extension === '.exe') {
+    return { command: executable, arguments: arguments_, environment }
+  }
+  if (extension === '.cmd' || extension === '.bat') {
+    const doubleEscape = true
+    const shellCommand = [
+      escapeCmdCommand(executable),
+      ...arguments_.map((argument) =>
+        escapeCmdArgument(argument, doubleEscape)),
+    ].join(' ')
+    return {
+      command: process.env.ComSpec ?? 'cmd.exe',
+      arguments: ['/d', '/s', '/v:off', '/c', `"${shellCommand}"`],
+      environment,
+      windowsVerbatimArguments: true,
+    }
+  }
+  if (extension !== '.ps1') {
     return { command: executable, arguments: arguments_, environment }
   }
   const adaptedEnvironment = {
@@ -244,9 +277,7 @@ function executableInvocation(executable, arguments_, environment) {
   const references = []
   for (const [index, argument] of arguments_.entries()) {
     const key = `PROJECT_OS_SMOKE_ARG_${index}`
-    adaptedEnvironment[key] = extension === '.ps1'
-      ? argument
-      : `"${argument.replaceAll('"', '\\"').replaceAll('%', '%%')}"`
+    adaptedEnvironment[key] = argument
     references.push(`$env:${key}`)
   }
   const command = extension === '.ps1'
@@ -268,6 +299,7 @@ function runExecutable(executable, arguments_, options = {}) {
   return runBounded(invocation.command, invocation.arguments, {
     ...options,
     environment: invocation.environment,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
   })
 }
 
@@ -621,11 +653,13 @@ function globalClientFiles(client) {
     }
   }
   const root = join(profile, '.kimi-code')
+  const credential = join(root, 'credentials', 'kimi-code.json')
   return {
     credentialFiles: [
       join(root, 'config.toml'),
       join(root, 'device_id'),
       join(root, 'server.token'),
+      credential,
     ],
     watchedFiles: [
       join(root, 'config.toml'),
@@ -633,6 +667,7 @@ function globalClientFiles(client) {
       join(root, 'server.token'),
       join(root, 'session_index.jsonl'),
       join(root, 'workspaces.json'),
+      credential,
     ],
   }
 }
@@ -640,11 +675,27 @@ function globalClientFiles(client) {
 function fileFingerprint(path) {
   if (!existsSync(path)) return { exists: false }
   const details = statSync(path)
+  if (!details.isFile()) {
+    return {
+      exists: true,
+      type: details.isDirectory() ? 'directory' : 'other',
+      mtimeMs: details.mtimeMs,
+    }
+  }
   return {
     exists: true,
+    type: 'file',
     size: details.size,
     mtimeMs: details.mtimeMs,
     sha256: createHash('sha256').update(readFileSync(path)).digest('hex'),
+  }
+}
+
+function isRegularFile(path) {
+  try {
+    return statSync(path).isFile()
+  } catch {
+    return false
   }
 }
 
@@ -698,14 +749,23 @@ async function prepareIsolatedState(client, workRoot) {
       )
     }
   } else {
-    const present = definition.credentialFiles.filter(existsSync)
+    const present = definition.credentialFiles.filter(isRegularFile)
     if (!present.some((path) => path.endsWith('config.toml'))) {
       throw new Error('Kimi credential configuration is unavailable')
     }
+    if (!present.some((path) =>
+      path.endsWith(join('credentials', 'kimi-code.json')))) {
+      throw new Error('Kimi OAuth credential file is unavailable')
+    }
     for (const source of present) {
+      const relativeDestination = source.endsWith(
+        join('credentials', 'kimi-code.json'),
+      )
+        ? join('credentials', 'kimi-code.json')
+        : source.split(/[\\/]/).at(-1)
       await copyCredential(
         source,
-        join(isolatedHome, '.kimi-code', source.split(/[\\/]/).at(-1)),
+        join(isolatedHome, '.kimi-code', relativeDestination),
       )
     }
   }
@@ -1079,9 +1139,17 @@ async function selfTest() {
     }
     const discovered = await discoverCommand(fakeName, environment)
     assert.equal(resolve(discovered), resolve(fakePath))
+    const exactArguments = [
+      'argument with spaces',
+      'literal&safe',
+      'pct%PATH%',
+      'trail\\',
+      'quote"caret^bang!',
+      '',
+    ]
     const invoked = await runExecutable(
       discovered,
-      ['argument with spaces', 'literal&safe'],
+      exactArguments,
       { environment, timeoutMs: 5_000 },
     )
     assert.equal(
@@ -1089,10 +1157,9 @@ async function selfTest() {
       true,
       `invoke adapter failed: ${redact(invoked.stderr, [selfRoot])}`,
     )
-    assert.deepEqual(JSON.parse(invoked.stdout), [
-      'argument with spaces',
-      'literal&safe',
-    ])
+    if (JSON.stringify(JSON.parse(invoked.stdout)) !== JSON.stringify(exactArguments)) {
+      throw new Error('cmd adapter did not preserve exact arguments')
+    }
 
     const heartbeat = join(selfRoot, 'heartbeat.txt')
     const pidFile = join(selfRoot, 'grandchild.pid')
@@ -1293,6 +1360,17 @@ process.stdin.on('data', (chunk) => {
     assert.equal(snapshotsEqual(snapshot, snapshotFiles([watchedFile])), true)
     await writeFile(watchedFile, '{"state":2}', 'utf8')
     assert.equal(snapshotsEqual(snapshot, snapshotFiles([watchedFile])), false)
+    const kimiDefinition = globalClientFiles('kimi')
+    assert.equal(
+      kimiDefinition.credentialFiles.some((path) =>
+        path.endsWith(join('credentials', 'kimi-code.json'))),
+      true,
+    )
+    assert.equal(
+      kimiDefinition.watchedFiles.some((path) =>
+        path.endsWith(join('credentials', 'kimi-code.json'))),
+      true,
+    )
 
     const fakeSecret = 'smoke-secret-123456'
     const safe = redact(
