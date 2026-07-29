@@ -21,6 +21,7 @@ import {
 import { openDatabase } from './database.js'
 import { DomainError } from './errors.js'
 import {
+  allocateImportPlaceholders,
   ExportService,
   validateExportDocument,
 } from './export-service.js'
@@ -582,6 +583,117 @@ describe('settings, tokens, export, backup, and seed', () => {
     expect({ ...actual, exportedAt: incoming.exportedAt }).toEqual(incoming)
     expect(actual.actors.some(({ id }) => id === 'actor_owner')).toBe(false)
     database.close()
+  })
+
+  it('avoids collisions with legacy fixed import placeholder values', () => {
+    const database = openDatabase(
+      join(temporaryDirectory, 'placeholder-collision.sqlite'),
+    )
+    const exports = new ExportService(database)
+    const initial = fixtureDocument()
+    const agentA: ExportDocument['actors'][number] = {
+      id: 'agent_a',
+      name: 'builder',
+      kind: 'agent',
+      role: 'dev-agent',
+      status: 'active',
+      client: 'client-a',
+      capabilities: [],
+      registeredAt: timestamp,
+      lastActiveAt: null,
+      version: 1,
+    }
+    const agentB: ExportDocument['actors'][number] = {
+      ...agentA,
+      id: 'agent_b',
+      client: 'client-b',
+    }
+    initial.actors.push(agentA, agentB)
+    initial.projects.push({
+      ...initial.projects[0]!,
+      id: 'project_b',
+      code: 'PRJ-002',
+      name: 'Project B',
+    })
+    initial.projectMembers.push(
+      {
+        projectId: 'project_atlas',
+        actorId: agentA.id,
+        membershipRole: 'member',
+        joinedAt: timestamp,
+      },
+      {
+        projectId: 'project_b',
+        actorId: initial.actors[0]!.id,
+        membershipRole: 'owner',
+        joinedAt: timestamp,
+      },
+      {
+        projectId: 'project_b',
+        actorId: agentB.id,
+        membershipRole: 'member',
+        joinedAt: timestamp,
+      },
+    )
+    exports.importJson(initial)
+    const activityInsert = database.prepare(`
+      INSERT INTO activities (
+        id, actor_id, project_id, source, operation, entity_type,
+        entity_id, action, note, details_json, created_at
+      ) VALUES (?, ?, ?, 'mcp', 'project.update', 'project', ?, ?, NULL, '{}', ?)
+    `)
+    activityInsert.run(
+      'activity_agent_a',
+      agentA.id,
+      'project_atlas',
+      'project_atlas',
+      'Anchored A',
+      timestamp,
+    )
+    activityInsert.run(
+      'activity_agent_b',
+      agentB.id,
+      'project_b',
+      'project_b',
+      'Anchored B',
+      timestamp,
+    )
+    const incoming = structuredClone(initial)
+    incoming.actors.find(({ id }) => id === agentA.id)!.client =
+      '__project_os_import__agent_b'
+    incoming.actors.find(({ id }) => id === agentB.id)!.client = 'client-b-new'
+    incoming.projects.find(({ id }) => id === 'project_atlas')!.code =
+      '__project_os_import__project_b'
+    incoming.projects.find(({ id }) => id === 'project_b')!.code = 'PRJ-NEW'
+
+    exports.importJson(incoming, agentA.id, 'mcp')
+
+    const actual = exports.exportJson()
+    expect({ ...actual, exportedAt: incoming.exportedAt }).toEqual(incoming)
+    expect(new ActivityService(database).list()).toHaveLength(3)
+    database.close()
+  })
+
+  it('retries placeholder collisions against values and prior allocations', () => {
+    const generated = [
+      'occupied',
+      'document-value',
+      'temporary-one',
+      'temporary-one',
+      'temporary-two',
+    ]
+
+    expect(allocateImportPlaceholders(
+      2,
+      new Set(['occupied', 'document-value']),
+      () => generated.shift()!,
+    )).toEqual(['temporary-one', 'temporary-two'])
+    expect(() => allocateImportPlaceholders(
+      1,
+      new Set(['occupied']),
+      () => 'occupied',
+      2,
+    )).toThrowError(expect.objectContaining({ code: 'IMPORT_INVALID' }))
   })
 
   it('rejects import.run actors that are absent from the incoming graph', () => {

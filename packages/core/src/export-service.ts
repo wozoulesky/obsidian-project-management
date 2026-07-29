@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { randomUUID } from 'node:crypto'
 import {
   activitySourceSchema,
   persistedActorSchema,
@@ -85,6 +86,43 @@ const settingsKeys = [
 
 function importInvalid(): DomainError {
   return new DomainError('IMPORT_INVALID', 'Import document is invalid')
+}
+
+export function allocateImportPlaceholders(
+  count: number,
+  unavailableValues: ReadonlySet<string>,
+  generate: () => string = () =>
+    `__project_os_import__${randomUUID()}`,
+  maxAttemptsPerValue = 128,
+): string[] {
+  const unavailable = new Set(unavailableValues)
+  const allocated: string[] = []
+
+  for (let index = 0; index < count; index += 1) {
+    let value: string | undefined
+    for (
+      let attempt = 0;
+      attempt < maxAttemptsPerValue;
+      attempt += 1
+    ) {
+      const candidate = generate()
+      if (
+        typeof candidate === 'string'
+        && candidate.length > 0
+        && !unavailable.has(candidate)
+      ) {
+        value = candidate
+        break
+      }
+    }
+    if (value === undefined) {
+      throw importInvalid()
+    }
+    unavailable.add(value)
+    allocated.push(value)
+  }
+
+  return allocated
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -545,18 +583,60 @@ export function replacePrimaryData(
       AND id NOT IN (SELECT actor_id FROM activities)
       AND id NOT IN (SELECT owner_id FROM projects)
   `).run()
-  database.prepare(`
-    UPDATE actors
-    SET client = '__project_os_import__' || id
+  const retainedAgents = database.prepare(`
+    SELECT id
+    FROM actors
     WHERE kind = 'agent'
-  `).run()
-  database.prepare(`
+    ORDER BY id
+  `).all() as { id: string }[]
+  const unavailableClients = new Set([
+    ...(database.prepare(`
+      SELECT client
+      FROM actors
+      WHERE kind = 'agent'
+    `).all() as { client: string }[]).map(({ client }) => client),
+    ...document.actors.flatMap((actor) =>
+      actor.kind === 'agent' && typeof actor.client === 'string'
+        ? [actor.client]
+        : []),
+  ])
+  const temporaryClients = allocateImportPlaceholders(
+    retainedAgents.length,
+    unavailableClients,
+  )
+  const temporaryClientUpdate = database.prepare(`
+    UPDATE actors
+    SET client = ?
+    WHERE id = ?
+  `)
+  retainedAgents.forEach((actor, index) => {
+    temporaryClientUpdate.run(temporaryClients[index]!, actor.id)
+  })
+
+  const retainedProjects = database.prepare(`
+    SELECT id
+    FROM projects
+    ORDER BY id
+  `).all() as { id: string }[]
+  const unavailableCodes = new Set([
+    ...(database.prepare(`
+      SELECT code
+      FROM projects
+    `).all() as { code: string }[]).map(({ code }) => code),
+    ...document.projects.map(({ code }) => code),
+  ])
+  const temporaryCodes = allocateImportPlaceholders(
+    retainedProjects.length,
+    unavailableCodes,
+  )
+  const temporaryCodeUpdate = database.prepare(`
     UPDATE projects
-    SET code = '__project_os_import__' || id
-    WHERE id IN (
-      SELECT project_id FROM activities WHERE project_id IS NOT NULL
-    )
-  `).run()
+    SET code = ?
+    WHERE id = ?
+  `)
+  retainedProjects.forEach((project, index) => {
+    temporaryCodeUpdate.run(temporaryCodes[index]!, project.id)
+  })
 
   const actorInsert = database.prepare(`
     INSERT INTO actors (
