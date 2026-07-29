@@ -1,3 +1,5 @@
+import { persistedActorSchema } from '@project-os/contracts'
+import type { PersistedActor } from '@project-os/contracts'
 import {
   DomainError,
   validateExportDocument,
@@ -38,6 +40,27 @@ const importCountsSchema = z.object({
 
 function importInvalid(): DomainError {
   return new DomainError('IMPORT_INVALID', 'Import document is invalid')
+}
+
+function sameLocalActorIdentity(
+  current: PersistedActor,
+  imported: PersistedActor | undefined,
+): boolean {
+  return imported !== undefined
+    && current.kind === 'human'
+    && current.status === 'active'
+    && current.client === null
+    && imported.kind === 'human'
+    && imported.status === 'active'
+    && imported.client === null
+    && imported.id === current.id
+    && imported.name === current.name
+    && imported.role === current.role
+    && imported.registeredAt === current.registeredAt
+    && imported.capabilities.length === current.capabilities.length
+    && imported.capabilities.every(
+      (capability, index) => capability === current.capabilities[index],
+    )
 }
 
 const upload = multer({
@@ -91,6 +114,16 @@ export const dataTransferRoutes: AppRouteModule = {
         }
         const context = getContext()
         const actorId = requestActorId(context)
+        const currentActor = callService(
+          persistedActorSchema,
+          () => context.services.actors.get(actorId),
+        )
+        const importedActor = parsed.data.actors.find(
+          ({ id }) => id === actorId,
+        )
+        if (!sameLocalActorIdentity(currentActor, importedActor)) {
+          throw importInvalid()
+        }
         internalOperation(() => context.services.exports.importJson(
           document,
           actorId,

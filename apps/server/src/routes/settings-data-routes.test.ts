@@ -441,6 +441,20 @@ describe('export and import routes', () => {
           filename: 'two.json',
           contentType: 'application/json',
         }),
+      () => request(app)
+        .post('/api/v1/import')
+        .field('actorId', 'actor_other')
+        .attach('file', Buffer.from(JSON.stringify(before)), {
+          filename: 'spoofed-actor.json',
+          contentType: 'application/json',
+        }),
+      () => request(app)
+        .post('/api/v1/import')
+        .field('source', 'mcp')
+        .attach('file', Buffer.from(JSON.stringify(before)), {
+          filename: 'spoofed-source.json',
+          contentType: 'application/json',
+        }),
     ]
     for (const send of cases) {
       const response = await send()
@@ -477,6 +491,90 @@ describe('export and import routes', () => {
       .toBe('dark')
     expect((await request(app).get('/api/v1/health')).status).toBe(200)
   })
+
+  it.each([
+    {
+      name: 'inactive status',
+      mutate(actor: Record<string, unknown>) {
+        actor.status = 'inactive'
+      },
+    },
+    {
+      name: 'agent kind',
+      mutate(actor: Record<string, unknown>) {
+        actor.kind = 'agent'
+        actor.role = 'dev-agent'
+        actor.client = 'codex'
+      },
+    },
+    {
+      name: 'role',
+      mutate(actor: Record<string, unknown>) {
+        actor.role = 'member'
+      },
+    },
+    {
+      name: 'name',
+      mutate(actor: Record<string, unknown>) {
+        actor.name = 'Replacement Owner'
+      },
+    },
+    {
+      name: 'client',
+      mutate(actor: Record<string, unknown>) {
+        delete actor.client
+      },
+    },
+  ])(
+    'rejects local actor $name tampering without changing local state',
+    async ({ mutate }) => {
+      const { app, context } = fixture()
+      const issued = await request(app)
+        .post('/api/v1/tokens')
+        .send({ name: 'Retained token' })
+      await request(app)
+        .patch('/api/v1/settings')
+        .send({ theme: 'dark', version: 1 })
+      const beforeActivities = context.database.prepare(`
+        SELECT operation, actor_id, source, entity_id
+        FROM activities
+        ORDER BY created_at, id
+      `).all()
+      const beforeTokens = (await request(app).get('/api/v1/tokens')).body.data
+      const document = (await request(app).get('/api/v1/export')).body.data
+      mutate(document.actors[0] as Record<string, unknown>)
+
+      const imported = await request(app)
+        .post('/api/v1/import')
+        .attach('file', Buffer.from(JSON.stringify(document)), {
+          filename: 'tampered-local-actor.json',
+          contentType: 'application/json',
+        })
+
+      expect(imported.status).toBe(400)
+      expect(imported.body.error.code).toBe('IMPORT_INVALID')
+      expect((await request(app).get('/api/v1/tokens')).body.data)
+        .toEqual(beforeTokens)
+      expect(beforeTokens[0].id).toBe(issued.body.data.id)
+      expect(context.database.prepare(`
+        SELECT operation, actor_id, source, entity_id
+        FROM activities
+        ORDER BY created_at, id
+      `).all()).toEqual(beforeActivities)
+      expect((await request(app).get('/api/v1/settings')).body.data)
+        .toMatchObject({ theme: 'dark', version: 2 })
+      const subsequentWrite = await request(app)
+        .patch('/api/v1/settings')
+        .send({ accent: 'teal', version: 2 })
+      expect(subsequentWrite.status).toBe(200)
+      expect(subsequentWrite.body.data).toMatchObject({
+        theme: 'dark',
+        accent: 'teal',
+        version: 3,
+      })
+      expect((await request(app).get('/api/v1/health')).status).toBe(200)
+    },
+  )
 
   it('rejects multipart files over 25 MiB with a stable 413 envelope', async () => {
     const { app } = fixture()
