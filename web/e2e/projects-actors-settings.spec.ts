@@ -1,0 +1,167 @@
+import { test, expect } from './real-runtime'
+
+test('shows all projects, filters by owner, and creates a task inside its project', async ({
+  page,
+  runtime,
+}) => {
+  await page.goto(new URL('/projects', runtime.baseURL).href)
+  await expect(
+    page.getByRole('heading', { level: 1, name: '全部项目' }),
+  ).toBeVisible()
+
+  const sidebarToggle = page.getByRole('button', { name: '展开侧边栏' })
+  await expect(sidebarToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.locator('.app-rail__label')).toHaveCount(0)
+  await sidebarToggle.click()
+  await expect(
+    page.getByRole('button', { name: '收起侧边栏' }),
+  ).toHaveAttribute('aria-expanded', 'true')
+  await expect(
+    page.getByRole('link', { name: '项目' }).locator('.app-rail__label'),
+  ).toHaveText('项目')
+
+  await expect(page.getByRole('article', { name: 'Default Project' })).toBeVisible()
+  await expect(page.getByRole('article', { name: 'Lin Portfolio' })).toBeVisible()
+
+  await page.getByRole('button', { name: runtime.seed.ownerName, exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`owner=${runtime.seed.ownerId}`))
+  await expect(page.getByRole('article', { name: 'Lin Portfolio' })).toBeVisible()
+  await expect(page.getByRole('article', { name: 'Default Project' })).toHaveCount(0)
+  await page.getByRole('button', { name: '全部负责人' }).click()
+
+  await page.getByRole('button', { name: '新建项目' }).click()
+  const createProject = page.getByRole('dialog', { name: '新建项目' })
+  await createProject.getByLabel('项目名称').fill('Agent Skill 安装体验')
+  await createProject
+    .getByLabel('主要负责人')
+    .selectOption({ label: runtime.seed.ownerName })
+  await createProject.getByLabel('项目描述').fill('真实浏览器项目旅程')
+  await createProject.getByLabel('开始日期').fill('2026-08-01')
+  await createProject.getByLabel('截止日期').fill('2026-08-31')
+  await createProject.getByRole('button', { name: '创建项目' }).click()
+
+  const createdProject = page.getByRole('article', {
+    name: 'Agent Skill 安装体验',
+  })
+  await expect(createdProject).toBeVisible()
+  await expect(createdProject.getByText(runtime.seed.ownerName, { exact: true }))
+    .toBeVisible()
+  await createdProject.getByRole('link', { name: '查看项目' }).click()
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Agent Skill 安装体验' }),
+  ).toBeVisible()
+
+  await page.getByRole('button', { name: '新建任务' }).click()
+  const createTask = page.getByRole('dialog', {
+    name: '在 Agent Skill 安装体验 中创建任务',
+  })
+  await expect(createTask.getByLabel('负责人').locator('option')).toHaveText([
+    '请选择',
+    runtime.seed.ownerName,
+  ])
+  await createTask.getByLabel('任务标题').fill('安装 Skill 并验证')
+  await createTask.getByLabel('任务描述').fill('仅在当前项目内创建')
+  await createTask
+    .getByLabel('负责人')
+    .selectOption({ label: runtime.seed.ownerName })
+  await createTask.getByLabel('开始日期').fill('2026-08-02')
+  await createTask.getByLabel('截止日期').fill('2026-08-05')
+  await createTask.getByLabel('优先级').selectOption('P0')
+  await createTask.getByRole('button', { name: '创建任务' }).click()
+
+  const taskItem = page.getByRole('listitem').filter({
+    hasText: '安装 Skill 并验证',
+  })
+  await expect(taskItem).toContainText(runtime.seed.ownerName)
+  await expect(taskItem).toContainText('P0')
+})
+
+test('creates, edits, and deactivates a human while exposing the Agent ID', async ({
+  context,
+  page,
+  runtime,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto(new URL('/actors', runtime.baseURL).href)
+  await expect(
+    page.getByRole('heading', { level: 1, name: '负责人目录' }),
+  ).toBeVisible()
+
+  const agentRow = page.getByRole('row', { name: new RegExp(runtime.seed.agentName) })
+  await expect(agentRow).toContainText('Agent')
+  await expect(agentRow).toContainText('codex')
+  await expect(agentRow).toContainText(runtime.seed.agentId)
+  await agentRow
+    .getByRole('button', { name: `复制 ${runtime.seed.agentName} 的 Agent ID` })
+    .click()
+  await expect(page.getByRole('status')).toContainText('已复制')
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(runtime.seed.agentId)
+
+  await page.getByRole('button', { name: '新增负责人' }).click()
+  const createHuman = page.getByRole('dialog', { name: '新增负责人' })
+  await createHuman.getByLabel('姓名').fill('Journey Owner')
+  await createHuman.getByLabel('人类角色').selectOption('owner')
+  await createHuman.getByLabel('能力').fill('planning, delivery')
+  await createHuman.getByRole('button', { name: '创建负责人' }).click()
+
+  let humanRow = page.getByRole('row', { name: /Journey Owner/ })
+  await expect(humanRow).toContainText('人类')
+  await humanRow.getByRole('button', { name: '编辑 Journey Owner' }).click()
+  const editHuman = page.getByRole('dialog', { name: '编辑负责人' })
+  await editHuman.getByLabel('姓名').fill('Journey Owner Edited')
+  await editHuman.getByRole('button', { name: '保存负责人' }).click()
+
+  humanRow = page.getByRole('row', { name: /Journey Owner Edited/ })
+  await humanRow
+    .getByRole('button', { name: '停用 Journey Owner Edited' })
+    .click()
+  const deactivate = page.getByRole('dialog', {
+    name: '确认停用 Journey Owner Edited',
+  })
+  await deactivate.getByRole('button', { name: '确认停用' }).click()
+  await expect(humanRow).toHaveAttribute('aria-disabled', 'true')
+  await expect(humanRow).toContainText('已停用')
+})
+
+test('keeps settings populated and persists saved appearance after reload', async ({
+  page,
+  runtime,
+}) => {
+  await page.goto(new URL('/settings', runtime.baseURL).href)
+  await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible()
+  for (const heading of ['外观', '常规', '数据', 'MCP', 'Agent Skills']) {
+    await expect(page.getByRole('heading', { name: heading, exact: true }))
+      .toBeVisible()
+  }
+
+  await page.getByLabel('深色').check()
+  await page.getByLabel('渐变').check()
+  await page.getByLabel('紫色').check()
+  await page.getByLabel('紧凑').check()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.locator('html')).toHaveAttribute('data-background', 'gradient')
+  await expect(page.locator('html')).toHaveAttribute('data-accent', 'purple')
+  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact')
+  await page.getByRole('button', { name: '保存外观设置' }).click()
+  await expect(page.getByRole('status')).toContainText('外观设置已保存')
+
+  await page.reload()
+  await expect(page.getByLabel('深色')).toBeChecked()
+  await expect(page.getByLabel('渐变')).toBeChecked()
+  await expect(page.getByLabel('紫色')).toBeChecked()
+  await expect(page.getByLabel('紧凑')).toBeChecked()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+
+  await expect(page.getByRole('button', { name: '创建备份' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '导出 JSON' })).toBeVisible()
+  await expect(page.getByLabel('选择要导入的 JSON 文件')).toBeAttached()
+  await expect(
+    page.getByRole('button', { name: '下载 Project OS Skill' }),
+  ).toBeVisible()
+  for (const client of ['Codex', 'Claude Code', 'Kimi Code']) {
+    await expect(
+      page.getByRole('button', { name: `复制 ${client} 配置` }),
+    ).toBeEnabled()
+  }
+})

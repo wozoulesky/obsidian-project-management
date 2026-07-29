@@ -766,6 +766,10 @@
   font-size: 0.75rem;
 }
 
+.risk-banner > .badge {
+  color: var(--text-primary);
+}
+
 .risk-banner--clear {
   color: color-mix(in srgb, var(--success) 72%, var(--rail));
   background: var(--surface);

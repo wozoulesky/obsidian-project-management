@@ -1,10 +1,17 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { httpProjectRepository } from '../data/http-project-repository'
 import { App } from './App'
+import { selectAppRepository } from './app-repository'
 import { renderApp } from './test-utils'
 
 describe('App', () => {
+  it('uses deterministic fixtures only for the explicit E2E build', () => {
+    expect(selectAppRepository(false)).toBe(httpProjectRepository)
+    expect(selectAppRepository(true)).not.toBe(httpProjectRepository)
+  })
+
   it('uses the shared loading skeleton while a lazy page resolves', () => {
     const { container, unmount } = renderApp(<App />)
 

@@ -40,7 +40,7 @@ test('1024px routes avoid body overflow while data surfaces scroll internally', 
   }
 })
 
-test('767px dashboard places the rail first, uses two metrics columns, and stacks charts', async ({
+test('767px dashboard keeps bottom navigation clear, uses two metrics columns, and stacks charts', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 767, height: 900 })
@@ -58,13 +58,16 @@ test('767px dashboard places the rail first, uses two metrics columns, and stack
     ).gridTemplateColumns
     return {
       chartRows: cards.map(({ top }) => top),
-      headerTop: header.top,
+      headerBottom: header.bottom,
       metricColumns: metrics.split(' ').filter(Boolean).length,
+      railBottom: rail.bottom,
       railTop: rail.top,
+      viewportHeight: window.innerHeight,
     }
   })
 
-  expect(layout.railTop).toBeLessThan(layout.headerTop)
+  expect(layout.railTop).toBeGreaterThan(layout.headerBottom)
+  expect(layout.railBottom).toBeLessThanOrEqual(layout.viewportHeight)
   expect(layout.metricColumns).toBe(2)
   expect(layout.chartRows[1]).toBeGreaterThan(layout.chartRows[0]!)
   await expect(page.getByRole('img', { name: /趋势图/ })).toBeVisible()
