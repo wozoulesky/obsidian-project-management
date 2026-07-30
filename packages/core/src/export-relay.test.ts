@@ -293,6 +293,39 @@ describe('relay export and import', () => {
     })
   })
 
+  it('rejects a human deliverable creator without a session', () => {
+    const invalid = relayDocument()
+    invalid.deliverables[0]!.sessionId = null
+    invalid.deliverables[0]!.createdBy = {
+      id: 'actor_owner',
+      name: 'Owner',
+      kind: 'human',
+      role: 'owner',
+      status: 'active',
+      client: null,
+      capabilities: [],
+      registeredAt: timestamp,
+      lastActiveAt: null,
+      version: 1,
+    }
+
+    expectImportInvalid(invalid)
+  })
+
+  it('rejects a session created after its last activity', () => {
+    const invalid = relayDocument()
+    invalid.sessions[0]!.createdAt = '2026-07-30T03:00:00.000Z'
+
+    expectImportInvalid(invalid)
+  })
+
+  it('rejects a closed session whose close precedes its last activity', () => {
+    const invalid = relayDocument()
+    invalid.sessions[0]!.closedAt = '2026-07-30T01:30:00.000Z'
+
+    expectImportInvalid(invalid)
+  })
+
   it('rejects duplicate IDs and broken relay graph ownership before writing', () => {
     const cases: [string, (value: ReturnType<typeof relayDocument>) => void][] = [
       ['duplicate session', (value) => value.sessions.push(value.sessions[0]!)],

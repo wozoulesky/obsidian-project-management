@@ -453,12 +453,14 @@ export function validateExportDocument(input: unknown): ExportDocument {
       || !sameActor(agent, session.agent)
       || !projectById.has(session.projectId)
       || session.status === 'abandoned'
+      || session.createdAt > session.lastActiveAt
       || (
         session.status === 'closed'
         && (
           session.summary === null
           || session.summary.length === 0
           || session.closedAt === null
+          || session.lastActiveAt > session.closedAt
         )
       )
       || (
@@ -499,6 +501,7 @@ export function validateExportDocument(input: unknown): ExportDocument {
     const creator = actorById.get(deliverable.createdBy.id)
     if (
       creator === undefined
+      || creator.kind !== 'agent'
       || !sameActor(creator, deliverable.createdBy)
       || !projectById.has(deliverable.projectId)
       || (
