@@ -27,11 +27,11 @@
 | REST collaboration routes | `npm test --workspace @project-os/server -- --run src/routes/collaboration-routes.test.ts` | PASS：5/5 |
 | Web unit/integration | `npm test --workspace web` | PASS：237/237 |
 | Skill v2 contract | `npm test --workspace @project-os/skill -- --run skill.test.ts` | PASS：精确 27-tool surface、三幕接力和 contract-only verifier |
-| 最终仓库门禁 | `npm run check` | **PENDING（release orchestrator）**：必须在最终合并源码上 fresh 执行；不得用上述 focused PASS 推导 |
+| 最终仓库门禁 | `npm run check` | PASS：2026-07-30（Asia/Hong_Kong）在 `codex/v1.1-relay` fresh 执行，Web 237、contracts 21、core 244（另 3 skipped）、MCP 25、server 190、Skill 6、runtime 3；lint/build/docs PASS |
 
-REST 的 5/5 和 Web 的 237/237 是当前集成证据摘要；最终发布仍以 orchestrator
-在最终源码上实际执行并记录的 `npm run check`、`npm run test:e2e` 和
-`git diff --check` 为准。
+REST 的 5/5、Web 的 237/237 和上述 fresh `npm run check` 是当前集成证据
+摘要；最终发布仍需按本清单另行完成 `npm run test:e2e`、`git diff --check`
+以及真实客户端 smoke 边界核对。
 
 v1.1 尚未重新完成三种真实模型客户端的全量写入 smoke。下面保留的真实客户端
 状态仍然是真实边界：Kimi Code 通过，Codex 与 Claude Code 未完成。因此
