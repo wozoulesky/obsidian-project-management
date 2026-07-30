@@ -4,13 +4,17 @@ import {
   ActivityService,
   ActorService,
   BackupService,
+  BriefingService,
   DashboardService,
   DefectService,
+  DeliverableService,
   DomainError,
   ExportService,
+  HandoffService,
   openDatabase,
   ProjectService,
   RequirementService,
+  SessionService,
   SettingsService,
   TaskService,
   TokenService,
@@ -24,11 +28,15 @@ export type AppServices = {
   activities: ActivityService
   actors: ActorService
   backups: BackupService
+  briefing: BriefingService
   dashboard: DashboardService
   defects: DefectService
+  deliverables: DeliverableService
   exports: ExportService
+  handoffs: HandoffService
   projects: ProjectService
   requirements: RequirementService
+  sessions: SessionService
   settings: SettingsService
   tasks: TaskService
   tokens: TokenService
@@ -65,6 +73,7 @@ export const defaultSeedDocument = {
     capabilities: [],
     registeredAt: seedTimestamp,
     lastActiveAt: null,
+    lastBriefingActivityId: null,
     version: 1,
   }],
   projects: [{
@@ -90,6 +99,9 @@ export const defaultSeedDocument = {
   tasks: [],
   requirements: [],
   defects: [],
+  sessions: [],
+  handoffs: [],
+  deliverables: [],
   settings: {
     theme: 'system',
     background: 'soft',
@@ -158,16 +170,24 @@ export function createAppContext(options: AppContextOptions): AppContext {
       actors: liveService(() =>
         new ActorService(lifecycle.getDatabase())),
       backups,
+      briefing: liveService(() =>
+        new BriefingService(lifecycle.getDatabase())),
       dashboard: liveService(() =>
         new DashboardService(lifecycle.getDatabase())),
       defects: liveService(() =>
         new DefectService(lifecycle.getDatabase())),
+      deliverables: liveService(() =>
+        new DeliverableService(lifecycle.getDatabase())),
       exports: liveService(() =>
         new ExportService(lifecycle.getDatabase())),
+      handoffs: liveService(() =>
+        new HandoffService(lifecycle.getDatabase())),
       projects: liveService(() =>
         new ProjectService(lifecycle.getDatabase())),
       requirements: liveService(() =>
         new RequirementService(lifecycle.getDatabase())),
+      sessions: liveService(() =>
+        new SessionService(lifecycle.getDatabase())),
       settings: liveService(() =>
         new SettingsService(lifecycle.getDatabase())),
       tasks: liveService(() =>
