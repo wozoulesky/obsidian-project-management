@@ -68,6 +68,9 @@ const importCountsSchema = z.object({
     tasks: z.number().int().nonnegative(),
     requirements: z.number().int().nonnegative(),
     defects: z.number().int().nonnegative(),
+    sessions: z.number().int().nonnegative(),
+    handoffs: z.number().int().nonnegative(),
+    deliverables: z.number().int().nonnegative(),
   }).strict(),
 }).strict()
 const skillConfigClientSchema = z.enum([

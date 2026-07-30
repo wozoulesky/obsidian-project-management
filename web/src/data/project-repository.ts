@@ -132,6 +132,9 @@ export type ImportCounts = {
     tasks: number
     requirements: number
     defects: number
+    sessions: number
+    handoffs: number
+    deliverables: number
   }
 }
 

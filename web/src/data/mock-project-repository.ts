@@ -535,6 +535,9 @@ export function createMockProjectRepository(): ProjectRepository {
           tasks: taskState.length,
           requirements: requirementState.length,
           defects: defectState.length,
+          sessions: sessionState.length,
+          handoffs: handoffState.length,
+          deliverables: deliverableState.length,
         },
       }
     },
