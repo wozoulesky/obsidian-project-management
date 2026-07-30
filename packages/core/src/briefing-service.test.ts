@@ -1,8 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { projectBriefingSchema } from '@project-os/contracts'
 import { BriefingService } from './briefing-service.js'
-import { createTestDatabase } from './database.js'
+import { createTestDatabase, openDatabase } from './database.js'
 import { DefectService } from './defect-service.js'
 import { BriefingService as ExportedBriefingService } from './index.js'
 import { TaskService } from './task-service.js'
@@ -307,6 +310,25 @@ describe('BriefingService', () => {
 
   it('is exported from the core package entrypoint', () => {
     expect(ExportedBriefingService).toBe(BriefingService)
+  })
+
+  it('runs the synchronization hook after reading the activity page', () => {
+    let hookCalls = 0
+    insertActivity(database, {
+      id: 'activity_hook',
+      createdAt: timestampAt(1),
+    })
+
+    new BriefingService(database, {
+      afterActivityRead: () => {
+        hookCalls += 1
+      },
+    }).getBriefing({
+      projectId: 'project_briefing',
+      agentId: 'actor_agent',
+    })
+
+    expect(hookCalls).toBe(1)
   })
 
   it('composes the complete project briefing from public services', () => {
@@ -656,5 +678,88 @@ describe('BriefingService', () => {
       projectId: 'project_briefing',
       agentId: 'actor_missing',
     })).toThrow()
+  })
+})
+
+describe('BriefingService activity snapshot concurrency', () => {
+  it('cannot persist a cursor for an activity omitted from the briefing', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'project-os-briefing-'))
+    const path = join(directory, 'briefing.sqlite')
+    const reader = openDatabase(path)
+    const writer = openDatabase(path)
+
+    try {
+      writer.exec('PRAGMA busy_timeout = 0')
+      insertActor(reader, {
+        id: 'actor_owner',
+        name: 'Owner',
+        kind: 'human',
+      })
+      insertActor(reader, { id: 'actor_agent', name: 'Builder' })
+      insertProject(reader, 'project_briefing', 'actor_owner')
+      insertActivity(reader, {
+        id: 'activity_base',
+        createdAt: timestampAt(1),
+      })
+      insertActivity(reader, {
+        id: 'activity_visible',
+        createdAt: timestampAt(2),
+      })
+      reader.prepare(`
+        UPDATE actors
+        SET last_briefing_activity_id = 'activity_base'
+        WHERE id = 'actor_agent'
+      `).run()
+
+      let concurrentWriteError: unknown
+      let attemptConcurrentWrite = true
+      const service = new BriefingService(reader, {
+        afterActivityRead: () => {
+          if (!attemptConcurrentWrite) {
+            return
+          }
+          attemptConcurrentWrite = false
+          try {
+            insertActivity(writer, {
+              id: 'activity_concurrent',
+              createdAt: timestampAt(3),
+            })
+          } catch (error) {
+            concurrentWriteError = error
+          }
+        },
+      })
+
+      const first = service.getBriefing({
+        projectId: 'project_briefing',
+        agentId: 'actor_agent',
+      })
+
+      expect(concurrentWriteError).toBeInstanceOf(Error)
+      expect(writer.prepare(`
+        SELECT id FROM activities WHERE id = 'activity_concurrent'
+      `).get()).toBeUndefined()
+      expect(first.new_activities.map(({ id }) => id)).toEqual([
+        'activity_visible',
+      ])
+      expect(first.activity_cursor).toBe('activity_visible')
+
+      insertActivity(writer, {
+        id: 'activity_concurrent',
+        createdAt: timestampAt(3),
+      })
+      const second = service.getBriefing({
+        projectId: 'project_briefing',
+        agentId: 'actor_agent',
+      })
+      expect(second.new_activities.map(({ id }) => id)).toEqual([
+        'activity_concurrent',
+      ])
+      expect(second.activity_cursor).toBe('activity_concurrent')
+    } finally {
+      writer.close()
+      reader.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

@@ -7,7 +7,10 @@ import type {
   PersistedActivity,
   ProjectBriefing,
 } from '@project-os/contracts'
-import { ActivityService } from './activity-service.js'
+import {
+  ActivityService,
+  withImmediateTransaction,
+} from './activity-service.js'
 import { DeliverableService } from './deliverable-service.js'
 import { DomainError } from './errors.js'
 import { HandoffService } from './handoff-service.js'
@@ -18,6 +21,10 @@ import { TaskService } from './task-service.js'
 export type BriefingInput = {
   projectId: string
   agentId: string
+}
+
+type BriefingServiceOptions = {
+  afterActivityRead?: () => void
 }
 
 type ActorBriefingRow = {
@@ -53,7 +60,10 @@ export class BriefingService {
   private readonly deliverables: DeliverableService
   private readonly activities: ActivityService
 
-  constructor(private readonly database: DatabaseSync) {
+  constructor(
+    private readonly database: DatabaseSync,
+    private readonly options: BriefingServiceOptions = {},
+  ) {
     this.projects = new ProjectService(database)
     this.tasks = new TaskService(database)
     this.sessions = new SessionService(database)
@@ -63,68 +73,71 @@ export class BriefingService {
   }
 
   getBriefing(input: BriefingInput): ProjectBriefing {
-    const { projectId, agentId } = briefingInputSchema.parse(input)
-    const project = this.projects.get(projectId)
-    const actor = this.readActor(agentId)
-    const tasks = this.tasks.list({ projectId })
-    const myTasks = tasks.filter((task) => (
-      task.assigneeId === agentId && task.status !== 'done'
-    ))
-    const inProgressTasks = tasks.filter((task) => (
-      task.status === 'in_progress'
-    ))
-    const latestProgressByTask = this.latestProgress(projectId)
-    const sessions = this.sessions.listForProject({ projectId })
-    const claimedTaskIds = new Set(
-      sessions
-        .filter((session) => session.status === 'active')
-        .flatMap((session) => session.taskIds),
-    )
-    const taskOrder = new Map(
-      tasks.map((task, index) => [task.id, index]),
-    )
-    const unclaimedTasks = tasks
-      .filter((task) => (
-        task.status === 'not_started'
-        && !claimedTaskIds.has(task.id)
+    return withImmediateTransaction(this.database, () => {
+      const { projectId, agentId } = briefingInputSchema.parse(input)
+      const project = this.projects.get(projectId)
+      const actor = this.readActor(agentId)
+      const tasks = this.tasks.list({ projectId })
+      const myTasks = tasks.filter((task) => (
+        task.assigneeId === agentId && task.status !== 'done'
       ))
-      .sort((left, right) => (
-        priorityRank[left.priority] - priorityRank[right.priority]
-        || taskOrder.get(left.id)! - taskOrder.get(right.id)!
+      const inProgressTasks = tasks.filter((task) => (
+        task.status === 'in_progress'
       ))
-    const latestHandoff = this.handoffs.latestForProject(projectId)
-    const recentDeliverables = this.deliverables.listForProject({
-      projectId,
-      limit: 10,
-    })
-    const activityPage = this.readActivities(
-      projectId,
-      actor.last_briefing_activity_id,
-    )
-    const activityCursor = this.activities.latestCursor({ projectId })
-    const briefing = projectBriefingSchema.parse({
-      project,
-      my_tasks: myTasks,
-      in_progress_tasks: inProgressTasks.map((task) => ({
-        task,
-        latest_progress: latestProgressByTask.get(task.id) ?? null,
-      })),
-      unclaimed_tasks: unclaimedTasks,
-      sessions,
-      latest_handoff: latestHandoff,
-      recent_deliverables: recentDeliverables,
-      new_activities: activityPage.items,
-      activities_truncated: activityPage.truncated,
-      activity_cursor: activityCursor,
-    })
+      const latestProgressByTask = this.latestProgress(projectId)
+      const sessions = this.sessions.listForProject({ projectId })
+      const claimedTaskIds = new Set(
+        sessions
+          .filter((session) => session.status === 'active')
+          .flatMap((session) => session.taskIds),
+      )
+      const taskOrder = new Map(
+        tasks.map((task, index) => [task.id, index]),
+      )
+      const unclaimedTasks = tasks
+        .filter((task) => (
+          task.status === 'not_started'
+          && !claimedTaskIds.has(task.id)
+        ))
+        .sort((left, right) => (
+          priorityRank[left.priority] - priorityRank[right.priority]
+          || taskOrder.get(left.id)! - taskOrder.get(right.id)!
+        ))
+      const latestHandoff = this.handoffs.latestForProject(projectId)
+      const recentDeliverables = this.deliverables.listForProject({
+        projectId,
+        limit: 10,
+      })
+      const activityPage = this.readActivities(
+        projectId,
+        actor.last_briefing_activity_id,
+      )
+      this.options.afterActivityRead?.()
+      const activityCursor = this.activities.latestCursor({ projectId })
+      const briefing = projectBriefingSchema.parse({
+        project,
+        my_tasks: myTasks,
+        in_progress_tasks: inProgressTasks.map((task) => ({
+          task,
+          latest_progress: latestProgressByTask.get(task.id) ?? null,
+        })),
+        unclaimed_tasks: unclaimedTasks,
+        sessions,
+        latest_handoff: latestHandoff,
+        recent_deliverables: recentDeliverables,
+        new_activities: activityPage.items,
+        activities_truncated: activityPage.truncated,
+        activity_cursor: activityCursor,
+      })
 
-    this.database.prepare(`
-      UPDATE actors
-      SET last_briefing_activity_id = ?
-      WHERE id = ?
-    `).run(activityCursor, agentId)
+      this.database.prepare(`
+        UPDATE actors
+        SET last_briefing_activity_id = ?
+        WHERE id = ?
+      `).run(activityCursor, agentId)
 
-    return briefing
+      return briefing
+    })
   }
 
   private readActor(agentId: string): ActorBriefingRow {
