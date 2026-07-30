@@ -1631,6 +1631,11 @@ describe('DashboardService', () => {
       context.dev.id,
       'mcp',
     )
+    context.database.prepare(`
+      UPDATE tasks
+      SET updated_at = ?
+      WHERE id = ?
+    `).run('2026-07-29T12:00:00.000Z', completed.id)
 
     const snapshot = context.dashboard.snapshot({
       projectId: context.project.id,

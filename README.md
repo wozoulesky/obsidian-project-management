@@ -2,6 +2,13 @@
 
 [中文](README.md) | [English](README_EN.md)
 
+## v1.0.0 正式版
+
+Project OS 首个完整版本现已就绪，覆盖项目组合与负责人筛选、项目内任务、
+人员与 Agent 目录、快速进度提交、可配置设置页，以及共享 SQLite 数据的
+REST、MCP 和 Agent Skill 协作链路。完整改动与已知限制见
+[CHANGELOG](CHANGELOG.md)。
+
 Project OS 是一个本地优先的项目工作台。React Web、REST API、SQLite、
 MCP 服务器和可安装的 Agent Skill 共享同一套数据与权限规则。当前版本支持：
 
@@ -131,6 +138,7 @@ Kimi Code 已在隔离临时 HOME 中完成工具发现、身份注册、项目�
 
 ## 进一步文档
 
+- [v1.0.0 变更说明](CHANGELOG.md)
 - [Web 开发说明](web/README.md)
 - [Agent 接入指南](docs/agent-setup.md)
 - [数据与备份指南](docs/data-and-backups.md)

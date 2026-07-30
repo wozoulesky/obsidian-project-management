@@ -2,6 +2,14 @@
 
 [中文](README.md) | [English](README_EN.md)
 
+## v1.0.0
+
+The first complete Project OS release is ready. It includes the project
+portfolio and owner filtering, project-scoped tasks, the human and Agent
+directory, quick progress submission, functional settings, and a shared
+SQLite-backed REST, MCP, and Agent Skill workflow. See the
+[CHANGELOG](CHANGELOG.md) for the full release notes and known limitations.
+
 Project OS is a local-first project workspace. Its React Web application, REST
 API, SQLite database, MCP server, and installable Agent Skill share the same
 data and permission rules. The current release includes:
@@ -146,6 +154,7 @@ a write.
 
 ## More documentation
 
+- [v1.0.0 changelog](CHANGELOG.md)
 - [Web development](web/README.md)
 - [Agent setup](docs/agent-setup.md)
 - [Data and backups](docs/data-and-backups.md)
