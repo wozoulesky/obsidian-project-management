@@ -33,8 +33,11 @@ export { DomainError } from './errors.js'
 export {
   generateActivityId,
   generateActorId,
+  generateDeliverableId,
+  generateHandoffId,
   generateId,
   generateProjectId,
+  generateSessionId,
 } from './ids.js'
 export type { EntityIdPrefix } from './ids.js'
 export { runMigrations } from './migrations.js'
