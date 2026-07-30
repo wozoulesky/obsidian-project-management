@@ -143,8 +143,6 @@ Kimi Code 已在隔离临时 HOME 中完成工具发现、身份注册、项目�
 - [Agent 接入指南](docs/agent-setup.md)
 - [数据与备份指南](docs/data-and-backups.md)
 - [发布检查清单](docs/release-checklist.md)
-- [完整设计规格](docs/superpowers/specs/2026-07-29-project-os-full-stack-mcp-design.md)
-- [实施计划索引](docs/superpowers/plans/2026-07-29-project-os-full-stack-index.md)
 
 ## 安全边界
 

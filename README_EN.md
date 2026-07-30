@@ -159,8 +159,6 @@ a write.
 - [Agent setup](docs/agent-setup.md)
 - [Data and backups](docs/data-and-backups.md)
 - [Release checklist](docs/release-checklist.md)
-- [Full design specification](docs/superpowers/specs/2026-07-29-project-os-full-stack-mcp-design.md)
-- [Implementation plan index](docs/superpowers/plans/2026-07-29-project-os-full-stack-index.md)
 
 ## Security boundary
 

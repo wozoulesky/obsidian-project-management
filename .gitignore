@@ -1,4 +1,6 @@
 .worktrees/
+PRD.md
+docs/superpowers/
 node_modules/
 /data/
 web/dist/
