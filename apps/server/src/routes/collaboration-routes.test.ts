@@ -232,4 +232,14 @@ describe('collaboration routes', () => {
       await api.get(path).expect(400)
     }
   })
+
+  it('rejects a missing parent project for every collaboration list', async () => {
+    const { api } = createApi()
+    for (const resource of ['sessions', 'handoffs', 'deliverables']) {
+      const response = await api
+        .get(`/api/v1/projects/project_missing/${resource}`)
+        .expect(404)
+      expect(response.body.error.code).toBe('PROJECT_NOT_FOUND')
+    }
+  })
 })

@@ -1,12 +1,14 @@
 import {
   deliverableSchema,
   handoffSchema,
+  persistedProjectSchema,
   persistedSessionSchema,
 } from '@project-os/contracts'
 import type { Router } from 'express'
 import { z } from 'zod'
 import type { AppRouteModule } from '../app.js'
 import {
+  callService,
   internalOperation,
   parseResponse,
   routeIdSchema,
@@ -45,6 +47,10 @@ export const collaborationRoutes: AppRouteModule = {
       const { projectId } = projectParamsSchema.parse(request.params)
       const query = sessionQuerySchema.parse(request.query)
       const context = getContext()
+      callService(
+        persistedProjectSchema,
+        () => context.services.projects.get(projectId),
+      )
       const raw = internalOperation(
         () => context.services.sessions.listForProject({
           projectId,
@@ -61,6 +67,10 @@ export const collaborationRoutes: AppRouteModule = {
       const { projectId } = projectParamsSchema.parse(request.params)
       const query = listQuerySchema.parse(request.query)
       const context = getContext()
+      callService(
+        persistedProjectSchema,
+        () => context.services.projects.get(projectId),
+      )
       const raw = internalOperation(
         () => context.services.handoffs.listForProject({
           projectId,
@@ -75,6 +85,10 @@ export const collaborationRoutes: AppRouteModule = {
       const { projectId } = projectParamsSchema.parse(request.params)
       const query = deliverableQuerySchema.parse(request.query)
       const context = getContext()
+      callService(
+        persistedProjectSchema,
+        () => context.services.projects.get(projectId),
+      )
       const raw = internalOperation(
         () => context.services.deliverables.listForProject({
           projectId,
