@@ -10,7 +10,105 @@ const persistedHuman = {
   status: 'active' as const,
   registeredAt: '2026-07-29T00:00:00.000Z',
   lastActiveAt: null,
+  lastBriefingActivityId: null,
   version: 1,
+}
+
+const agent = {
+  id: 'agent-1',
+  name: 'Builder',
+  kind: 'agent' as const,
+  role: 'dev-agent' as const,
+}
+
+const project = {
+  id: 'project-1',
+  code: 'PROJ-1',
+  name: 'Project OS',
+  description: 'Relay work between agents',
+  ownerId: 'actor-1',
+  startDate: '2026-07-29',
+  dueDate: null,
+  status: 'in_progress' as const,
+  progress: 25,
+  createdAt: '2026-07-29T00:00:00.000Z',
+  updatedAt: '2026-07-29T01:00:00.000Z',
+  version: 1,
+}
+
+const task = {
+  id: 'task-1',
+  code: 'TASK-1',
+  title: 'Build relay contracts',
+  description: '',
+  assignee: agent,
+  startDate: '2026-07-29',
+  dueDate: '2026-07-30',
+  priority: 'P1' as const,
+  status: 'in_progress' as const,
+  progress: 50,
+  milestoneId: '',
+  dependencyIds: [],
+  projectId: 'project-1',
+  assigneeId: 'agent-1',
+  createdAt: '2026-07-29T00:00:00.000Z',
+  updatedAt: '2026-07-29T01:00:00.000Z',
+  version: 1,
+}
+
+const session = {
+  id: 'session-1',
+  projectId: 'project-1',
+  agentId: 'agent-1',
+  agent,
+  intent: 'Implement relay contracts',
+  taskIds: ['task-1'],
+  status: 'active' as const,
+  summary: null,
+  createdAt: '2026-07-29T01:00:00.000Z',
+  lastActiveAt: '2026-07-29T01:30:00.000Z',
+  closedAt: null,
+}
+
+const handoff = {
+  id: 'handoff-1',
+  projectId: 'project-1',
+  sessionId: 'session-1',
+  author: agent,
+  summary: 'Contracts are ready for the service layer',
+  done: ['Added relay schemas'],
+  blockers: [],
+  nextSteps: ['Implement persistence'],
+  gotchas: ['Keep wire field names stable'],
+  refs: [
+    { kind: 'commit' as const, ref: 'abc123', note: 'Contract commit' },
+    { kind: 'file' as const, ref: 'packages/contracts/src/index.ts' },
+    { kind: 'url' as const, ref: 'https://example.test/relay' },
+    { kind: 'note' as const, ref: 'Review the cursor fallback' },
+  ],
+  createdAt: '2026-07-29T02:00:00.000Z',
+}
+
+const deliverable = {
+  id: 'deliverable-1',
+  projectId: 'project-1',
+  requirementId: 'requirement-1',
+  taskId: 'task-1',
+  title: 'Relay contract implementation',
+  kind: 'commit' as const,
+  ref: 'abc123',
+  note: null,
+  createdBy: agent,
+  sessionId: 'session-1',
+  createdAt: '2026-07-29T01:45:00.000Z',
+}
+
+const activity = {
+  id: 'activity-1',
+  actor: agent,
+  action: 'Checked in',
+  operation: 'session.checkin' as const,
+  createdAt: '2026-07-29T01:00:00.000Z',
 }
 
 describe('shared contracts', () => {
@@ -26,9 +124,12 @@ describe('shared contracts', () => {
   })
 
   it('parses human actors', () => {
-    expect(contracts.actorSchema.parse(persistedHuman)).toMatchObject(
-      persistedHuman,
-    )
+    expect(contracts.actorSchema.parse(persistedHuman)).toMatchObject({
+      id: persistedHuman.id,
+      name: persistedHuman.name,
+      kind: persistedHuman.kind,
+      role: persistedHuman.role,
+    })
   })
 
   it('exposes project identity and owner fields', () => {
@@ -62,6 +163,11 @@ describe('activity operations', () => {
       'import.run',
       'token.issue',
       'token.revoke',
+      'session.checkin',
+      'session.note',
+      'session.checkout',
+      'handoff.update',
+      'deliverable.record',
     ] as const
 
     for (const operation of stableOperations) {
@@ -161,11 +267,233 @@ describe('persisted validation boundaries', () => {
     ).toBe(false)
   })
 
+  it('requires a nullable, non-empty briefing activity waterline', () => {
+    const {
+      lastBriefingActivityId: _lastBriefingActivityId,
+      ...withoutWaterline
+    } = persistedHuman
+
+    expect(
+      contracts.persistedActorSchema.safeParse(withoutWaterline).success,
+    ).toBe(false)
+    expect(
+      contracts.persistedActorSchema.safeParse({
+        ...persistedHuman,
+        lastBriefingActivityId: '',
+      }).success,
+    ).toBe(false)
+    expect(
+      contracts.persistedActorSchema.safeParse({
+        ...persistedHuman,
+        lastBriefingActivityId: 'activity-1',
+      }).success,
+    ).toBe(true)
+  })
+
   it('rejects actor roles that do not match the actor kind', () => {
     expect(
       contracts.actorSchema.safeParse({
         ...persistedHuman,
         role: 'dev-agent',
+      }).success,
+    ).toBe(false)
+  })
+})
+
+describe('relay entities and briefing', () => {
+  it('parses sessions and persisted sessions with embedded agent snapshots', () => {
+    expect(contracts.sessionSchema.parse(session)).toEqual(session)
+    expect(contracts.persistedSessionSchema.parse(session)).toEqual(session)
+    expect(
+      contracts.sessionSchema.safeParse({
+        ...session,
+        agent: { ...agent, role: 'owner' },
+      }).success,
+    ).toBe(false)
+    expect(
+      contracts.sessionSchema.safeParse({
+        ...session,
+        status: 'waiting',
+      }).success,
+    ).toBe(false)
+  })
+
+  it('parses handoffs and rejects empty references', () => {
+    expect(contracts.handoffSchema.parse(handoff)).toEqual(handoff)
+    expect(
+      contracts.handoffSchema.safeParse({
+        ...handoff,
+        refs: [{ kind: 'file', ref: '' }],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('parses deliverables with actor snapshots', () => {
+    expect(contracts.deliverableSchema.parse(deliverable)).toEqual(deliverable)
+    expect(
+      contracts.deliverableSchema.safeParse({
+        ...deliverable,
+        kind: 'artifact',
+      }).success,
+    ).toBe(false)
+  })
+
+  it('preserves the project briefing wire field names', () => {
+    const briefing = {
+      project,
+      my_tasks: [task],
+      in_progress_tasks: [
+        {
+          task,
+          latest_progress: {
+            note: 'Halfway done',
+            actor_name: 'Builder',
+            created_at: '2026-07-29T01:30:00.000Z',
+          },
+        },
+        { task, latest_progress: null },
+      ],
+      unclaimed_tasks: [],
+      sessions: [session],
+      latest_handoff: handoff,
+      recent_deliverables: [deliverable],
+      new_activities: [activity],
+      activities_truncated: false,
+      activity_cursor: 'activity-1',
+    }
+
+    expect(contracts.projectBriefingSchema.parse(briefing)).toEqual(briefing)
+    expect(
+      contracts.projectBriefingSchema.safeParse({
+        ...briefing,
+        activities_truncated: 'false',
+      }).success,
+    ).toBe(false)
+  })
+})
+
+describe('relay inputs', () => {
+  it('validates session check-ins and limits claimed tasks to 20', () => {
+    expect(
+      contracts.sessionCheckinInputSchema.parse({
+        projectId: 'project-1',
+        agentId: 'agent-1',
+        intent: 'Continue relay work',
+        taskIds: ['task-1'],
+      }),
+    ).toEqual({
+      projectId: 'project-1',
+      agentId: 'agent-1',
+      intent: 'Continue relay work',
+      taskIds: ['task-1'],
+    })
+    expect(
+      contracts.sessionCheckinInputSchema.safeParse({
+        projectId: 'project-1',
+        agentId: 'agent-1',
+        intent: '',
+        taskIds: [],
+      }).success,
+    ).toBe(false)
+    expect(
+      contracts.sessionCheckinInputSchema.safeParse({
+        projectId: 'project-1',
+        agentId: 'agent-1',
+        intent: 'Claim too much',
+        taskIds: Array.from({ length: 21 }, (_, index) => `task-${index}`),
+      }).success,
+    ).toBe(false)
+  })
+
+  it('validates non-empty session notes with an optional task association', () => {
+    expect(
+      contracts.sessionNoteInputSchema.parse({
+        sessionId: 'session-1',
+        agentId: 'agent-1',
+        note: 'The cursor is project-scoped',
+        taskId: 'task-1',
+      }),
+    ).toEqual({
+      sessionId: 'session-1',
+      agentId: 'agent-1',
+      note: 'The cursor is project-scoped',
+      taskId: 'task-1',
+    })
+    expect(
+      contracts.sessionNoteInputSchema.safeParse({
+        sessionId: 'session-1',
+        agentId: 'agent-1',
+        note: '',
+      }).success,
+    ).toBe(false)
+  })
+
+  it('validates structured session checkout input', () => {
+    const checkout = {
+      sessionId: 'session-1',
+      agentId: 'agent-1',
+      summary: 'Relay contracts implemented',
+      done: ['Schemas added'],
+      blockers: [],
+      nextSteps: ['Add services'],
+      gotchas: [],
+      refs: [{ kind: 'commit' as const, ref: 'abc123' }],
+    }
+
+    expect(contracts.sessionCheckoutInputSchema.parse(checkout)).toEqual(
+      checkout,
+    )
+    expect(
+      contracts.sessionCheckoutInputSchema.safeParse({
+        ...checkout,
+        summary: '',
+      }).success,
+    ).toBe(false)
+    expect(
+      contracts.sessionCheckoutInputSchema.safeParse({
+        ...checkout,
+        refs: [{ kind: 'commit', ref: '' }],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('requires a deliverable to reference a requirement or task', () => {
+    const base = {
+      projectId: 'project-1',
+      agentId: 'agent-1',
+      title: 'Relay contracts',
+      kind: 'commit' as const,
+      ref: 'abc123',
+    }
+
+    expect(
+      contracts.deliverableRecordInputSchema.safeParse({
+        ...base,
+        requirementId: 'requirement-1',
+      }).success,
+    ).toBe(true)
+    expect(
+      contracts.deliverableRecordInputSchema.safeParse({
+        ...base,
+        taskId: 'task-1',
+        sessionId: 'session-1',
+        note: 'Ready for review',
+      }).success,
+    ).toBe(true)
+    expect(
+      contracts.deliverableRecordInputSchema.safeParse(base).success,
+    ).toBe(false)
+    expect(
+      contracts.deliverableRecordInputSchema.safeParse({
+        ...base,
+        requirementId: '',
+      }).success,
+    ).toBe(false)
+    expect(
+      contracts.deliverableRecordInputSchema.safeParse({
+        ...base,
+        taskId: 'task-1',
+        ref: '',
       }).success,
     ).toBe(false)
   })
