@@ -58,6 +58,8 @@ export type {
   BackupServiceOptions,
   DatabaseLifecycle,
 } from './backup-service.js'
+export { BriefingService } from './briefing-service.js'
+export type { BriefingInput } from './briefing-service.js'
 export { ExportService, validateExportDocument } from './export-service.js'
 export type { ExportDocument } from './export-service.js'
 export { HandoffService } from './handoff-service.js'
