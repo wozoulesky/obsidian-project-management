@@ -29,6 +29,7 @@ import {
 import { projectRoutes } from './routes/projects.js'
 import { taskRoutes } from './routes/tasks.js'
 import { activityRoutes } from './routes/activities.js'
+import { collaborationRoutes } from './routes/collaboration.js'
 import { dashboardRoutes } from './routes/dashboard.js'
 import { defectRoutes } from './routes/defects.js'
 import { requirementRoutes } from './routes/requirements.js'
@@ -669,6 +670,7 @@ export function createApp(options: CreateAppOptions): ProjectOsApp {
     defectRoutes,
     dashboardRoutes,
     activityRoutes,
+    collaborationRoutes,
     settingsRoutes,
     tokenRoutes,
     backupRoutes,

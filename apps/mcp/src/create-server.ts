@@ -2,12 +2,17 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type {
   ActivityService,
   ActorService,
+  BriefingService,
   DashboardService,
   DefectService,
+  DeliverableService,
+  HandoffService,
   ProjectService,
   RequirementService,
+  SessionService,
   TaskService,
 } from '@project-os/core'
+import { registerCollaborationTools } from './tools/collaboration.js'
 import { registerDefectTools } from './tools/defects.js'
 import { registerIdentityTools } from './tools/identity.js'
 import { registerProjectTools } from './tools/projects.js'
@@ -19,10 +24,14 @@ import { inputInvalidResult } from './tool-result.js'
 export type ProjectOsMcpServices = {
   activities: ActivityService
   actors: ActorService
+  briefing: BriefingService
   dashboard: DashboardService
   defects: DefectService
+  deliverables: DeliverableService
+  handoffs: HandoffService
   projects: ProjectService
   requirements: RequirementService
+  sessions: SessionService
   tasks: TaskService
 }
 
@@ -57,6 +66,7 @@ export function createProjectOsMcpServer(
   registerRequirementTools(server, services)
   registerDefectTools(server, services)
   registerReportTools(server, services)
+  registerCollaborationTools(server, services)
 
   return server
 }

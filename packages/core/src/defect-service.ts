@@ -2,9 +2,9 @@ import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import {
   activitySourceSchema,
+  actorSchema,
   defectSchema,
   defectStatusSchema,
-  persistedActorSchema,
   persistedDefectSchema,
   persistedTaskSchema,
 } from '@project-os/contracts'
@@ -698,7 +698,7 @@ export class DefectService {
       last_active_at: string | null
       version: number
     }
-    const assignee = persistedActorSchema.parse({
+    const assignee = actorSchema.parse({
       id: actorRow.id,
       name: actorRow.name,
       kind: actorRow.kind,

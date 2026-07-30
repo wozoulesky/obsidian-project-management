@@ -231,7 +231,7 @@ describe('Project OS Skill package routes', () => {
       ok: true,
       mode: 'contract-only',
       transport: 'stdio',
-      toolCount: 22,
+      toolCount: 27,
       checks: ['listTools'],
       writeSmoke: false,
     })

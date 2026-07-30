@@ -13,6 +13,7 @@ const actor = {
   capabilities: ['planning'],
   registeredAt: '2026-07-29T00:00:00.000Z',
   lastActiveAt: null,
+  lastBriefingActivityId: null,
   version: 3,
 }
 

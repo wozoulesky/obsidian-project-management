@@ -1,7 +1,8 @@
 # Agent 接入指南
 
-Project OS MCP 当前提供 22 tools，覆盖身份、项目、任务、需求、缺陷、进度、
-仪表盘和活动。所有写操作都进入与 REST 相同的服务层、SQLite 事务和活动日志。
+Project OS MCP 当前提供 27 tools，覆盖身份、项目、任务、需求、缺陷、进度、
+仪表盘、活动和 Agent 接力会话。所有写操作都进入与 REST 相同的服务层、
+SQLite 事务和活动日志。
 
 ## 前置条件
 
@@ -117,7 +118,7 @@ ZIP 中的路径和配置片段会指向生成 ZIP 的 Project OS 运行目录�
 
 ## 验证连接与副作用
 
-默认验证只启动 stdio、完成协议初始化，并严格核对 22 tools；它不会调用需要
+默认验证只启动 stdio、完成协议初始化，并严格核对 27 tools；它不会调用需要
 Agent 身份的业务 tools，因此不会写入 Agent、项目、任务或活动：
 
 ```bash
@@ -125,7 +126,7 @@ node integrations/project-os/scripts/verify-connection.mjs
 ```
 
 预期 JSON 包含 `ok: true`、`mode: "contract-only"`、
-`transport: "stdio"` 和 `toolCount: 22`。
+`transport: "stdio"` 和 `toolCount: 27`。
 
 这里的 `sideEffects: []` 只表示没有业务 tool 副作用，不代表文件系统只读。
 stdio 启动会打开所选 SQLite；路径不存在时会创建父目录、数据库和 WAL，并执行
@@ -167,15 +168,40 @@ node scripts/smoke-clients.mjs --clients codex,claude,kimi --write-smoke
 node scripts/smoke-clients.mjs --self-test
 ```
 
-## Agent 身份与安全工作流
+## Agent 三幕接力工作流
 
-1. 首次使用 `agent_register`，保存返回的 Agent ID；后续先调用
-   `agent_whoami`，不要重复注册。
-2. 用 `project_list` 和带 `assignee_id` 的 `task_list` 建立工作范围。
-3. 更新前读取当前 `version`；冲突时重新读取并人工协调。
-4. 用 `progress_submit` 提交被分配任务的进度，并用 `activity_log` 核对审计
-   记录。
-5. 工具返回 `isError: true` 时不得声明成功，也不得通过更换身份绕过权限。
+每个 Agent 会话都执行以下三幕。任务受阻或没有代码改动也不能省略结束动作。
+
+### 第一幕：Start every session
+
+1. 用已保存的 Agent ID 调用 `agent_whoami`。只有在 ID 不存在时才调用一次
+   `agent_register` 并保存返回值；身份停用或失效时不得静默创建第二个身份。
+2. 用明确的 `project_id`、`intent` 和本轮声明认领的 `task_ids` 调用
+   `session_checkin`。认领只声明会话范围，不会改变任务状态或负责人。
+3. 开工前读取 check-in 返回的 briefing：先看 `latest_handoff`，再看
+   `new_activities`，然后核对当前任务、活动会话、近期交付物和受阻项。
+
+### 第二幕：Perform work safely
+
+1. 更新前读取当前 `version`；发生冲突时重新读取、协调并仅在意图仍然成立时
+   重试。
+2. 遵守角色权限、项目成员关系、任务分配和会话所有权；不能通过更换身份绕过
+   拒绝。
+3. 关键决策、踩坑和阻塞出现时立即调用 `session_note`；关联具体任务时带上
+   `task_id`，不要等到结束时才补记。
+4. 工具返回 `isError: true` 时不得声明成功。需要审计证据时用
+   `activity_log` 核对；增量读取用 `since`，常规向后翻页用 `after`，两者
+   不能同时提供。
+
+### 第三幕：End every session（强制）
+
+1. 先用 `deliverable_record` 登记每一个 commit、文件、URL 或说明，至少关联
+   一个 `requirement_id` 或 `task_id`，并在适用时带上本轮 `session_id`。
+2. 再用 `session_checkout` 写入 `summary`、`done`、`blockers` 和
+   `next_steps`，并按需补充 `gotchas` 与结构化 `refs`。
+
+没有 checkout 就不算完成；下一个 Agent 只能看到 abandoned 会话，收不到可
+直接续作的结构化 handoff。
 
 完整工具语义见
 [工具参考](../integrations/project-os/references/tool-reference.md)。

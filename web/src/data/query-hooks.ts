@@ -90,6 +90,12 @@ export const projectQueryKeys = {
     ['defects', selectedProjectId] as const,
   ganttFor: (selectedProjectId: string) =>
     ['gantt', selectedProjectId] as const,
+  sessionsFor: (selectedProjectId: string) =>
+    ['projects', selectedProjectId, 'sessions'] as const,
+  handoffsFor: (selectedProjectId: string) =>
+    ['projects', selectedProjectId, 'handoffs'] as const,
+  deliverablesFor: (selectedProjectId: string) =>
+    ['projects', selectedProjectId, 'deliverables'] as const,
   dashboardPrefix: ['dashboard', projectId] as const,
   dashboard: (days: 7 | 30 | 90) =>
     ['dashboard', projectId, days] as const,
@@ -213,6 +219,34 @@ export function useProjectMembers(selectedProjectId: string) {
   return useQuery({
     queryKey: projectQueryKeys.projectMembersFor(selectedProjectId),
     queryFn: () => context.repository.listProjectMembers(selectedProjectId),
+    enabled: selectedProjectId !== '',
+  })
+}
+
+export function useProjectSessions(selectedProjectId: string) {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.sessionsFor(selectedProjectId),
+    queryFn: () => context.repository.listProjectSessions(selectedProjectId),
+    enabled: selectedProjectId !== '',
+  })
+}
+
+export function useProjectHandoffs(selectedProjectId: string) {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.handoffsFor(selectedProjectId),
+    queryFn: () => context.repository.listProjectHandoffs(selectedProjectId),
+    enabled: selectedProjectId !== '',
+  })
+}
+
+export function useProjectDeliverables(selectedProjectId: string) {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.deliverablesFor(selectedProjectId),
+    queryFn: () =>
+      context.repository.listProjectDeliverables(selectedProjectId),
     enabled: selectedProjectId !== '',
   })
 }

@@ -105,15 +105,21 @@ describe('Project OS Agent Skill package', () => {
     expect(allText()).not.toMatch(/transport["']?\s*:\s*["']sse/i)
   })
 
-  it('documents exactly the approved 22-tool surface', () => {
+  it('documents exactly the approved 27-tool surface', () => {
     const reference = read('references/tool-reference.md')
-    const toolNames = reference.match(/`[a-z][a-z_]+`/g)
-      ?.map((name) => name.slice(1, -1))
+    const toolNames = [...reference.matchAll(
+      /^- `([a-z][a-z_]+)` —/gm,
+    )].map((match) => match[1])
 
     expect(toolNames).toEqual([
       'agent_register',
       'agent_whoami',
       'agent_list',
+      'session_checkin',
+      'project_briefing',
+      'session_note',
+      'session_checkout',
+      'deliverable_record',
       'project_create',
       'project_get',
       'project_list',
@@ -137,15 +143,47 @@ describe('Project OS Agent Skill package', () => {
     expect(allText()).not.toMatch(/\b(requirement_get|defect_get)\b/)
   })
 
+  it('requires the three-act relay workflow for every session', () => {
+    const skill = read('SKILL.md')
+
+    expect(skill).toContain('## Start every session')
+    expect(skill).toMatch(
+      /`agent_whoami`[\s\S]*`agent_register`[\s\S]*`session_checkin`/,
+    )
+    expect(skill).toMatch(
+      /`session_checkin`[\s\S]*intent[\s\S]*task_ids/,
+    )
+    expect(skill).toMatch(
+      /briefing[\s\S]*latest_handoff[\s\S]*new_activities[\s\S]*before work/i,
+    )
+    expect(skill).toContain('## Perform work safely')
+    expect(skill).toMatch(
+      /decisions[\s\S]*gotchas[\s\S]*blockers[\s\S]*`session_note`/i,
+    )
+    expect(skill).toContain('## End every session')
+    expect(skill).toMatch(
+      /every deliverable[\s\S]*`deliverable_record`[\s\S]*`session_checkout`/i,
+    )
+    expect(skill).toMatch(
+      /summary[\s\S]*done[\s\S]*blockers[\s\S]*next_steps[\s\S]*gotchas[\s\S]*refs/,
+    )
+    expect(skill).toMatch(
+      /No checkout means the work is not finished[\s\S]*abandoned session/i,
+    )
+  })
+
   it('keeps SKILL frontmatter minimal and openai metadata usable', () => {
     const skill = read('SKILL.md')
     const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1]
+    const openai = read('agents/openai.yaml')
 
     expect(frontmatter?.match(/^[a-z_]+:/gm)).toEqual([
       'name:',
       'description:',
     ])
-    expect(read('agents/openai.yaml')).toContain(
+    expect(openai).toContain('27 tools')
+    expect(openai).toContain('three-act relay')
+    expect(openai).toContain(
       'default_prompt: "Use $project-os',
     )
   })
@@ -204,7 +242,7 @@ describe('Project OS Agent Skill package', () => {
       checks: ['listTools'],
       mode: 'contract-only',
       sideEffects: [],
-      toolCount: 22,
+      toolCount: 27,
       writeSmoke: false,
     })
 

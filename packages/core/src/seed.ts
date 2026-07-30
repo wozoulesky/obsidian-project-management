@@ -107,10 +107,17 @@ export function createLegacyFixtureSeedDocument(
       capabilities: [],
       registeredAt: seedTimestamp,
       lastActiveAt: null,
+      lastBriefingActivityId: null,
       version: 1,
     }
   })
-  const actorById = new Map(actors.map((actor) => [actor.id, actor]))
+  const actorById = new Map(actors.map((actor) => {
+    const {
+      lastBriefingActivityId: _lastBriefingActivityId,
+      ...snapshot
+    } = actor
+    return [actor.id, snapshot] as const
+  }))
   const taskStatusById = new Map(
     seed.tasks.map((task) => [task.id, task.status]),
   )
@@ -197,6 +204,9 @@ export function createLegacyFixtureSeedDocument(
       updatedAt: canonicalTimestamp(defect.updatedAt),
       version: 1,
     })),
+    sessions: [],
+    handoffs: [],
+    deliverables: [],
     settings: {
       theme: 'system',
       background: 'soft',
@@ -246,6 +256,9 @@ export function seedDatabase(
         + (SELECT COUNT(*) FROM requirements)
         + (SELECT COUNT(*) FROM requirement_tasks)
         + (SELECT COUNT(*) FROM defects)
+        + (SELECT COUNT(*) FROM sessions)
+        + (SELECT COUNT(*) FROM handoffs)
+        + (SELECT COUNT(*) FROM deliverables)
         + (SELECT COUNT(*) FROM settings)
         + (SELECT COUNT(*) FROM access_tokens)
         + (SELECT COUNT(*) FROM activities) AS count

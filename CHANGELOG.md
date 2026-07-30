@@ -1,5 +1,46 @@
 # Changelog
 
+## v1.1.0 — 2026-07-30
+
+Project OS v1.1.0 adds a durable Agent-to-Agent relay loop while preserving the
+existing local-first project, task, requirement, defect, and reporting flows.
+
+### Highlights
+
+- Added Agent work sessions with explicit check-in intent and task claims.
+- Added project briefings with the latest structured handoff, active and
+  abandoned sessions, recent deliverables, and incremental activity.
+- Added in-session notes for decisions, gotchas, and blockers.
+- Added deliverable records linked to requirements or tasks.
+- Added mandatory checkout handoffs containing completed work, blockers, next
+  steps, gotchas, and references.
+
+### Platform and integrations
+
+- Expanded the MCP surface from 22 to 27 tools with strict schemas and
+  permission checks for session check-in, project briefing, session notes,
+  session checkout, and deliverable recording.
+- Added relay persistence, migrations, import/export validation, and REST
+  project-scoped session, handoff, and deliverable endpoints.
+- Updated the installable Project OS Skill to a three-act start, work, and end
+  protocol so the next Agent can resume from durable state.
+
+### Quality and documentation
+
+- Added an exact double-Agent MCP relay test proving Agent B receives Agent A's
+  checkout, deliverable, and activity trail.
+- Added collaboration service, REST, import/export, permission, and Web
+  repository coverage.
+- Updated the bilingual README, Agent setup guide, tool reference, verifier,
+  and release evidence checklist for the 27-tool contract.
+
+### Validation
+
+- Focused v1.1 MCP, REST, and Web tests are recorded in the
+  [release checklist](docs/release-checklist.md).
+- A fresh final `npm run check` remains a release-orchestrator gate and must not
+  be inferred from focused suites.
+
 ## v1.0.0 — 2026-07-30
 
 Project OS v1.0.0 is the first complete local-first project management and

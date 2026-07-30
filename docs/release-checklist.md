@@ -16,7 +16,29 @@
   验收。
 - 任一客户端失败时，命令返回非零是正确门禁行为；不得为了发布把它改成零。
 
-## 自动化证据
+## v1.1.0 接力验收证据
+
+以下 focused 结果来自当前 v1.1 集成工作；它们证明接力链路的对应层，不替代
+最终全量门禁：
+
+| 检查 | 命令 | 当前证据 |
+|---|---|---|
+| MCP exact double-Agent relay | `npm test --workspace @project-os/mcp -- --run src/mcp-tools.test.ts` | PASS：当前 focused 文件 23/23；精确场景验证 Agent A checkout 后，Agent B 首次 check-in briefing 收到 handoff、deliverable 与增量 activity |
+| REST collaboration routes | `npm test --workspace @project-os/server -- --run src/routes/collaboration-routes.test.ts` | PASS：5/5 |
+| Web unit/integration | `npm test --workspace web` | PASS：237/237 |
+| Skill v2 contract | `npm test --workspace @project-os/skill -- --run skill.test.ts` | PASS：精确 27-tool surface、三幕接力和 contract-only verifier |
+| 最终仓库门禁 | `npm run check` | PASS：2026-07-30（Asia/Hong_Kong）在 `codex/v1.1-relay` fresh 执行，Web 237、contracts 21、core 244（另 3 skipped）、MCP 25、server 190、Skill 6、runtime 3；lint/build/docs PASS |
+
+REST 的 5/5、Web 的 237/237 和上述 fresh `npm run check` 是当前集成证据
+摘要；最终发布仍需按本清单另行完成 `npm run test:e2e`、`git diff --check`
+以及真实客户端 smoke 边界核对。
+
+v1.1 尚未重新完成三种真实模型客户端的全量写入 smoke。下面保留的真实客户端
+状态仍然是真实边界：Kimi Code 通过，Codex 与 Claude Code 未完成。因此
+v1.1 候选版本同样**不得**描述为“三客户端完全验收”，也不得把 double-Agent
+自动化测试当成真实客户端调用证据。
+
+## v1.0 基线自动化证据（历史）
 
 2026-07-30（Asia/Hong_Kong）在
 `E:\project_manage\.worktrees\project-os-full-stack` 单次、无重叠执行：
@@ -26,13 +48,14 @@
 | 全量静态/单元/构建/文档 | `npm run check` | PASS：Web 232、contracts 12、core 173（另 3 skipped）、MCP 17、server 185、Skill 5、runtime 3；lint/build/docs PASS |
 | Playwright | `npm run test:e2e` | PASS：最终源码包含 `825bf60`、`0ede881`、`c0e9890`，57 passed、10 intentional project skips |
 | 文档专项 | `npm run check:docs` | PASS：6 documents，且 fresh-clone 自检在模拟 `apps/mcp/dist/stdio.js` 缺失时通过 |
-| stdio 合约 | `node integrations/project-os/scripts/verify-connection.mjs` | PASS：contract-only、22 tools、无业务 tool 写入；启动打开/迁移默认 SQLite |
+| stdio 合约 | `node integrations/project-os/scripts/verify-connection.mjs` | PASS：contract-only、当时的完整 tool surface、无业务 tool 写入；启动打开/迁移默认 SQLite |
 | harness 自检 | `node scripts/smoke-clients.mjs --self-test` | PASS：audit/isolation/adapter/process-tree/redaction/evidence |
 | 真实客户端 smoke | `node scripts/smoke-clients.mjs --clients codex,claude,kimi --write-smoke` | EXPECTED INCOMPLETE：exit 1，见下表 |
 | 空白/冲突标记 | `git diff --check` | PASS |
 
-默认连接验证应报告 `mode: "contract-only"`、`transport: "stdio"` 和
-`toolCount: 22`，且 `sideEffects` 为空。这里的空数组只表示没有
+该历史运行的默认连接验证报告了 `mode: "contract-only"`、
+`transport: "stdio"`，且 `toolCount` 与当时的合约一致、`sideEffects` 为空。
+当前 v1.1 verifier 的精确合约为 27 tools。这里的空数组只表示没有
 Agent/project/task/activity 等业务 tool 写入；stdio 启动仍会打开指定 SQLite，
 并可能创建目录、数据库、WAL 或执行 migrations。若不能触碰目标数据库，应使用
 临时 `--database` 路径。

@@ -49,7 +49,16 @@ const activityLogInputSchema = z.strictObject({
   project_id: persistedProjectSchema.shape.id.optional(),
   source: activitySourceSchema.optional(),
   after: persistedActivitySchema.shape.id.optional(),
+  since: persistedActivitySchema.shape.id.optional(),
   limit: z.number().int().min(1).max(200).optional(),
+}).superRefine((value, context) => {
+  if (value.after !== undefined && value.since !== undefined) {
+    context.addIssue({
+      code: 'custom',
+      message: 'after and since cannot be provided together',
+      path: ['since'],
+    })
+  }
 })
 
 function authorize(
@@ -124,8 +133,10 @@ export function registerReportTools(
   server.registerTool('activity_log', {
     description:
       'Read Project OS activity with entity, actor, project, source and '
-      + 'cursor filters. Requires agent_id with activity.read permission and '
-      + 'updates caller activity after taking the result snapshot.',
+      + 'cursor filters. after pages older activity in reverse chronological '
+      + 'order; since returns only newer activity in ascending order. Requires '
+      + 'agent_id with activity.read permission and updates caller activity '
+      + 'after taking the result snapshot.',
     inputSchema: activityLogInputSchema,
     annotations: {
       readOnlyHint: false,
@@ -140,17 +151,26 @@ export function registerReportTools(
     project_id: projectId,
     source,
     after,
+    since,
     limit,
   }) => handleToolCall(() => {
     authorize(services, agentId, 'activity.read')
-    const items = services.activities.list({
+    const filter = {
       ...(entityId === undefined ? {} : { entityId }),
       ...(actorId === undefined ? {} : { actorId }),
       ...(projectId === undefined ? {} : { projectId }),
       ...(source === undefined ? {} : { source }),
-      ...(after === undefined ? {} : { after }),
       ...(limit === undefined ? {} : { limit }),
-    })
+    }
+    const items = since === undefined
+      ? services.activities.list({
+        ...filter,
+        ...(after === undefined ? {} : { after }),
+      })
+      : services.activities.listNewer({
+        ...filter,
+        after: since,
+      })
     touchAfterRead(services.actors, agentId)
     return successResult(`Found ${items.length} activity item(s).`, { items })
   }))

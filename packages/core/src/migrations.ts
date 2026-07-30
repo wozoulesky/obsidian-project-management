@@ -426,6 +426,154 @@ const migrations: readonly Migration[] = [
       CREATE INDEX access_tokens_revoked_at_idx ON access_tokens (revoked_at);
     `,
   },
+  {
+    version: 2,
+    sql: `
+      ALTER TABLE actors ADD COLUMN last_briefing_activity_id TEXT;
+
+      CREATE TABLE activities_v2 (
+        id TEXT PRIMARY KEY CHECK (length(id) > 0),
+        actor_id TEXT NOT NULL,
+        project_id TEXT,
+        source TEXT NOT NULL CHECK (source IN ('web', 'mcp')),
+        operation TEXT NOT NULL CHECK (
+          operation IN (
+            'actor.create',
+            'actor.update',
+            'actor.deactivate',
+            'actor.register',
+            'project.create',
+            'project.update',
+            'project.member.add',
+            'task.create',
+            'task.update',
+            'task.schedule',
+            'task.progress',
+            'requirement.create',
+            'requirement.update',
+            'defect.create',
+            'defect.update',
+            'defect.to_task',
+            'settings.update',
+            'backup.create',
+            'backup.restore',
+            'import.run',
+            'token.issue',
+            'token.revoke',
+            'session.checkin',
+            'session.note',
+            'session.checkout',
+            'handoff.update',
+            'deliverable.record'
+          )
+        ),
+        entity_type TEXT NOT NULL CHECK (length(entity_type) > 0),
+        entity_id TEXT NOT NULL CHECK (length(entity_id) > 0),
+        action TEXT NOT NULL CHECK (length(action) > 0),
+        note TEXT,
+        details_json TEXT NOT NULL DEFAULT '{}'
+          CHECK (json_valid(details_json)),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        FOREIGN KEY (actor_id) REFERENCES actors (id) ON DELETE RESTRICT,
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
+      ) STRICT;
+
+      INSERT INTO activities_v2 SELECT * FROM activities;
+      DROP TABLE activities;
+      ALTER TABLE activities_v2 RENAME TO activities;
+
+      CREATE INDEX activities_created_at_idx
+        ON activities (created_at DESC);
+      CREATE INDEX activities_entity_idx
+        ON activities (entity_type, entity_id, created_at DESC);
+      CREATE INDEX activities_project_id_idx ON activities (project_id);
+
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY CHECK (length(id) > 0),
+        project_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        intent TEXT NOT NULL CHECK (length(intent) > 0),
+        task_ids_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (${jsonTextArray('task_ids_json')}),
+        status TEXT NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active', 'closed')),
+        summary TEXT,
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        last_active_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('last_active_at')}),
+        closed_at TEXT
+          CHECK (${optionalCanonicalUtcTimestamp('closed_at')}),
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_id) REFERENCES actors (id) ON DELETE RESTRICT
+      ) STRICT;
+
+      ${jsonTextArrayTriggers('sessions', 'task_ids_json')}
+
+      CREATE INDEX sessions_project_id_idx ON sessions (project_id);
+      CREATE INDEX sessions_agent_id_idx ON sessions (agent_id);
+      CREATE INDEX sessions_status_idx ON sessions (status);
+
+      CREATE TABLE handoffs (
+        id TEXT PRIMARY KEY CHECK (length(id) > 0),
+        project_id TEXT NOT NULL,
+        session_id TEXT,
+        author_id TEXT NOT NULL,
+        summary TEXT NOT NULL CHECK (length(summary) > 0),
+        done_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (${jsonTextArray('done_json')}),
+        blockers_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (${jsonTextArray('blockers_json')}),
+        next_steps_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (${jsonTextArray('next_steps_json')}),
+        gotchas_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (${jsonTextArray('gotchas_json')}),
+        refs_json TEXT NOT NULL DEFAULT '[]'
+          CHECK (json_valid(refs_json)),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
+        FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE SET NULL,
+        FOREIGN KEY (author_id) REFERENCES actors (id) ON DELETE RESTRICT
+      ) STRICT;
+
+      ${jsonTextArrayTriggers('handoffs', 'done_json')}
+      ${jsonTextArrayTriggers('handoffs', 'blockers_json')}
+      ${jsonTextArrayTriggers('handoffs', 'next_steps_json')}
+      ${jsonTextArrayTriggers('handoffs', 'gotchas_json')}
+
+      CREATE INDEX handoffs_project_created_at_idx
+        ON handoffs (project_id, created_at DESC);
+
+      CREATE TABLE deliverables (
+        id TEXT PRIMARY KEY CHECK (length(id) > 0),
+        project_id TEXT NOT NULL,
+        requirement_id TEXT,
+        task_id TEXT,
+        title TEXT NOT NULL CHECK (length(title) > 0),
+        kind TEXT NOT NULL CHECK (kind IN ('commit', 'file', 'url', 'note')),
+        ref TEXT NOT NULL CHECK (length(ref) > 0),
+        note TEXT,
+        created_by TEXT NOT NULL,
+        session_id TEXT,
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
+        FOREIGN KEY (requirement_id)
+          REFERENCES requirements (id) ON DELETE SET NULL,
+        FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE SET NULL,
+        FOREIGN KEY (created_by) REFERENCES actors (id) ON DELETE RESTRICT,
+        FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE SET NULL,
+        CHECK (requirement_id IS NOT NULL OR task_id IS NOT NULL)
+      ) STRICT;
+
+      CREATE INDEX deliverables_project_id_idx
+        ON deliverables (project_id);
+      CREATE INDEX deliverables_requirement_id_idx
+        ON deliverables (requirement_id);
+    `,
+  },
 ]
 
 const latestKnownVersion = validateMigrationVersions(

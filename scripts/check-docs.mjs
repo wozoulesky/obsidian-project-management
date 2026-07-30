@@ -156,7 +156,7 @@ for (const transport of ['stdio', 'Streamable HTTP']) {
 for (const phrase of [
   'Streamable HTTP',
   'stdio',
-  '22 tools',
+  '27 tools',
   'data/project_manage.db',
   'apps/mcp/dist/stdio.js',
   'web/dist/',
@@ -187,7 +187,7 @@ assert(
   'Documentation contains a secret-looking bearer value',
 )
 assert(
-  !/\b(?!22\b)\d+\s+tools\b/i.test(combined),
+  !/\b(?!27\b)\d+\s+tools\b/i.test(combined),
   'Documentation contains an outdated MCP tool count',
 )
 
@@ -282,7 +282,7 @@ assert(approvedToolBlock !== null, 'Verifier approved tool contract is missing')
 const approvedToolCount = [
   ...approvedToolBlock[1].matchAll(/'([a-z_]+)'/g),
 ].length
-assert.equal(approvedToolCount, 22, 'MCP approved tool contract count changed')
+assert.equal(approvedToolCount, 27, 'MCP approved tool contract count changed')
 assert(
   combined.includes(`${approvedToolCount} tools`),
   'Documentation tool count does not match the verifier contract',

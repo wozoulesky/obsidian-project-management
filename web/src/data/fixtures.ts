@@ -1,9 +1,12 @@
 import type {
   ActivityEvent,
   Actor,
+  Deliverable,
   Defect,
+  Handoff,
   Requirement,
   RiskItem,
+  Session,
   Task,
   TrendPoint,
 } from './domain'
@@ -15,6 +18,9 @@ export interface FixtureSeed {
   defects: Defect[]
   risks: RiskItem[]
   activities: ActivityEvent[]
+  sessions: Session[]
+  handoffs: Handoff[]
+  deliverables: Deliverable[]
   trendByDays: Record<7 | 30 | 90, TrendPoint[]>
 }
 
@@ -381,6 +387,64 @@ export function createFixtureSeed(): FixtureSeed {
       createdAt: '2026-07-28T10:34:00+08:00',
     },
   ]
+  const sessions: Session[] = [
+    {
+      id: 'session-relay-active',
+      projectId: 'atlas',
+      agentId: actors.dev!.id,
+      agent: actors.dev!,
+      intent: '完成 v1.1 接力面板',
+      taskIds: ['task-051', 'task-047'],
+      status: 'active',
+      summary: null,
+      createdAt: '2026-07-29T00:30:00.000Z',
+      lastActiveAt: '2026-07-29T02:10:00.000Z',
+      closedAt: null,
+    },
+    {
+      id: 'session-relay-abandoned',
+      projectId: 'atlas',
+      agentId: actors.qa!.id,
+      agent: actors.qa!,
+      intent: '验证接力链路',
+      taskIds: ['task-043'],
+      status: 'abandoned',
+      summary: null,
+      createdAt: '2026-07-28T03:00:00.000Z',
+      lastActiveAt: '2026-07-28T03:30:00.000Z',
+      closedAt: null,
+    },
+  ]
+  const handoffs: Handoff[] = [{
+    id: 'handoff-relay-1',
+    projectId: 'atlas',
+    sessionId: 'session-relay-closed',
+    author: actors.pm!,
+    summary: 'REST 只读接口与契约已对齐。',
+    done: ['完成三条查询链路'],
+    blockers: ['等待视觉走查'],
+    nextSteps: ['接入仪表盘面板'],
+    gotchas: [],
+    refs: [{
+      kind: 'commit',
+      ref: '8d6c1ee',
+      note: 'REST relay endpoints',
+    }],
+    createdAt: '2026-07-29T00:20:00.000Z',
+  }]
+  const deliverables: Deliverable[] = [{
+    id: 'deliverable-relay-1',
+    projectId: 'atlas',
+    requirementId: null,
+    taskId: 'task-051',
+    title: '接力面板实现',
+    kind: 'file',
+    ref: 'web/src/features/dashboard/DashboardPage.tsx',
+    note: '展示现场会话、交接与交付物。',
+    createdBy: actors.pm!,
+    sessionId: 'session-relay-active',
+    createdAt: '2026-07-29T02:15:00.000Z',
+  }]
   const trendByDays: Record<7 | 30 | 90, TrendPoint[]> = {
     7: [
       { date: '2026-07-22', actual: 5, planned: 6 },
@@ -407,7 +471,18 @@ export function createFixtureSeed(): FixtureSeed {
     ],
   }
 
-  return { actors, tasks, requirements, defects, risks, activities, trendByDays }
+  return {
+    actors,
+    tasks,
+    requirements,
+    defects,
+    risks,
+    activities,
+    sessions,
+    handoffs,
+    deliverables,
+    trendByDays,
+  }
 }
 
 function deepFreeze<T>(value: T): T {
@@ -428,4 +503,7 @@ export const requirements = deepFreeze(compatibilitySeed.requirements)
 export const defects = deepFreeze(compatibilitySeed.defects)
 export const risks = deepFreeze(compatibilitySeed.risks)
 export const activities = deepFreeze(compatibilitySeed.activities)
+export const sessions = deepFreeze(compatibilitySeed.sessions)
+export const handoffs = deepFreeze(compatibilitySeed.handoffs)
+export const deliverables = deepFreeze(compatibilitySeed.deliverables)
 export const trendByDays = deepFreeze(compatibilitySeed.trendByDays)

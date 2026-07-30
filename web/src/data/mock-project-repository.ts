@@ -44,6 +44,9 @@ export function createMockProjectRepository(): ProjectRepository {
   const requirementState = seed.requirements
   const defectState = seed.defects
   const activityState = seed.activities
+  const sessionState = seed.sessions
+  const handoffState = seed.handoffs
+  const deliverableState = seed.deliverables
   const projectState: Project[] = [{
     id: 'atlas',
     code: 'ATLAS',
@@ -177,6 +180,26 @@ export function createMockProjectRepository(): ProjectRepository {
     async listProjectMembers(projectId) {
       return clone(
         memberState.filter((member) => member.projectId === projectId),
+      )
+    },
+
+    async listProjectSessions(projectId) {
+      return clone(
+        sessionState.filter((session) => session.projectId === projectId),
+      )
+    },
+
+    async listProjectHandoffs(projectId) {
+      return clone(
+        handoffState.filter((handoff) => handoff.projectId === projectId),
+      )
+    },
+
+    async listProjectDeliverables(projectId) {
+      return clone(
+        deliverableState.filter(
+          (deliverable) => deliverable.projectId === projectId,
+        ),
       )
     },
 

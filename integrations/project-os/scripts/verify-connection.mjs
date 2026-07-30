@@ -18,6 +18,7 @@ const approvedTools = [
   'defect_update',
   'list_overdue',
   'progress_submit',
+  'project_briefing',
   'project_create',
   'project_get',
   'project_list',
@@ -25,10 +26,14 @@ const approvedTools = [
   'requirement_create',
   'requirement_list',
   'requirement_update',
+  'session_checkin',
+  'session_checkout',
+  'session_note',
   'task_create',
   'task_get',
   'task_list',
   'task_update',
+  'deliverable_record',
 ]
 
 function valueAfter(arguments_, index, flag) {

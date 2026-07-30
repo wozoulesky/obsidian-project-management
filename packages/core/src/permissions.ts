@@ -19,6 +19,11 @@ export const workOperations = [
   'activity.read',
   'activity.note',
   'description.write',
+  'session.manage',
+  'briefing.read',
+  'handoff.read',
+  'deliverable.read',
+  'deliverable.record',
 ] as const
 
 export type WorkOperation = (typeof workOperations)[number]
@@ -39,6 +44,11 @@ const permissions: Record<ActorRole, ReadonlySet<WorkOperation>> = {
     'report.read',
     'report.write',
     'activity.read',
+    'session.manage',
+    'briefing.read',
+    'handoff.read',
+    'deliverable.read',
+    'deliverable.record',
   ]),
   'dev-agent': new Set([
     'project.read',
@@ -49,6 +59,11 @@ const permissions: Record<ActorRole, ReadonlySet<WorkOperation>> = {
     'defect.write',
     'report.read',
     'activity.read',
+    'session.manage',
+    'briefing.read',
+    'handoff.read',
+    'deliverable.read',
+    'deliverable.record',
   ]),
   'qa-agent': new Set([
     'project.read',
@@ -59,6 +74,11 @@ const permissions: Record<ActorRole, ReadonlySet<WorkOperation>> = {
     'defect.verify',
     'report.read',
     'activity.read',
+    'session.manage',
+    'briefing.read',
+    'handoff.read',
+    'deliverable.read',
+    'deliverable.record',
   ]),
   'doc-agent': new Set([
     'project.read',
@@ -69,6 +89,10 @@ const permissions: Record<ActorRole, ReadonlySet<WorkOperation>> = {
     'activity.read',
     'activity.note',
     'description.write',
+    'session.manage',
+    'briefing.read',
+    'handoff.read',
+    'deliverable.read',
   ]),
 }
 

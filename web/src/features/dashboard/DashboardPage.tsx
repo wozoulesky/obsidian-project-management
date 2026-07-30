@@ -9,9 +9,18 @@ import {
 } from '../../components/data/DataState'
 import { Badge } from '../../components/ui/Badge'
 import type { RiskItem } from '../../data/domain'
-import { useDashboard } from '../../data/query-hooks'
+import {
+  useDashboard,
+  useProjectDeliverables,
+  useProjectHandoffs,
+  useProjectRepository,
+  useProjectSessions,
+} from '../../data/query-hooks'
 import { ActivityFeed } from './ActivityFeed'
+import { AgentPresence } from './AgentPresence'
+import { LatestHandoff } from './LatestHandoff'
 import { MetricBand } from './MetricBand'
+import { RecentDeliverables } from './RecentDeliverables'
 import { RiskBanner } from './RiskBanner'
 import { RiskQueue } from './RiskQueue'
 
@@ -22,7 +31,11 @@ const periods: DashboardPeriod[] = [7, 30, 90]
 export function DashboardPage() {
   const [period, setPeriod] = useState<DashboardPeriod>(30)
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
+  const { projectId } = useProjectRepository()
   const dashboard = useDashboard(period)
+  const sessions = useProjectSessions(projectId)
+  const handoffs = useProjectHandoffs(projectId)
+  const deliverables = useProjectDeliverables(projectId)
   const snapshot = dashboard.data
   const selectedRisk =
     snapshot?.risks.find((risk) => risk.id === selectedRiskId) ?? null
@@ -87,6 +100,51 @@ export function DashboardPage() {
 
       <RiskBanner risks={snapshot.risks} />
       <MetricBand metrics={snapshot.metrics} />
+
+      <section aria-label="Agent 现场" className="dashboard-relay">
+        <div className="dashboard-relay__header">
+          <div>
+            <p className="dashboard-page__eyebrow">AGENT RELAY</p>
+            <h2>Agent 现场</h2>
+          </div>
+          <Badge tone="primary">
+            {sessions.data?.filter(({ status }) => status === 'active')
+              .length ?? 0}{' '}
+            个在线
+          </Badge>
+        </div>
+        <div className="dashboard-relay__grid">
+          <AgentPresence
+            dataUpdatedAt={sessions.dataUpdatedAt}
+            error={sessions.error}
+            isError={sessions.isError}
+            isFetching={sessions.isFetching}
+            isPending={sessions.isPending}
+            onRetry={() => sessions.refetch()}
+            sessions={sessions.data}
+          />
+          <LatestHandoff
+            dataUpdatedAt={handoffs.dataUpdatedAt}
+            error={handoffs.error}
+            handoff={
+              handoffs.data === undefined ? undefined : handoffs.data[0] ?? null
+            }
+            isError={handoffs.isError}
+            isFetching={handoffs.isFetching}
+            isPending={handoffs.isPending}
+            onRetry={() => handoffs.refetch()}
+          />
+          <RecentDeliverables
+            dataUpdatedAt={deliverables.dataUpdatedAt}
+            deliverables={deliverables.data}
+            error={deliverables.error}
+            isError={deliverables.isError}
+            isFetching={deliverables.isFetching}
+            isPending={deliverables.isPending}
+            onRetry={() => deliverables.refetch()}
+          />
+        </div>
+      </section>
 
       <div className="dashboard-layout dashboard-layout--charts">
         <section className="dashboard-card dashboard-main">

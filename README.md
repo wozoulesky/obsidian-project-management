@@ -2,11 +2,11 @@
 
 [中文](README.md) | [English](README_EN.md)
 
-## v1.0.0 正式版
+## v1.1.0
 
-Project OS 首个完整版本现已就绪，覆盖项目组合与负责人筛选、项目内任务、
-人员与 Agent 目录、快速进度提交、可配置设置页，以及共享 SQLite 数据的
-REST、MCP 和 Agent Skill 协作链路。完整改动与已知限制见
+Project OS v1.1.0 在完整的本地项目管理能力上新增可持久化的 Agent 接力闭环，
+覆盖会话签到、项目 briefing、过程笔记、交付物登记和结构化 checkout handoff。
+REST、MCP、Agent Skill 与 Web 继续共享 SQLite 数据和权限规则。完整改动与已知限制见
 [CHANGELOG](CHANGELOG.md)。
 
 Project OS 是一个本地优先的项目工作台。React Web、REST API、SQLite、
@@ -14,6 +14,8 @@ MCP 服务器和可安装的 Agent Skill 共享同一套数据与权限规则。
 
 - 所有项目总览、按负责人筛选、新建项目和项目内新建任务；
 - 人员与 Agent 负责人目录、任务快速提交、需求、缺陷、甘特图和仪表盘；
+- Agent 会话签到、增量 briefing、过程笔记、交付物登记与结构化 checkout
+  handoff 组成的接力闭环；
 - 外观、数据、MCP 令牌和 Agent Skills 设置；
 - Codex、Claude Code、Kimi Code 的 stdio 接入，以及 `/mcp` Streamable HTTP；
 - SQLite 持久化、备份恢复和 JSON 导入导出。
@@ -100,7 +102,8 @@ npm run test:e2e
 
 ## MCP 与 Agent Skill
 
-Project OS 暴露 22 tools。两种连接方式使用相同服务层和 SQLite 数据：
+Project OS 暴露 27 tools，包含会话、briefing、过程笔记、交付物和 handoff
+接力闭环。两种连接方式使用相同服务层和 SQLite 数据：
 
 - stdio：`apps/mcp/dist/stdio.js`，适合本机 Codex、Claude Code 和 Kimi Code；
 - Streamable HTTP：`http://127.0.0.1:4310/mcp`，适合支持该传输的客户端。
@@ -138,7 +141,7 @@ Kimi Code 已在隔离临时 HOME 中完成工具发现、身份注册、项目�
 
 ## 进一步文档
 
-- [v1.0.0 变更说明](CHANGELOG.md)
+- [v1.1.0 变更说明](CHANGELOG.md)
 - [Web 开发说明](web/README.md)
 - [Agent 接入指南](docs/agent-setup.md)
 - [数据与备份指南](docs/data-and-backups.md)
