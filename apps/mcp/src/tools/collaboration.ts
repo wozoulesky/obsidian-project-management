@@ -19,7 +19,6 @@ import type {
 import { z } from 'zod'
 import {
   runAtomicWrite,
-  touchAfterRead,
 } from '../tool-execution.js'
 import {
   handleToolCall,
@@ -156,11 +155,11 @@ export function registerCollaborationTools(
     project_id: projectId,
   }) => handleToolCall(() => {
     authorize(services, agentId, 'briefing.read')
-    const briefing = services.briefing.getBriefing({
-      agentId,
-      projectId,
-    })
-    touchAfterRead(services.actors, agentId)
+    const briefing = runAtomicWrite(services.actors, agentId, () =>
+      services.briefing.getBriefing({
+        agentId,
+        projectId,
+      }))
     return successResult(
       `Project briefing contains ${briefing.new_activities.length} new activity item(s).`,
       { briefing },

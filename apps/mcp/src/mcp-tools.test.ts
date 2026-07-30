@@ -595,6 +595,77 @@ describe('Project OS MCP identity and project tools', () => {
     })
   })
 
+  it('does not consume briefing activity when the caller touch fails', async () => {
+    const pm = await register()
+    const dev = await register('dev-agent')
+    const pmId = pm.agent_id as string
+    const devId = dev.agent_id as string
+    const createdProject = await harness.call('project_create', {
+      agent_id: pmId,
+      name: 'Retryable Briefing',
+      owner_id: pmId,
+    })
+    const project = structured(createdProject).project as Record<
+      string,
+      unknown
+    >
+    const projectId = project.id as string
+    new ProjectService(database).addMember(projectId, devId, pmId, 'mcp')
+    await harness.call('project_briefing', {
+      agent_id: devId,
+      project_id: projectId,
+    })
+    const cursorBefore = new ActorService(database)
+      .get(devId).lastBriefingActivityId
+    const createdTask = await harness.call('task_create', {
+      agent_id: pmId,
+      project_id: projectId,
+      title: 'Unread task activity',
+      assignee_id: devId,
+      start_date: '2026-07-30',
+      due_date: '2026-08-01',
+      priority: 'P1',
+    })
+    const task = structured(createdTask).task as Record<string, unknown>
+    database.exec(`
+      CREATE TRIGGER fail_briefing_actor_touch
+      BEFORE UPDATE OF last_active_at ON actors
+      WHEN OLD.id = '${devId}'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced briefing touch failure');
+      END
+    `)
+
+    const failed = await harness.call('project_briefing', {
+      agent_id: devId,
+      project_id: projectId,
+    })
+
+    expect(failed.isError).toBe(true)
+    expect(structured(failed)).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Tool execution failed',
+      details: {},
+    })
+    expect(new ActorService(database).get(devId).lastBriefingActivityId)
+      .toBe(cursorBefore)
+
+    database.exec('DROP TRIGGER fail_briefing_actor_touch')
+    const retried = await harness.call('project_briefing', {
+      agent_id: devId,
+      project_id: projectId,
+    })
+    const retriedActivities = (
+      structured(retried).briefing as Record<string, any>
+    ).new_activities as Array<Record<string, unknown>>
+    expect(retriedActivities).toEqual([
+      expect.objectContaining({
+        operation: 'task.create',
+        entityId: task.id,
+      }),
+    ])
+  })
+
   it('rejects collaboration schema errors before mutation or actor touch', async () => {
     const pm = await register()
     const dev = await register('dev-agent')
