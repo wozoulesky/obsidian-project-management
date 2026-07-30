@@ -92,7 +92,9 @@ export function DataSettings() {
       setStatus(
         `导入完成：负责人 ${counts.actors}，项目 ${counts.projects}，`
         + `成员关系 ${counts.projectMembers}，任务 ${counts.tasks}，`
-        + `需求 ${counts.requirements}，缺陷 ${counts.defects}。`,
+        + `需求 ${counts.requirements}，缺陷 ${counts.defects}，`
+        + `会话 ${counts.sessions}，交接 ${counts.handoffs}，`
+        + `交付物 ${counts.deliverables}。`,
       )
     } catch (caught) {
       setError(`导入失败：${message(caught)}`)

@@ -33,7 +33,7 @@ type ActorBriefingRow = {
 
 type LatestProgressRow = {
   task_id: string
-  note: string | null
+  note: string
   actor_name: string
   created_at: string
 }
@@ -177,6 +177,7 @@ export class BriefingService {
         WHERE activities.project_id = ?
           AND activities.entity_type = 'task'
           AND activities.operation = 'task.progress'
+          AND activities.note IS NOT NULL
           AND tasks.status = 'in_progress'
       )
       SELECT

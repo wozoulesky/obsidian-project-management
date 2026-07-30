@@ -631,20 +631,9 @@ describe('BriefingService', () => {
   })
 
   it('does not advance the actor waterline when a later read fails', () => {
-    insertTask(database, {
-      id: 'task_progress_a',
-      status: 'in_progress',
-    })
     insertActivity(database, {
       id: 'activity_base',
       createdAt: timestampAt(1),
-    })
-    insertActivity(database, {
-      id: 'activity_invalid_progress',
-      operation: 'task.progress',
-      entityId: 'task_progress_a',
-      note: null,
-      createdAt: timestampAt(2),
     })
     database.prepare(`
       UPDATE actors
@@ -652,15 +641,51 @@ describe('BriefingService', () => {
       WHERE id = 'actor_agent'
     `).run()
 
-    expect(() => new BriefingService(database).getBriefing({
+    const service = new BriefingService(database, {
+      afterActivityRead: () => {
+        throw new Error('injected read failure')
+      },
+    })
+    expect(() => service.getBriefing({
       projectId: 'project_briefing',
       agentId: 'actor_agent',
-    })).toThrow()
+    })).toThrow('injected read failure')
     expect(database.prepare(`
       SELECT last_briefing_activity_id AS cursor
       FROM actors
       WHERE id = 'actor_agent'
     `).get()).toEqual({ cursor: 'activity_base' })
+  })
+
+  it('skips progress rows without a note instead of failing the briefing', () => {
+    insertTask(database, {
+      id: 'task_progress_a',
+      status: 'in_progress',
+    })
+    insertActivity(database, {
+      id: 'activity_progress_noted',
+      operation: 'task.progress',
+      entityId: 'task_progress_a',
+      note: '已完成 50%',
+      createdAt: timestampAt(1),
+    })
+    insertActivity(database, {
+      id: 'activity_progress_null_note',
+      operation: 'task.progress',
+      entityId: 'task_progress_a',
+      note: null,
+      createdAt: timestampAt(2),
+    })
+
+    const briefing = new BriefingService(database).getBriefing({
+      projectId: 'project_briefing',
+      agentId: 'actor_agent',
+    })
+
+    expect(briefing.in_progress_tasks).toHaveLength(1)
+    expect(briefing.in_progress_tasks[0]?.latest_progress).toMatchObject({
+      note: '已完成 50%',
+    })
   })
 
   it('validates IDs and requires both the project and actor to exist', () => {

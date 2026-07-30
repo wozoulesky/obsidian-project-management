@@ -124,6 +124,9 @@ describe('settings repository', () => {
           tasks: 4,
           requirements: 5,
           defects: 6,
+          sessions: 7,
+          handoffs: 8,
+          deliverables: 9,
         },
       },
     ]

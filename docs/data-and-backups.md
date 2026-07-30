@@ -68,7 +68,7 @@ POST /api/v1/import
 - 文档必须符合当前导出结构，并保留当前本地操作者身份。
 
 导入在事务中替换 actors、projects、project members、tasks、requirements、
-defects 和外观设置，并保留兼容的活动审计锚点。成功响应会返回各业务集合数量。
+defects、sessions、handoffs、deliverables 和外观设置，并保留兼容的活动审计锚点。成功响应会返回各业务集合数量。
 验证失败不会部分导入。
 
 JSON 导出包含业务记录和外观设置，但不包含访问令牌、令牌摘要或完整活动历史。

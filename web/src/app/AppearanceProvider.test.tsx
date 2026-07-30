@@ -339,6 +339,9 @@ describe('AppearanceProvider reconciliation', () => {
           tasks: 0,
           requirements: 0,
           defects: 0,
+          sessions: 0,
+          handoffs: 0,
+          deliverables: 0,
         },
       }
     })

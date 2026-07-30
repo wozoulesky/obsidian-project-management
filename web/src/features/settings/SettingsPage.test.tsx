@@ -118,7 +118,7 @@ describe('SettingsPage', () => {
     )
 
     expect(await screen.findByRole('status')).toHaveTextContent(
-      /负责人 6，项目 1，成员关系 6，任务 50，需求 20，缺陷 7/,
+      /负责人 6，项目 1，成员关系 6，任务 50，需求 20，缺陷 7，会话 2，交接 1，交付物 1/,
     )
   })
 

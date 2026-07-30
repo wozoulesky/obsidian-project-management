@@ -35,6 +35,9 @@ const importCountsSchema = z.object({
     tasks: z.number().int().nonnegative(),
     requirements: z.number().int().nonnegative(),
     defects: z.number().int().nonnegative(),
+    sessions: z.number().int().nonnegative(),
+    handoffs: z.number().int().nonnegative(),
+    deliverables: z.number().int().nonnegative(),
   }).strict(),
 }).strict()
 
@@ -169,6 +172,9 @@ export const dataTransferRoutes: AppRouteModule = {
             tasks: parsed.data.tasks.length,
             requirements: parsed.data.requirements.length,
             defects: parsed.data.defects.length,
+            sessions: parsed.data.sessions.length,
+            handoffs: parsed.data.handoffs.length,
+            deliverables: parsed.data.deliverables.length,
           },
         })
         sendSuccess(response, counts)

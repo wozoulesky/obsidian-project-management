@@ -397,6 +397,9 @@ describe('export and import routes', () => {
         tasks: exported.body.data.tasks.length,
         requirements: exported.body.data.requirements.length,
         defects: exported.body.data.defects.length,
+        sessions: exported.body.data.sessions.length,
+        handoffs: exported.body.data.handoffs.length,
+        deliverables: exported.body.data.deliverables.length,
       },
     })
     expect((await request(target.app).get('/api/v1/settings')).body.data.density)
