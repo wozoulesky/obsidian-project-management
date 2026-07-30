@@ -1,6 +1,7 @@
 .worktrees/
 PRD.md
 docs/superpowers/
+docs/v1.1-relay-plan.md
 node_modules/
 /data/
 web/dist/
