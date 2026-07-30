@@ -63,6 +63,16 @@ function insertOwner(database: DatabaseSync, id = 'actor_owner'): void {
   `).run(id, 'Owner', timestamp)
 }
 
+function actorSnapshot(
+  actor: ExportDocument['actors'][number],
+): ExportDocument['tasks'][number]['assignee'] {
+  const {
+    lastBriefingActivityId: _lastBriefingActivityId,
+    ...snapshot
+  } = actor
+  return snapshot
+}
+
 function fixtureDocument(name = 'Atlas'): ExportDocument {
   const owner = {
     id: 'actor_owner',
@@ -74,6 +84,7 @@ function fixtureDocument(name = 'Atlas'): ExportDocument {
     capabilities: [],
     registeredAt: timestamp,
     lastActiveAt: null,
+    lastBriefingActivityId: null,
     version: 1,
   }
   return {
@@ -106,7 +117,7 @@ function fixtureDocument(name = 'Atlas'): ExportDocument {
       projectId: 'project_atlas',
       title: 'Ship',
       description: '',
-      assignee: owner,
+      assignee: actorSnapshot(owner),
       assigneeId: owner.id,
       startDate: '2026-07-01',
       dueDate: '2026-07-02',
@@ -142,7 +153,7 @@ function fixtureDocument(name = 'Atlas'): ExportDocument {
       description: '',
       severity: 'normal' as const,
       status: 'open' as const,
-      assignee: owner,
+      assignee: actorSnapshot(owner),
       assigneeId: owner.id,
       reproductionSteps: [],
       linkedRequirementId: 'requirement_one',
@@ -151,6 +162,9 @@ function fixtureDocument(name = 'Atlas'): ExportDocument {
       updatedAt: timestamp,
       version: 1,
     }],
+    sessions: [],
+    handoffs: [],
+    deliverables: [],
     settings: {
       theme: 'system' as const,
       background: 'soft' as const,
@@ -420,6 +434,9 @@ describe('settings, tokens, export, backup, and seed', () => {
       'tasks',
       'requirements',
       'defects',
+      'sessions',
+      'handoffs',
+      'deliverables',
       'settings',
     ])
     expect(serialized).not.toContain(token.token)
@@ -618,6 +635,7 @@ describe('settings, tokens, export, backup, and seed', () => {
       capabilities: [],
       registeredAt: timestamp,
       lastActiveAt: null,
+      lastBriefingActivityId: null,
       version: 1,
     }
     initial.actors.push(auditor)
@@ -651,9 +669,9 @@ describe('settings, tokens, export, backup, and seed', () => {
       joinedAt: timestamp,
     }]
     incoming.tasks[0]!.assigneeId = auditor.id
-    incoming.tasks[0]!.assignee = auditor
+    incoming.tasks[0]!.assignee = actorSnapshot(auditor)
     incoming.defects[0]!.assigneeId = auditor.id
-    incoming.defects[0]!.assignee = auditor
+    incoming.defects[0]!.assignee = actorSnapshot(auditor)
 
     exports.importJson(incoming, auditor.id, 'web')
 
@@ -679,6 +697,7 @@ describe('settings, tokens, export, backup, and seed', () => {
       capabilities: [],
       registeredAt: timestamp,
       lastActiveAt: null,
+      lastBriefingActivityId: null,
       version: 1,
     }
     const agentB: ExportDocument['actors'][number] = {
@@ -876,9 +895,9 @@ describe('settings, tokens, export, backup, and seed', () => {
       candidateDocument.actors = [actor]
       candidateDocument.projects[0]!.ownerId = actor.id
       candidateDocument.projectMembers[0]!.actorId = actor.id
-      candidateDocument.tasks[0]!.assignee = actor
+      candidateDocument.tasks[0]!.assignee = actorSnapshot(actor)
       candidateDocument.tasks[0]!.assigneeId = actor.id
-      candidateDocument.defects[0]!.assignee = actor
+      candidateDocument.defects[0]!.assignee = actorSnapshot(actor)
       candidateDocument.defects[0]!.assigneeId = actor.id
       const candidate = openDatabase(candidatePath)
       new ExportService(candidate).importJson(candidateDocument)
@@ -1195,6 +1214,9 @@ describe('settings, tokens, export, backup, and seed', () => {
     })
     expect('activities' in document).toBe(false)
     expect('risks' in document).toBe(false)
+    expect(document.sessions).toEqual([])
+    expect(document.handoffs).toEqual([])
+    expect(document.deliverables).toEqual([])
   })
 
   it('accepts the typed legacy fixture directly at the seed boundary', () => {
