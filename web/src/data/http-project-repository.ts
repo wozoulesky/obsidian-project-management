@@ -1,6 +1,8 @@
 import {
   createProjectInputSchema,
   dashboardSnapshotSchema,
+  deliverableSchema,
+  handoffSchema,
   persistedActivitySchema,
   persistedActorSchema,
   persistedAppSettingsSchema,
@@ -8,6 +10,7 @@ import {
   persistedProjectMemberSchema,
   persistedProjectSchema,
   persistedRequirementSchema,
+  persistedSessionSchema,
   persistedTaskSchema,
   themeSchema,
   backgroundSchema,
@@ -39,6 +42,8 @@ const healthSchema = z.object({
   status: z.literal('ok'),
   database: z.literal('ok'),
 }).strict()
+const itemCollectionSchema = <Output>(itemSchema: z.ZodType<Output>) =>
+  z.object({ items: z.array(itemSchema) }).strict()
 const tokenSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -203,6 +208,27 @@ export function createHttpProjectRepository(
         z.object({
           items: z.array(persistedProjectMemberSchema),
         }).strict(),
+      )
+      return response.items
+    },
+    async listProjectSessions(projectId) {
+      const response = await client.request(
+        `/projects/${encodeURIComponent(projectId)}/sessions`,
+        itemCollectionSchema(persistedSessionSchema),
+      )
+      return response.items
+    },
+    async listProjectHandoffs(projectId) {
+      const response = await client.request(
+        `/projects/${encodeURIComponent(projectId)}/handoffs`,
+        itemCollectionSchema(handoffSchema),
+      )
+      return response.items
+    },
+    async listProjectDeliverables(projectId) {
+      const response = await client.request(
+        `/projects/${encodeURIComponent(projectId)}/deliverables`,
+        itemCollectionSchema(deliverableSchema),
       )
       return response.items
     },

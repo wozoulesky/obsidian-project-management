@@ -12,12 +12,15 @@ import type {
   Background,
   CreateProjectInput,
   DashboardSnapshot,
+  Deliverable,
   Defect,
+  Handoff,
   Priority,
   Project,
   ProjectMember,
   Requirement,
   RequirementStatus,
+  Session,
   Task,
   TaskDateInput,
   TaskProgressInput,
@@ -148,6 +151,9 @@ export interface ProjectRepository {
   listProjects(): Promise<Project[]>
   getProject(projectId: string): Promise<Project>
   listProjectMembers(projectId: string): Promise<ProjectMember[]>
+  listProjectSessions(projectId: string): Promise<Session[]>
+  listProjectHandoffs(projectId: string): Promise<Handoff[]>
+  listProjectDeliverables(projectId: string): Promise<Deliverable[]>
   createProject(input: CreateProjectInput): Promise<Project>
   createTask(
     projectId: string,

@@ -6,6 +6,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   projectQueryKeys,
   projectRepository,
+  useProjectDeliverables,
+  useProjectHandoffs,
+  useProjectSessions,
   useCreateHuman,
   useCreateProject,
   useCreateTask,
@@ -221,6 +224,62 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.defects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+  })
+})
+
+describe('relay queries', () => {
+  it('uses stable project-scoped keys for all relay resources', async () => {
+    const { queryClient, wrapper } = createHarness()
+    const sessions = vi.spyOn(projectRepository, 'listProjectSessions')
+      .mockResolvedValue([])
+    const handoffs = vi.spyOn(projectRepository, 'listProjectHandoffs')
+      .mockResolvedValue([])
+    const deliverables = vi.spyOn(
+      projectRepository,
+      'listProjectDeliverables',
+    ).mockResolvedValue([])
+
+    const sessionsHook = renderHook(() => useProjectSessions('atlas'), {
+      wrapper,
+    })
+    const handoffsHook = renderHook(() => useProjectHandoffs('atlas'), {
+      wrapper,
+    })
+    const deliverablesHook = renderHook(
+      () => useProjectDeliverables('atlas'),
+      { wrapper },
+    )
+
+    await act(async () => {
+      await Promise.all([
+        sessionsHook.result.current.refetch(),
+        handoffsHook.result.current.refetch(),
+        deliverablesHook.result.current.refetch(),
+      ])
+    })
+
+    expect(sessions).toHaveBeenCalledWith('atlas')
+    expect(handoffs).toHaveBeenCalledWith('atlas')
+    expect(deliverables).toHaveBeenCalledWith('atlas')
+    expect(queryClient.getQueryData(
+      projectQueryKeys.sessionsFor('atlas'),
+    )).toEqual([])
+    expect(queryClient.getQueryData(
+      projectQueryKeys.handoffsFor('atlas'),
+    )).toEqual([])
+    expect(queryClient.getQueryData(
+      projectQueryKeys.deliverablesFor('atlas'),
+    )).toEqual([])
+  })
+
+  it('does not request relay resources without a selected project', () => {
+    const { wrapper } = createHarness()
+    const sessions = vi.spyOn(projectRepository, 'listProjectSessions')
+
+    const { result } = renderHook(() => useProjectSessions(''), { wrapper })
+
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(sessions).not.toHaveBeenCalled()
   })
 })
 

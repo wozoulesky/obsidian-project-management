@@ -17,6 +17,30 @@ afterEach(() => {
 })
 
 describe('DashboardPage', () => {
+  it('shows the agent onsite relay context without replacing project health', async () => {
+    renderApp(<DashboardPage />)
+
+    const onsite = await screen.findByRole('region', {
+      name: 'Agent 现场',
+    })
+    expect(within(onsite).getByText('dev-agent')).toBeInTheDocument()
+    expect(
+      within(onsite).getByText('完成 v1.1 接力面板'),
+    ).toBeInTheDocument()
+    expect(within(onsite).getByText('2 个认领任务')).toBeInTheDocument()
+    expect(within(onsite).getByText('已离场')).toBeInTheDocument()
+    expect(
+      within(onsite).getByText('REST 只读接口与契约已对齐。'),
+    ).toBeInTheDocument()
+    expect(within(onsite).getByText('完成三条查询链路')).toBeInTheDocument()
+    expect(within(onsite).getByText('等待视觉走查')).toBeInTheDocument()
+    expect(within(onsite).getByText('接入仪表盘面板')).toBeInTheDocument()
+    expect(
+      within(onsite).getByText('接力面板实现'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '项目指标' })).toBeVisible()
+  })
+
   it('shows the default project health, highest risk and responsible agent', async () => {
     renderApp(<DashboardPage />)
 

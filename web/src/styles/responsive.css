@@ -114,6 +114,10 @@
       "status";
   }
 
+  .dashboard-relay__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .activity-feed__item {
     grid-template-columns: minmax(0, 1fr);
   }

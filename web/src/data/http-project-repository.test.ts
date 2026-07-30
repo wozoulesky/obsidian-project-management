@@ -133,6 +133,94 @@ describe('ApiClient', () => {
 })
 
 describe('HTTP project repository', () => {
+  it('loads relay sessions, handoffs, and deliverables from project-scoped endpoints', async () => {
+    const agent = {
+      ...task.assignee,
+      id: 'agent-1',
+      name: 'dev-agent',
+      kind: 'agent' as const,
+      role: 'dev-agent' as const,
+      client: 'codex' as const,
+    }
+    const session = {
+      id: 'session-1',
+      projectId: 'project/one',
+      agentId: agent.id,
+      agent,
+      intent: 'Finish the relay dashboard',
+      taskIds: ['task-1'],
+      status: 'active' as const,
+      summary: null,
+      createdAt: '2026-07-29T01:00:00.000Z',
+      lastActiveAt: '2026-07-29T02:00:00.000Z',
+      closedAt: null,
+    }
+    const handoff = {
+      id: 'handoff-1',
+      projectId: 'project/one',
+      sessionId: session.id,
+      author: agent,
+      summary: 'Repository wiring is complete.',
+      done: ['Added the read paths'],
+      blockers: [],
+      nextSteps: ['Render the dashboard panels'],
+      gotchas: [],
+      refs: [{ kind: 'commit' as const, ref: 'abc123' }],
+      createdAt: '2026-07-29T03:00:00.000Z',
+    }
+    const deliverable = {
+      id: 'deliverable-1',
+      projectId: 'project/one',
+      requirementId: null,
+      taskId: 'task-1',
+      title: 'Relay repository',
+      kind: 'file' as const,
+      ref: 'web/src/data/http-project-repository.ts',
+      note: null,
+      createdBy: agent,
+      sessionId: session.id,
+      createdAt: '2026-07-29T03:05:00.000Z',
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(success({ items: [session] })))
+      .mockResolvedValueOnce(jsonResponse(success({ items: [handoff] })))
+      .mockResolvedValueOnce(jsonResponse(success({ items: [deliverable] })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.listProjectSessions('project/one')).resolves
+      .toEqual([session])
+    await expect(repository.listProjectHandoffs('project/one')).resolves
+      .toEqual([handoff])
+    await expect(repository.listProjectDeliverables('project/one')).resolves
+      .toEqual([deliverable])
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      '/api/projects/project%2Fone/sessions',
+      '/api/projects/project%2Fone/handoffs',
+      '/api/projects/project%2Fone/deliverables',
+    ])
+  })
+
+  it('rejects a malformed relay collection response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(success({
+          items: [{
+            id: 'session-1',
+            status: 'active',
+          }],
+        })),
+      ),
+    )
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.listProjectSessions('project-1')).rejects
+      .toMatchObject({ code: 'API_RESPONSE_INVALID' })
+  })
+
   it('loads every task once through the global cursor endpoint', async () => {
     const fetchMock = vi
       .fn()
