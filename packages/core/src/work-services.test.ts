@@ -1769,7 +1769,7 @@ function runWorkConcurrencyClient(
       process.execPath,
       [vitestEntry, 'run', workConcurrencyClient],
       {
-        cwd: repositoryRoot,
+        cwd: join(repositoryRoot, 'packages', 'core'),
         env: { ...process.env, ...environment },
         stdio: ['ignore', 'pipe', 'pipe'],
       },

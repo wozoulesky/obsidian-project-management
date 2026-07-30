@@ -121,6 +121,7 @@ export const test = base.extend<
         )
 
         vite = await createViteServer({
+          cacheDir: join(temporaryDirectory, 'vite-cache'),
           configFile: join(webRoot, 'vite.config.ts'),
           root: webRoot,
           logLevel: 'silent',

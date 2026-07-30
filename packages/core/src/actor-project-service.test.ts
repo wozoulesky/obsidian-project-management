@@ -858,7 +858,7 @@ function runConcurrencyClient(
       process.execPath,
       [vitestEntry, 'run', concurrencyClient],
       {
-        cwd: repositoryRoot,
+        cwd: join(repositoryRoot, 'packages', 'core'),
         env: {
           ...process.env,
           ...environment,

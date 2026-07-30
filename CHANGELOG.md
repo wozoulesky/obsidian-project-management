@@ -38,6 +38,8 @@ Agent collaboration release.
   security, MCP, Skill, and release-checklist documentation.
 - Added checks for REST/MCP consistency, failure recovery, atomic writes, and
   deterministic Skill packaging.
+- Isolated nested-worktree concurrency clients and parallel Vite dependency
+  caches to prevent duplicate test discovery and optimizer races.
 
 ### Known limitations
 
