@@ -240,12 +240,22 @@ export class HandoffService {
   }
 
   private assertAuthor(authorId: string): void {
-    if (this.database.prepare(`
-      SELECT 1 FROM actors WHERE id = ?
-    `).get(authorId) === undefined) {
+    const author = this.database.prepare(`
+      SELECT status FROM actors WHERE id = ?
+    `).get(authorId) as {
+      status: PersistedActor['status']
+    } | undefined
+    if (author === undefined) {
       throw new DomainError(
         'ACTOR_NOT_FOUND',
         'Actor does not exist',
+        { actorId: authorId },
+      )
+    }
+    if (author.status !== 'active') {
+      throw new DomainError(
+        'ACTOR_INACTIVE',
+        'Actor is inactive',
         { actorId: authorId },
       )
     }

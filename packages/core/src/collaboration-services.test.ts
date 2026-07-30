@@ -327,6 +327,24 @@ describe('SessionService', () => {
     }))
   })
 
+  it('rejects an inactive agent at checkin', () => {
+    database.prepare(`
+      UPDATE actors SET status = 'inactive' WHERE id = ?
+    `).run(fixture.agentId)
+
+    expect(() => sessions().checkin({
+      projectId: fixture.projectId,
+      agentId: fixture.agentId,
+      intent: 'Inactive checkin',
+      taskIds: [fixture.taskId],
+    })).toThrowError(expect.objectContaining({
+      code: 'ACTOR_INACTIVE',
+      details: { actorId: fixture.agentId },
+    }))
+    expect(rows(database, 'SELECT id FROM sessions')).toEqual([])
+    expect(rows(database, 'SELECT id FROM activities')).toEqual([])
+  })
+
   it('rolls checkin back if recording its activity fails', () => {
     database.exec(`
       CREATE TRIGGER fail_session_checkin_activity
@@ -423,6 +441,38 @@ describe('SessionService', () => {
       agentId: fixture.agentId,
       note: 'Too late',
     })).toThrowError(expect.objectContaining({ code: 'SESSION_CLOSED' }))
+  })
+
+  it('re-checks that the owning agent is active before adding a note', () => {
+    const service = sessions()
+    const session = service.checkin({
+      projectId: fixture.projectId,
+      agentId: fixture.agentId,
+      intent: 'Inactive note',
+      taskIds: [],
+    })
+    const oldTimestamp = '2026-07-01T00:00:00.000Z'
+    database.prepare(`
+      UPDATE sessions SET last_active_at = ? WHERE id = ?
+    `).run(oldTimestamp, session.id)
+    database.prepare(`
+      UPDATE actors SET status = 'inactive' WHERE id = ?
+    `).run(fixture.agentId)
+
+    expect(() => service.note({
+      sessionId: session.id,
+      agentId: fixture.agentId,
+      note: 'Must not be written',
+    })).toThrowError(expect.objectContaining({
+      code: 'ACTOR_INACTIVE',
+      details: { actorId: fixture.agentId },
+    }))
+    expect(rows(database, `
+      SELECT last_active_at FROM sessions WHERE id = ?
+    `, session.id)).toEqual([{ last_active_at: oldTimestamp }])
+    expect(rows(database, `
+      SELECT id FROM activities WHERE operation = 'session.note'
+    `)).toEqual([])
   })
 
   it('rolls the last-active touch back if note activity insertion fails', () => {
@@ -606,6 +656,44 @@ describe('SessionService', () => {
     })).toThrowError(expect.objectContaining({ code: 'SESSION_CLOSED' }))
   })
 
+  it('re-checks that the owning agent is active before checkout', () => {
+    const service = sessions()
+    const session = service.checkin({
+      projectId: fixture.projectId,
+      agentId: fixture.agentId,
+      intent: 'Inactive checkout',
+      taskIds: [],
+    })
+    database.prepare(`
+      UPDATE actors SET status = 'inactive' WHERE id = ?
+    `).run(fixture.agentId)
+
+    expect(() => service.checkout({
+      sessionId: session.id,
+      agentId: fixture.agentId,
+      summary: 'Must not close',
+      done: [],
+      blockers: [],
+      nextSteps: [],
+      gotchas: [],
+      refs: [],
+    })).toThrowError(expect.objectContaining({
+      code: 'ACTOR_INACTIVE',
+      details: { actorId: fixture.agentId },
+    }))
+    expect(rows(database, `
+      SELECT status, summary, closed_at FROM sessions WHERE id = ?
+    `, session.id)).toEqual([{
+      status: 'active',
+      summary: null,
+      closed_at: null,
+    }])
+    expect(rows(database, 'SELECT id FROM handoffs')).toEqual([])
+    expect(rows(database, `
+      SELECT operation FROM activities ORDER BY rowid
+    `)).toEqual([{ operation: 'session.checkin' }])
+  })
+
   it('rolls back session close, handoff, and activities on checkout failure', () => {
     const service = sessions()
     const session = service.checkin({
@@ -700,6 +788,26 @@ describe('HandoffService', () => {
       entity_id: handoff.id,
       source: 'mcp',
     }])
+  })
+
+  it.each([
+    ['agent', 'agentId'],
+    ['human', 'humanId'],
+  ] as const)('rejects an inactive %s author', (_kind, authorKey) => {
+    const authorId = fixture[authorKey]
+    database.prepare(`
+      UPDATE actors SET status = 'inactive' WHERE id = ?
+    `).run(authorId)
+
+    expect(() => handoffs().create({
+      ...createInput('Inactive author'),
+      authorId,
+    })).toThrowError(expect.objectContaining({
+      code: 'ACTOR_INACTIVE',
+      details: { actorId: authorId },
+    }))
+    expect(rows(database, 'SELECT id FROM handoffs')).toEqual([])
+    expect(rows(database, 'SELECT id FROM activities')).toEqual([])
   })
 
   it('uses created time and rowid for latest-first tie ordering', () => {
@@ -876,6 +984,26 @@ describe('DeliverableService', () => {
     })).toThrowError(expect.objectContaining({
       code: 'DELIVERABLE_SESSION_INVALID',
     }))
+  })
+
+  it('rejects an inactive agent before recording a deliverable', () => {
+    database.prepare(`
+      UPDATE actors SET status = 'inactive' WHERE id = ?
+    `).run(fixture.agentId)
+
+    expect(() => deliverables().record({
+      projectId: fixture.projectId,
+      agentId: fixture.agentId,
+      title: 'Inactive author',
+      kind: 'file',
+      ref: '/inactive',
+      taskId: fixture.taskId,
+    })).toThrowError(expect.objectContaining({
+      code: 'ACTOR_INACTIVE',
+      details: { actorId: fixture.agentId },
+    }))
+    expect(rows(database, 'SELECT id FROM deliverables')).toEqual([])
+    expect(rows(database, 'SELECT id FROM activities')).toEqual([])
   })
 
   it('filters requirements and orders ties latest-first by rowid', () => {

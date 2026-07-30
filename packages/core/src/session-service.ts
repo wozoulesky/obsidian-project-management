@@ -187,6 +187,7 @@ export class SessionService {
         session.agent_id,
         parsed.agentId,
       )
+      this.assertActiveActor(session.agent_id)
       this.assertOpen(parsed.sessionId, session.status)
       if (parsed.taskId !== undefined) {
         this.assertTask(parsed.taskId, session.project_id)
@@ -222,6 +223,7 @@ export class SessionService {
         current.agent_id,
         parsed.agentId,
       )
+      this.assertActiveActor(current.agent_id)
       this.assertOpen(parsed.sessionId, current.status)
 
       const timestamp = new Date().toISOString()
@@ -338,8 +340,11 @@ export class SessionService {
 
   private assertAgent(agentId: string): void {
     const actor = this.database.prepare(`
-      SELECT kind FROM actors WHERE id = ?
-    `).get(agentId) as { kind: 'human' | 'agent' } | undefined
+      SELECT kind, status FROM actors WHERE id = ?
+    `).get(agentId) as {
+      kind: 'human' | 'agent'
+      status: PersistedActor['status']
+    } | undefined
     if (actor === undefined) {
       throw new DomainError(
         'ACTOR_NOT_FOUND',
@@ -352,6 +357,35 @@ export class SessionService {
         'ACTOR_AGENT_REQUIRED',
         'Sessions can only be owned by agents',
         { actorId: agentId },
+      )
+    }
+    if (actor.status !== 'active') {
+      throw new DomainError(
+        'ACTOR_INACTIVE',
+        'Actor is inactive',
+        { actorId: agentId },
+      )
+    }
+  }
+
+  private assertActiveActor(actorId: string): void {
+    const actor = this.database.prepare(`
+      SELECT status FROM actors WHERE id = ?
+    `).get(actorId) as {
+      status: PersistedActor['status']
+    } | undefined
+    if (actor === undefined) {
+      throw new DomainError(
+        'ACTOR_NOT_FOUND',
+        'Actor does not exist',
+        { actorId },
+      )
+    }
+    if (actor.status !== 'active') {
+      throw new DomainError(
+        'ACTOR_INACTIVE',
+        'Actor is inactive',
+        { actorId },
       )
     }
   }

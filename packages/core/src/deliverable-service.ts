@@ -231,8 +231,11 @@ export class DeliverableService {
 
   private assertAgent(agentId: string): void {
     const actor = this.database.prepare(`
-      SELECT kind FROM actors WHERE id = ?
-    `).get(agentId) as { kind: 'human' | 'agent' } | undefined
+      SELECT kind, status FROM actors WHERE id = ?
+    `).get(agentId) as {
+      kind: 'human' | 'agent'
+      status: PersistedActor['status']
+    } | undefined
     if (actor === undefined) {
       throw new DomainError(
         'ACTOR_NOT_FOUND',
@@ -244,6 +247,13 @@ export class DeliverableService {
       throw new DomainError(
         'ACTOR_AGENT_REQUIRED',
         'Deliverables must be recorded by an agent',
+        { actorId: agentId },
+      )
+    }
+    if (actor.status !== 'active') {
+      throw new DomainError(
+        'ACTOR_INACTIVE',
+        'Actor is inactive',
         { actorId: agentId },
       )
     }
