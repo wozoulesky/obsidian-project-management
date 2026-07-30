@@ -2,13 +2,13 @@
 
 [中文](README.md) | [English](README_EN.md)
 
-## v1.0.0
+## v1.1.0
 
-The first complete Project OS release is ready. It includes the project
-portfolio and owner filtering, project-scoped tasks, the human and Agent
-directory, quick progress submission, functional settings, and a shared
-SQLite-backed REST, MCP, and Agent Skill workflow. See the
-[CHANGELOG](CHANGELOG.md) for the full release notes and known limitations.
+Project OS v1.1.0 adds a durable Agent relay loop to the complete local project
+workspace: session check-in, project briefings, in-session notes, deliverable
+records, and structured checkout handoffs. REST, MCP, the Agent Skill, and the
+Web application continue to share SQLite data and permission rules. See the
+[CHANGELOG](CHANGELOG.md) for full release notes and known limitations.
 
 Project OS is a local-first project workspace. Its React Web application, REST
 API, SQLite database, MCP server, and installable Agent Skill share the same
@@ -18,6 +18,8 @@ data and permission rules. The current release includes:
   creation inside a selected project;
 - a unified human/Agent directory, quick progress submission, requirements,
   defects, Gantt planning, and dashboards;
+- a relay closed loop for Agent session check-in, incremental briefings,
+  in-session notes, deliverable records, and structured checkout handoffs;
 - appearance, data, MCP token, and Agent Skills settings;
 - stdio setup for Codex, Claude Code, and Kimi Code, plus `/mcp` Streamable HTTP;
 - SQLite persistence, backups/restores, and JSON import/export.
@@ -107,8 +109,9 @@ npm run test:e2e
 
 ## MCP and the Agent Skill
 
-Project OS exposes 22 tools. Both transports use the same services and SQLite
-data:
+Project OS exposes 27 tools, including the session, briefing, note,
+deliverable, and handoff relay closed loop. Both transports use the same
+services and SQLite data:
 
 - stdio at `apps/mcp/dist/stdio.js` for local Codex, Claude Code, and Kimi Code;
 - Streamable HTTP at `http://127.0.0.1:4310/mcp` for compatible clients.
@@ -154,7 +157,7 @@ a write.
 
 ## More documentation
 
-- [v1.0.0 changelog](CHANGELOG.md)
+- [v1.1.0 changelog](CHANGELOG.md)
 - [Web development](web/README.md)
 - [Agent setup](docs/agent-setup.md)
 - [Data and backups](docs/data-and-backups.md)
