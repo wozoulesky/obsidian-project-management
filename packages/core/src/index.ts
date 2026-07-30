@@ -29,6 +29,10 @@ export type {
   DefectToTaskInput,
   UpdateDefectInput,
 } from './defect-service.js'
+export { DeliverableService } from './deliverable-service.js'
+export type {
+  DeliverableListFilter,
+} from './deliverable-service.js'
 export { DomainError } from './errors.js'
 export {
   generateActivityId,
@@ -56,6 +60,11 @@ export type {
 } from './backup-service.js'
 export { ExportService, validateExportDocument } from './export-service.js'
 export type { ExportDocument } from './export-service.js'
+export { HandoffService } from './handoff-service.js'
+export type {
+  CreateHandoffInput,
+  HandoffListFilter,
+} from './handoff-service.js'
 export { ProjectService } from './project-service.js'
 export type {
   CreateProjectServiceInput,
@@ -68,6 +77,14 @@ export type {
   RequirementListFilter,
   UpdateRequirementInput,
 } from './requirement-service.js'
+export {
+  SESSION_STALE_AFTER_MS,
+  SessionService,
+} from './session-service.js'
+export type {
+  SessionCheckoutResult,
+  SessionListFilter,
+} from './session-service.js'
 export { TaskService } from './task-service.js'
 export type {
   CreateTaskInput,

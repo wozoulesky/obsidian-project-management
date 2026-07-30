@@ -33,6 +33,7 @@ type ActivityRow = {
   actor_capabilities_json: string
   actor_registered_at: string
   actor_last_active_at: string | null
+  actor_last_briefing_activity_id: string | null
   actor_version: number
 }
 
@@ -131,6 +132,7 @@ function mapActor(row: ActivityRow): PersistedActor {
     capabilities: JSON.parse(row.actor_capabilities_json),
     registeredAt: row.actor_registered_at,
     lastActiveAt: row.actor_last_active_at,
+    lastBriefingActivityId: row.actor_last_briefing_activity_id,
     version: row.actor_version,
   })
 }
@@ -173,6 +175,7 @@ const activitySelect = `
     actors.capabilities_json AS actor_capabilities_json,
     actors.registered_at AS actor_registered_at,
     actors.last_active_at AS actor_last_active_at,
+    actors.last_briefing_activity_id AS actor_last_briefing_activity_id,
     actors.version AS actor_version
   FROM activities
   JOIN actors ON actors.id = activities.actor_id

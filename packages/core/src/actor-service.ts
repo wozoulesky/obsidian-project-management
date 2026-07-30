@@ -34,6 +34,7 @@ type ActorRow = {
   capabilities_json: string
   registered_at: string
   last_active_at: string | null
+  last_briefing_activity_id: string | null
   version: number
 }
 
@@ -81,6 +82,7 @@ function mapActor(row: ActorRow): PersistedActor {
     capabilities: JSON.parse(row.capabilities_json),
     registeredAt: row.registered_at,
     lastActiveAt: row.last_active_at,
+    lastBriefingActivityId: row.last_briefing_activity_id,
     version: row.version,
   })
 }
@@ -155,6 +157,7 @@ export class ActorService {
         capabilities_json,
         registered_at,
         last_active_at,
+        last_briefing_activity_id,
         version
       FROM actors
       WHERE id = ?
@@ -247,6 +250,7 @@ export class ActorService {
           capabilities_json,
           registered_at,
           last_active_at,
+          last_briefing_activity_id,
           version
         FROM actors
         WHERE kind = 'agent' AND client = ? AND name = ?
@@ -349,6 +353,7 @@ export class ActorService {
         capabilities_json,
         registered_at,
         last_active_at,
+        last_briefing_activity_id,
         version
       FROM actors
       ${where}
