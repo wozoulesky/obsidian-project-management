@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project OS · 任务管理视觉原型</title>
+  <style>
+    :root {
+      --bg: #070908;
+      --surface: #0c100e;
+      --surface-raised: #131915;
+      --line: #243028;
+      --line-bright: #3f5b49;
+      --text: #f3f7f4;
+      --muted: #8b9a90;
+      --green: #37f58a;
+      --green-deep: #0d8f4b;
+      --red: #ff5d68;
+      --amber: #f4b942;
+      --radius-panel: 18px;
+      --radius-card: 12px;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .45);
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    .ambient { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 55% 0, rgba(55, 245, 138, .08), transparent 32rem); }
+    .console-shell { position: relative; display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; min-height: 100vh; }
+    .side-rail, .smart-panel { padding: 24px 18px; background: #080b09; }
+    .side-rail { border-right: 1px solid var(--line); }
+    .smart-panel { border-left: 1px solid var(--line); }
+    .brand { margin: 0 0 28px; font-weight: 800; letter-spacing: .08em; }
+    .nav-group { margin: 22px 0 8px; color: var(--muted); font-size: 12px; }
+    nav a { display: block; padding: 9px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; }
+    nav a[aria-current="page"] { background: var(--surface-raised); color: var(--green); }
+    .workspace-card { margin-top: 28px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+    .workspace-card small, .eyebrow, dt { color: var(--muted); }
+    .workspace-card strong { display: block; margin: 3px 0 10px; }
+    .workspace { min-width: 0; padding: 24px; }
+    .topbar { display: flex; align-items: center; gap: 16px; }
+    .topbar h1 { margin: 0 auto 0 0; font-size: 22px; }
+    .search { min-width: 220px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); }
+    .button { padding: 9px 13px; border: 1px solid var(--line-bright); border-radius: 9px; background: var(--surface-raised); color: var(--text); }
+    .button.primary { border-color: var(--green); background: var(--green); color: #031108; font-weight: 700; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+    .metric, .task-list, .task-fan, .timeline { border: 1px solid var(--line); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow); }
+    .metric { padding: 15px; }
+    .metric strong { display: block; margin-top: 6px; font-size: 24px; }
+    .task-stage { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(320px, 1.3fr); gap: 16px; }
+    .task-list, .task-fan, .timeline { padding: 18px; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .section-head h2 { margin: 0; font-size: 16px; }
+    .task-list ul, .timeline ol { margin: 0; padding: 0; list-style: none; }
+    .task-list li { padding: 12px 0; border-top: 1px solid var(--line); }
+    .task-list li:first-child { border-top: 0; }
+    .task-list small { display: block; color: var(--muted); }
+    .fan-stack { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .fan-card { min-height: 112px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface-raised); }
+    .fan-card.is-selected { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
+    .fan-card small { color: var(--green); }
+    .fan-card h3 { margin: 8px 0 0; font-size: 14px; }
+    .timeline { margin-top: 16px; }
+    .timeline ol { display: grid; grid-template-columns: repeat(4, 1fr); }
+    .timeline li { padding: 10px 12px; border-left: 1px solid var(--line); }
+    .timeline li:first-child { border-left: 0; }
+    .timeline time { display: block; color: var(--green); font-size: 12px; }
+    .smart-panel h2 { margin: 4px 0; font-size: 20px; }
+    .task-code { color: var(--green); font-family: ui-monospace, monospace; }
+    .description { color: var(--muted); }
+    .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+    .facts div { padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-card); }
+    dd { margin: 4px 0 0; }
+    .ai-advice { padding: 14px; border: 1px solid var(--green-deep); border-radius: var(--radius-card); background: rgba(55, 245, 138, .06); }
+    .panel-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .toast { position: fixed; right: 24px; bottom: 24px; padding: 11px 15px; border: 1px solid var(--line-bright); border-radius: var(--radius-card); background: #050706; box-shadow: var(--shadow); color: var(--muted); }
+    :focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <div class="console-shell">
+    <aside class="side-rail" aria-label="主导航">
+      <p class="brand">Project OS</p>
+      <nav>
+        <a href="#">仪表盘</a>
+        <a href="#">项目</a>
+        <a href="#">负责人</a>
+        <p class="nav-group">交付</p>
+        <a href="#" aria-current="page">计划 / 任务</a>
+        <a href="#">甘特图</a>
+        <a href="#">需求</a>
+        <a href="#">缺陷</a>
+        <p class="nav-group">系统</p>
+        <a href="#">设置</a>
+      </nav>
+      <section class="workspace-card" aria-label="当前工作区">
+        <small>Workspace</small><strong>Project OS Core</strong><small>Local Owner</small>
+      </section>
+    </aside>
+
+    <main class="workspace" id="main-content">
+      <header class="topbar">
+        <h1>任务控制台</h1>
+        <label><span class="eyebrow">搜索</span> <input class="search" type="search" placeholder="任务、成员或标签"></label>
+        <button class="button primary" type="button">＋ 新建任务</button>
+      </header>
+
+      <section class="metrics" aria-label="任务指标">
+        <article class="metric"><span class="eyebrow">进行中</span><strong>12</strong></article>
+        <article class="metric"><span class="eyebrow">本周完成</span><strong>28</strong></article>
+        <article class="metric"><span class="eyebrow">高优先级</span><strong>05</strong></article>
+        <article class="metric"><span class="eyebrow">平均周期</span><strong>2.4d</strong></article>
+      </section>
+
+      <section class="task-stage" aria-label="任务工作区">
+        <article class="task-list">
+          <div class="section-head"><h2>待推进</h2><span class="eyebrow">7 项</span></div>
+          <ul>
+            <li><strong>统一任务状态字典</strong><small>产品系统 · 今天</small></li>
+            <li><strong>补齐验收检查点</strong><small>交付流程 · 明天</small></li>
+            <li><strong>迁移项目负责人字段</strong><small>数据层 · 周四</small></li>
+            <li><strong>更新本地运行手册</strong><small>文档 · 周五</small></li>
+          </ul>
+        </article>
+
+        <article class="task-fan">
+          <div class="section-head"><h2>任务扇面</h2><span class="eyebrow">按优先级</span></div>
+          <div class="fan-stack">
+            <article class="fan-card is-selected"><small>P0 · CORE-218</small><h3>构建任务管理视觉原型</h3></article>
+            <article class="fan-card"><small>P1 · CORE-214</small><h3>完善责任人筛选器</h3></article>
+            <article class="fan-card"><small>P1 · CORE-211</small><h3>梳理依赖阻塞关系</h3></article>
+            <article class="fan-card"><small>P2 · CORE-209</small><h3>校准计划时间轴</h3></article>
+            <article class="fan-card"><small>P2 · CORE-203</small><h3>优化快捷任务入口</h3></article>
+            <article class="fan-card"><small>P3 · CORE-198</small><h3>归档季度交付记录</h3></article>
+          </div>
+        </article>
+      </section>
+
+      <section class="timeline" aria-labelledby="timeline-title">
+        <div class="section-head"><h2 id="timeline-title">交付时间线</h2><span class="eyebrow">本周</span></div>
+        <ol>
+          <li><time datetime="2026-08-03">周一</time>原型结构</li>
+          <li><time datetime="2026-08-04">周二</time>视觉校准</li>
+          <li><time datetime="2026-08-05">周三</time>交互联调</li>
+          <li><time datetime="2026-08-07">周五</time>评审交付</li>
+        </ol>
+      </section>
+    </main>
+
+    <aside class="smart-panel" aria-label="智能详情">
+      <span class="task-code">CORE-218</span>
+      <h2>构建任务管理视觉原型</h2>
+      <p class="description">建立任务控制台的语义骨架，明确三栏信息层级与选中任务上下文。</p>
+      <dl class="facts">
+        <div><dt>负责人</dt><dd>林简</dd></div>
+        <div><dt>优先级</dt><dd>P0</dd></div>
+        <div><dt>状态</dt><dd>进行中</dd></div>
+        <div><dt>截止</dt><dd>8 月 5 日</dd></div>
+      </dl>
+      <section class="ai-advice" aria-labelledby="ai-title">
+        <span class="eyebrow">AI 建议</span>
+        <h3 id="ai-title">先锁定结构，再补交互</h3>
+        <p>当前依赖清晰。建议优先确认信息密度与右侧详情字段，随后接入任务选择状态。</p>
+      </section>
+      <div class="panel-actions">
+        <button class="button" type="button">编辑任务</button>
+        <button class="button primary" type="button">标记完成</button>
+      </div>
+    </aside>
+  </div>
+  <div class="toast" role="status" aria-live="polite">已载入本地任务视图</div>
+</body>
+</html>
