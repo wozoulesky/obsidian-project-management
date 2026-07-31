@@ -822,15 +822,13 @@
       box-shadow: inset 0 1px rgba(255, 255, 255, .22), 0 5px 12px rgba(0, 0, 0, .24);
     }
 
-    .timeline li.is-active::before,
-    .timeline li:first-child::before {
+    .timeline li.is-active::before {
       border-color: rgba(55, 245, 138, .78);
       background: var(--green);
       box-shadow: inset 0 1px rgba(255, 255, 255, .34), 0 0 16px rgba(55, 245, 138, .32);
     }
 
-    .timeline li.is-today::after,
-    .timeline li:first-child::after {
+    .timeline li.is-today::after {
       position: absolute;
       z-index: 4;
       top: -8px;
@@ -853,8 +851,33 @@
       text-transform: uppercase;
     }
 
-    .timeline .is-today time,
-    .timeline li:first-child time { color: var(--green); }
+    .timeline .is-today time { color: var(--green); }
+
+    .empty-state {
+      display: grid;
+      min-height: 96px;
+      place-items: center;
+      padding: 18px;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .task-list li.empty-state {
+      border: 0;
+      background: transparent;
+    }
+
+    .task-list li.empty-state::before,
+    .timeline li.empty-state::before,
+    .timeline li.empty-state::after { display: none; }
+
+    .fan-empty { min-height: 244px; }
+
+    .timeline li.empty-state {
+      grid-column: 1 / -1;
+      border: 0;
+    }
 
     .smart-panel {
       border-left: 1px solid var(--line-bright);
@@ -1092,7 +1115,37 @@
       }
       .timeline { overflow-x: auto; }
       .timeline ol { min-width: 560px; }
-      .fan-card { width: min(176px, calc(100% - 48px)); }
+
+      .fan-stack {
+        display: grid;
+        grid-auto-columns: minmax(168px, 76%);
+        grid-auto-flow: column;
+        gap: 12px;
+        min-height: 244px;
+        padding: 7px 4px 14px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        perspective: none;
+        scroll-snap-type: x mandatory;
+        scrollbar-color: rgba(55, 245, 138, .34) transparent;
+      }
+
+      .fan-stack::before { display: none; }
+
+      .fan-card,
+      .fan-card:nth-child(n),
+      .fan-stack:hover .fan-card.is-selected {
+        position: relative;
+        top: auto;
+        left: auto;
+        z-index: auto;
+        width: auto;
+        min-height: 214px;
+        padding: 42px 14px 14px;
+        transform: none !important;
+        filter: none;
+        scroll-snap-align: center;
+      }
     }
 
     @media (max-width: 380px) {
@@ -1114,8 +1167,12 @@
       .fan-stack {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-auto-flow: row;
         gap: 8px;
+        padding: 0;
+        overflow: visible;
         perspective: none;
+        scroll-snap-type: none;
       }
 
       .fan-stack::before { display: none; }
@@ -1169,8 +1226,8 @@
 
       <section class="task-stage" aria-label="任务工作区">
         <article class="task-list">
-          <div class="section-head"><h2>任务清单</h2><span class="eyebrow" data-visible-count></span></div>
-          <div class="segmented scope-controls" aria-label="任务范围">
+          <div class="section-head"><h2>任务清单</h2><span class="eyebrow" data-visible-count aria-live="polite"></span></div>
+          <div class="segmented scope-controls" role="group" aria-label="任务范围">
             <button class="segment-button" type="button" data-scope="all" aria-pressed="true">全部</button>
             <button class="segment-button" type="button" data-scope="mine" aria-pressed="false">我的</button>
             <button class="segment-button" type="button" data-scope="joined" aria-pressed="false">参与</button>
@@ -1187,8 +1244,8 @@
       <section class="timeline" aria-labelledby="timeline-title" tabindex="0">
         <div class="section-head">
           <h2 id="timeline-title">交付时间线</h2>
-          <span class="eyebrow" data-range-label></span>
-          <div class="segmented range-controls" aria-label="时间范围">
+          <span class="eyebrow" data-range-label aria-live="polite"></span>
+          <div class="segmented range-controls" role="group" aria-label="时间范围">
             <button class="segment-button" type="button" data-range="week" aria-pressed="true">周</button>
             <button class="segment-button" type="button" data-range="month" aria-pressed="false">月</button>
             <button class="segment-button" type="button" data-range="quarter" aria-pressed="false">季度</button>
@@ -1206,7 +1263,7 @@
         <div><dt>负责人</dt><dd data-detail-owner></dd></div>
         <div><dt>项目</dt><dd data-detail-project></dd></div>
         <div><dt>优先级</dt><dd data-detail-priority></dd></div>
-        <div><dt>状态</dt><dd data-detail-status></dd></div>
+        <div><dt>状态</dt><dd data-detail-status tabindex="-1"></dd></div>
         <div><dt>截止</dt><dd data-detail-due></dd></div>
         <div><dt>进度</dt><dd data-detail-progress></dd></div>
       </dl>
@@ -1311,10 +1368,14 @@
       }
     ];
 
+    const DEMO_REFERENCE_DATE = '2026-08-01';
     let activeScope = 'all';
     let selectedId = 'task-001';
     let activeRange = 'week';
     let toastTimer;
+    let inputModality = 'pointer';
+    let fanFrame = null;
+    let pendingFanPoint = null;
 
     const metricsNode = document.querySelector('[data-metrics]');
     const taskListNode = document.querySelector('[data-task-list]');
@@ -1324,13 +1385,64 @@
     const reducedMotionQuery = typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)')
       : null;
+    const finePointerQuery = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(pointer: fine)')
+      : null;
 
     function visibleTasks() {
       return tasks.filter((task) => task.scope.includes(activeScope));
     }
 
     function selectedTask() {
-      return tasks.find((task) => task.id === selectedId) || visibleTasks()[0] || null;
+      if (!selectedId) return null;
+      return visibleTasks().find((task) => task.id === selectedId) || null;
+    }
+
+    function normalizeSelection() {
+      const visible = visibleTasks();
+      if (!visible.some((task) => task.id === selectedId)) {
+        selectedId = visible[0]?.id || null;
+      }
+    }
+
+    function parseDateOnly(value) {
+      const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+      return new Date(Date.UTC(year, month - 1, day));
+    }
+
+    function formatDateOnly(date) {
+      return date.toISOString().slice(0, 10);
+    }
+
+    function timelineRangeConfig() {
+      const reference = parseDateOnly(DEMO_REFERENCE_DATE);
+      const year = reference.getUTCFullYear();
+      const month = reference.getUTCMonth();
+      let start;
+      let end;
+      let label;
+      let density;
+
+      if (activeRange === 'week') {
+        start = new Date(reference);
+        end = new Date(reference);
+        end.setUTCDate(end.getUTCDate() + 6);
+        label = '本周 ' + formatDateOnly(start).slice(5).replace('-', '/') + '–' + formatDateOnly(end).slice(5).replace('-', '/');
+        density = 'compact';
+      } else if (activeRange === 'month') {
+        start = new Date(Date.UTC(year, month, 1));
+        end = new Date(Date.UTC(year, month + 1, 0));
+        label = year + ' 年 ' + (month + 1) + ' 月';
+        density = 'regular';
+      } else {
+        const quarterStartMonth = Math.floor(month / 3) * 3;
+        start = new Date(Date.UTC(year, quarterStartMonth, 1));
+        end = new Date(Date.UTC(year, quarterStartMonth + 3, 0));
+        label = year + ' Q' + (Math.floor(month / 3) + 1);
+        density = 'dense';
+      }
+
+      return { start, end, label, density };
     }
 
     function makeElement(tagName, className, text) {
@@ -1374,6 +1486,11 @@
       });
 
       const fragment = document.createDocumentFragment();
+      if (!visible.length) {
+        const empty = makeElement('li', 'empty-state', '当前范围暂无任务');
+        empty.setAttribute('role', 'status');
+        fragment.append(empty);
+      }
       visible.forEach((task) => {
         const item = makeElement('li', [
           task.id === selectedId ? 'is-current' : '',
@@ -1405,6 +1522,11 @@
     function renderFan() {
       const visible = visibleTasks();
       const fragment = document.createDocumentFragment();
+      if (!visible.length) {
+        const empty = makeElement('p', 'empty-state fan-empty', '当前范围暂无可展示任务');
+        empty.setAttribute('role', 'status');
+        fragment.append(empty);
+      }
       visible.forEach((task, index) => {
         const selected = task.id === selectedId;
         const card = makeElement('button', 'fan-card' + (selected ? ' is-selected' : ''));
@@ -1428,7 +1550,29 @@
 
     function renderDetails() {
       const task = selectedTask();
-      if (!task) return;
+      const tagsNode = document.querySelector('[data-detail-tags]');
+      const editButton = document.querySelector('[data-action="edit"]');
+      const completeButton = document.querySelector('[data-action="complete"]');
+
+      if (!task) {
+        document.querySelector('[data-detail-code]').textContent = 'NO TASK';
+        document.querySelector('[data-detail-title]').textContent = '暂无可显示任务';
+        document.querySelector('[data-detail-description]').textContent = '当前范围没有任务，请切换任务范围。';
+        document.querySelector('[data-detail-owner]').textContent = '—';
+        document.querySelector('[data-detail-project]').textContent = '—';
+        document.querySelector('[data-detail-priority]').textContent = '—';
+        document.querySelector('[data-detail-status]').textContent = '无任务';
+        document.querySelector('[data-detail-due]').textContent = '—';
+        document.querySelector('[data-detail-progress]').textContent = '—';
+        tagsNode.replaceChildren();
+        document.querySelector('[data-advice-title]').textContent = '切换任务范围';
+        document.querySelector('[data-advice-text]').textContent = '选择包含任务的范围后，可继续查看详情与建议。';
+        editButton.disabled = true;
+        completeButton.disabled = true;
+        completeButton.textContent = '标记完成';
+        return;
+      }
+
       document.querySelector('[data-detail-code]').textContent = task.code;
       document.querySelector('[data-detail-title]').textContent = task.title;
       document.querySelector('[data-detail-description]').textContent = task.description;
@@ -1439,7 +1583,6 @@
       document.querySelector('[data-detail-due]').textContent = task.due;
       document.querySelector('[data-detail-progress]').textContent = task.progress + '%';
 
-      const tagsNode = document.querySelector('[data-detail-tags]');
       const tags = document.createDocumentFragment();
       task.tags.forEach((tag) => tags.append(makeElement('span', 'tag', tag)));
       tagsNode.replaceChildren(tags);
@@ -1459,22 +1602,20 @@
       document.querySelector('[data-advice-title]').textContent = adviceTitle;
       document.querySelector('[data-advice-text]').textContent = adviceText;
 
-      const completeButton = document.querySelector('[data-action="complete"]');
+      editButton.disabled = false;
       completeButton.disabled = task.status === '已完成';
       completeButton.textContent = task.status === '已完成' ? '已完成' : '标记完成';
     }
 
     function renderTimeline() {
-      const rangeConfig = {
-        week: { label: '本周', limit: 4, density: 'compact' },
-        month: { label: '本月', limit: 5, density: 'regular' },
-        quarter: { label: '本季度', limit: 6, density: 'dense' }
-      };
-      const config = rangeConfig[activeRange];
+      const config = timelineRangeConfig();
       const entries = visibleTasks()
+        .filter((task) => {
+          const date = parseDateOnly(task.due);
+          return date >= config.start && date <= config.end;
+        })
         .slice()
-        .sort((a, b) => a.due.localeCompare(b.due))
-        .slice(0, config.limit);
+        .sort((a, b) => a.due.localeCompare(b.due));
       document.querySelector('[data-range-label]').textContent = config.label + ' · ' + entries.length + ' 个节点';
       document.querySelectorAll('[data-range]').forEach((button) => {
         button.setAttribute('aria-pressed', String(button.dataset.range === activeRange));
@@ -1483,12 +1624,17 @@
       timelineNode.dataset.density = config.density;
 
       const fragment = document.createDocumentFragment();
-      entries.forEach((task, index) => {
+      if (!entries.length) {
+        const empty = makeElement('li', 'empty-state', '当前时间范围暂无交付节点');
+        empty.setAttribute('role', 'status');
+        fragment.append(empty);
+      }
+      entries.forEach((task) => {
+        const date = task.due.slice(0, 10);
         const item = makeElement('li', [
           task.id === selectedId ? 'is-active' : '',
-          index === 0 ? 'is-today' : ''
+          date === DEMO_REFERENCE_DATE ? 'is-today' : ''
         ].filter(Boolean).join(' '));
-        const date = task.due.slice(0, 10);
         let label = date.slice(5).replace('-', '/');
         if (activeRange === 'month') label = Number(date.slice(5, 7)) + ' 月 ' + Number(date.slice(8, 10)) + ' 日';
         if (activeRange === 'quarter') label = date.slice(0, 4) + ' Q' + (Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1) + ' · ' + date.slice(5).replace('-', '/');
@@ -1501,11 +1647,23 @@
     }
 
     function renderAll() {
+      normalizeSelection();
       renderMetrics();
       renderTaskList();
       renderFan();
       renderDetails();
       renderTimeline();
+    }
+
+    function restoreTaskFocus(surface, taskId, scrollPosition) {
+      const root = surface === 'list' ? taskListNode : fanStage;
+      root.scrollTop = scrollPosition.top;
+      root.scrollLeft = scrollPosition.left;
+      const replacement = Array.from(root.querySelectorAll('[data-task-id]'))
+        .find((button) => button.dataset.taskId === taskId);
+      if (!replacement) return;
+      if (inputModality === 'keyboard') replacement.focus();
+      else replacement.focus({ preventScroll: true });
     }
 
     function showToast(message) {
@@ -1516,6 +1674,14 @@
         toastNode.hidden = true;
       }, 2400);
     }
+
+    document.addEventListener('keydown', () => {
+      inputModality = 'keyboard';
+    }, true);
+
+    document.addEventListener('pointerdown', () => {
+      inputModality = 'pointer';
+    }, true);
 
     document.addEventListener('click', (event) => {
       const actionButton = event.target.closest('[data-action]');
@@ -1530,6 +1696,7 @@
             task.status = '已完成';
             task.progress = 100;
             renderAll();
+            document.querySelector('[data-detail-status]').focus({ preventScroll: true });
             showToast('已将“' + task.title + '”标记为完成。');
           }
         }
@@ -1539,8 +1706,6 @@
       const scopeButton = event.target.closest('[data-scope]');
       if (scopeButton) {
         activeScope = scopeButton.dataset.scope;
-        const nextVisible = visibleTasks();
-        if (!nextVisible.some((task) => task.id === selectedId)) selectedId = nextVisible[0].id;
         renderAll();
         return;
       }
@@ -1554,38 +1719,70 @@
 
       const taskButton = event.target.closest('[data-task-id]');
       if (taskButton) {
+        const surface = taskButton.closest('[data-task-list]') ? 'list' : 'fan';
+        const root = surface === 'list' ? taskListNode : fanStage;
+        const scrollPosition = { top: root.scrollTop, left: root.scrollLeft };
         selectedId = taskButton.dataset.taskId;
         renderTaskList();
         renderFan();
         renderDetails();
         renderTimeline();
+        restoreTaskFocus(surface, selectedId, scrollPosition);
       }
     });
 
+    function cancelFanFrame() {
+      if (fanFrame === null) return;
+      if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(fanFrame);
+      else window.clearTimeout(fanFrame);
+      fanFrame = null;
+    }
+
     function resetFanTilt() {
+      cancelFanFrame();
+      pendingFanPoint = null;
       fanStage.style.setProperty('--tilt-x', '0deg');
       fanStage.style.setProperty('--tilt-y', '0deg');
     }
 
-    function handleFanPointerMove(event) {
+    function applyFanTilt() {
+      fanFrame = null;
+      if (!pendingFanPoint) return;
       const rect = fanStage.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) - .5;
-      const y = ((event.clientY - rect.top) / rect.height) - .5;
+      if (!rect.width || !rect.height) return;
+      const x = ((pendingFanPoint.x - rect.left) / rect.width) - .5;
+      const y = ((pendingFanPoint.y - rect.top) / rect.height) - .5;
       fanStage.style.setProperty('--tilt-x', (x * 2.4).toFixed(2) + 'deg');
       fanStage.style.setProperty('--tilt-y', (y * -2.4).toFixed(2) + 'deg');
+    }
+
+    function handleFanPointerMove(event) {
+      if (event.pointerType && event.pointerType !== 'mouse') return;
+      pendingFanPoint = { x: event.clientX, y: event.clientY };
+      if (fanFrame !== null) return;
+      fanFrame = typeof window.requestAnimationFrame === 'function'
+        ? window.requestAnimationFrame(applyFanTilt)
+        : window.setTimeout(applyFanTilt, 16);
     }
 
     function syncFanMotion() {
       fanStage.removeEventListener('pointermove', handleFanPointerMove);
       resetFanTilt();
-      if (!reducedMotionQuery || !reducedMotionQuery.matches) {
+      const motionAllowed = !reducedMotionQuery || !reducedMotionQuery.matches;
+      const finePointer = finePointerQuery && finePointerQuery.matches;
+      if (motionAllowed && finePointer) {
         fanStage.addEventListener('pointermove', handleFanPointerMove);
       }
     }
 
     fanStage.addEventListener('pointerleave', resetFanTilt);
+    fanStage.addEventListener('pointercancel', resetFanTilt);
+    fanStage.addEventListener('pointerup', resetFanTilt);
     if (reducedMotionQuery && typeof reducedMotionQuery.addEventListener === 'function') {
       reducedMotionQuery.addEventListener('change', syncFanMotion);
+    }
+    if (finePointerQuery && typeof finePointerQuery.addEventListener === 'function') {
+      finePointerQuery.addEventListener('change', syncFanMotion);
     }
     syncFanMotion();
     renderAll();
