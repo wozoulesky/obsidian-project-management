@@ -238,11 +238,26 @@
       gap: 14px;
     }
 
+    .page-heading {
+      min-width: max-content;
+      margin-right: auto;
+    }
+
     .topbar h1 {
-      margin: 0 auto 0 0;
+      margin: 0;
       font-size: clamp(20px, 1.7vw, 24px);
       font-weight: 720;
       letter-spacing: -.035em;
+      line-height: 1.05;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 620;
+      letter-spacing: .08em;
+      white-space: nowrap;
     }
 
     .topbar label {
@@ -303,15 +318,41 @@
 
     .button.primary {
       border-color: rgba(55, 245, 138, .84);
-      background: linear-gradient(180deg, #53f89a, var(--green));
-      box-shadow: inset 0 1px rgba(255, 255, 255, .32), 0 0 0 1px rgba(55, 245, 138, .1), 0 11px 28px rgba(55, 245, 138, .14);
-      color: #031108;
+      background:
+        linear-gradient(180deg, rgba(55, 245, 138, .12), rgba(55, 245, 138, .035)),
+        rgba(12, 20, 16, .82);
+      box-shadow: inset 0 1px rgba(255, 255, 255, .1), inset 0 0 16px rgba(55, 245, 138, .035), 0 0 0 1px rgba(55, 245, 138, .08), 0 10px 26px rgba(0, 0, 0, .28);
+      color: #e9fff2;
       font-weight: 780;
     }
 
     .button.primary:hover {
-      box-shadow: inset 0 1px rgba(255, 255, 255, .4), 0 0 0 1px rgba(55, 245, 138, .2), 0 13px 34px rgba(55, 245, 138, .24);
-      filter: brightness(1.045);
+      border-color: var(--green);
+      box-shadow: inset 0 1px rgba(255, 255, 255, .14), inset 0 0 20px rgba(55, 245, 138, .06), 0 0 0 1px rgba(55, 245, 138, .13), 0 12px 30px rgba(0, 0, 0, .34), 0 0 20px rgba(55, 245, 138, .1);
+      filter: brightness(1.06);
+    }
+
+    .notification-button {
+      position: relative;
+      min-width: 62px;
+      padding-inline: 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .notification-dot {
+      display: inline-grid;
+      min-width: 17px;
+      height: 17px;
+      margin-left: 4px;
+      place-items: center;
+      border: 1px solid rgba(55, 245, 138, .48);
+      border-radius: 999px;
+      background: rgba(55, 245, 138, .08);
+      color: var(--green);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 9px;
+      font-weight: 750;
     }
 
     .metrics {
@@ -356,8 +397,12 @@
     }
 
     .metric {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       min-height: 78px;
       padding: 14px 15px 13px;
+      align-items: end;
+      gap: 10px;
       transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
     }
 
@@ -382,6 +427,58 @@
       font-weight: 650;
       letter-spacing: -.055em;
       line-height: 1.2;
+    }
+
+    .metric-visual {
+      display: grid;
+      justify-items: end;
+      gap: 7px;
+      padding-bottom: 2px;
+    }
+
+    .metric-trend {
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 680;
+      letter-spacing: .035em;
+      white-space: nowrap;
+    }
+
+    .trend-mark {
+      display: inline-block;
+      margin-right: 3px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    .metric-spark {
+      display: flex;
+      height: 16px;
+      align-items: end;
+      gap: 3px;
+    }
+
+    .metric-spark i {
+      display: block;
+      width: 4px;
+      min-height: 3px;
+      border-radius: 3px 3px 1px 1px;
+      background: rgba(224, 234, 227, .42);
+      box-shadow: 0 0 8px rgba(224, 234, 227, .08);
+    }
+
+    .metric.is-in-progress .metric-trend { color: rgba(122, 230, 169, .78); }
+    .metric.is-in-progress .metric-spark i {
+      background: rgba(55, 245, 138, .68);
+      box-shadow: 0 0 8px rgba(55, 245, 138, .16);
+    }
+
+    .metric.is-completed .metric-trend { color: rgba(169, 210, 185, .76); }
+    .metric.is-completed .metric-spark i { background: rgba(190, 211, 199, .62); }
+
+    .metric.is-overdue strong { color: var(--red); }
+    .metric.is-overdue .metric-spark i {
+      background: var(--red);
+      box-shadow: 0 0 8px rgba(255, 92, 97, .2);
     }
 
     .task-stage {
@@ -573,6 +670,9 @@
     .task-status.is-complete { color: var(--green); }
     .task-status.is-overdue { color: var(--red); }
 
+    .task-priority { color: var(--muted); }
+    .task-list li[data-priority="中"] .task-priority { color: var(--amber); }
+
     .progress-track {
       display: block;
       height: 3px;
@@ -733,6 +833,9 @@
 
     .fan-card.is-selected small { color: rgba(3, 17, 8, .72); }
 
+    .fan-card[data-priority="中"] .fan-priority { color: var(--amber); }
+    .fan-card.is-selected[data-priority="中"] .fan-priority { color: #3d2200; }
+
     .fan-card.is-selected::after {
       opacity: .46;
       filter: brightness(.36);
@@ -777,11 +880,15 @@
       box-shadow: inset 0 0 0 1px rgba(55, 245, 138, .24), var(--shadow);
     }
 
-    .timeline ol {
+    .timeline-track {
       position: relative;
+    }
+
+    .timeline ol {
       display: grid;
       grid-template-columns: repeat(var(--timeline-count, 4), minmax(0, 1fr));
       gap: 0;
+      position: relative;
       padding-top: 4px;
     }
 
@@ -829,12 +936,59 @@
       box-shadow: inset 0 1px rgba(255, 255, 255, .34), 0 0 16px rgba(55, 245, 138, .32);
     }
 
-    .timeline li.is-today::after {
+    .timeline li.is-selected {
+      border-radius: 8px;
+      background: rgba(224, 234, 227, .025);
+      box-shadow: inset 0 0 0 1px rgba(224, 234, 227, .16);
+    }
+
+    .timeline li.is-complete::before {
+      border-color: rgba(224, 234, 227, .4);
+      background: linear-gradient(180deg, rgba(224, 234, 227, .5), rgba(139, 154, 144, .24));
+    }
+
+    .timeline li.is-overdue::before {
+      border-color: rgba(255, 92, 97, .78);
+      background: rgba(255, 92, 97, .88);
+      box-shadow: inset 0 1px rgba(255, 255, 255, .28), 0 0 14px rgba(255, 92, 97, .24);
+    }
+
+    .timeline li.is-overdue time { color: var(--red); }
+
+    .today-marker {
       position: absolute;
       z-index: 4;
-      top: -8px;
+      top: 0;
       bottom: -13px;
-      left: 10px;
+      width: 1px;
+      pointer-events: none;
+      transform: translateX(-.5px);
+    }
+
+    .today-marker::before {
+      position: absolute;
+      top: -1px;
+      left: 50%;
+      padding: 1px 4px;
+      border: 1px solid rgba(55, 245, 138, .38);
+      border-radius: 999px;
+      content: "今日";
+      transform: translateX(-50%);
+      background: rgba(3, 12, 7, .9);
+      box-shadow: 0 0 12px rgba(55, 245, 138, .16);
+      color: var(--green);
+      font-size: 8px;
+      font-weight: 760;
+      letter-spacing: .06em;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+
+    .today-marker::after {
+      position: absolute;
+      top: 16px;
+      bottom: 0;
+      left: 0;
       width: 1px;
       content: "";
       background: var(--green);
@@ -851,8 +1005,6 @@
       letter-spacing: .1em;
       text-transform: uppercase;
     }
-
-    .timeline .is-today time { color: var(--green); }
 
     .empty-state {
       display: grid;
@@ -1013,7 +1165,9 @@
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin-top: 14px;
+      margin: 14px 0 0;
+      padding: 0;
+      list-style: none;
     }
 
     .tag {
@@ -1024,6 +1178,8 @@
       color: var(--muted);
       font-size: 10px;
     }
+
+    [data-detail-priority][data-priority="中"] { color: var(--amber); }
 
     .toast {
       position: fixed;
@@ -1096,7 +1252,7 @@
       .nav-group, .workspace-card { display: none; }
       .workspace { padding: 18px 16px; }
       .topbar { flex-wrap: wrap; }
-      .topbar h1 { flex-basis: 100%; }
+      .page-heading { flex-basis: 100%; }
       .topbar label { flex: 1; }
       .search { width: 100%; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1108,7 +1264,7 @@
 
     @media (max-width: 520px) {
       .topbar label .eyebrow { display: none; }
-      .topbar > .button { width: 100%; }
+      .topbar > .button.primary { width: 100%; }
       .timeline .section-head { flex-wrap: wrap; }
       .timeline .range-controls {
         flex-basis: 100%;
@@ -1116,7 +1272,7 @@
         margin-left: 0;
       }
       .timeline { overflow-x: auto; }
-      .timeline ol { min-width: 560px; }
+      .timeline-track { min-width: 560px; }
     }
 
     @media (max-width: 600px) {
@@ -1221,8 +1377,12 @@
 
     <main class="workspace" id="main-content">
       <header class="topbar">
-        <h1>任务控制台</h1>
+        <div class="page-heading">
+          <h1>任务控制台</h1>
+          <p class="subtitle">高效规划 · 智能协同 · 结果驱动</p>
+        </div>
         <label><span class="eyebrow">搜索</span> <input class="search" type="search" aria-label="搜索任务、成员或标签" placeholder="任务、成员或标签"></label>
+        <button class="button notification-button" type="button" data-action="notifications" aria-label="查看通知，2 条未读">通知<span class="notification-dot" aria-hidden="true">2</span></button>
         <button class="button primary" type="button" data-action="new">＋ 新建任务</button>
       </header>
 
@@ -1255,7 +1415,10 @@
             <button class="segment-button" type="button" data-range="quarter" aria-pressed="false">季度</button>
           </div>
         </div>
-        <ol data-timeline-list></ol>
+        <div class="timeline-track">
+          <ol data-timeline-list></ol>
+          <span class="today-marker" data-today-marker aria-hidden="true" hidden></span>
+        </div>
       </section>
     </main>
 
@@ -1271,7 +1434,7 @@
         <div><dt>截止</dt><dd data-detail-due></dd></div>
         <div><dt>进度</dt><dd data-detail-progress></dd></div>
       </dl>
-      <div class="tag-list" data-detail-tags aria-label="任务标签"></div>
+      <ul class="tag-list" data-detail-tags aria-label="任务标签"></ul>
       <section class="ai-advice" aria-labelledby="ai-title">
         <span class="eyebrow">AI 建议</span>
         <h3 id="ai-title" data-advice-title></h3>
@@ -1307,7 +1470,7 @@
         description: '核对本地 MCP 工具清单、权限边界与异常回退路径。',
         owner: 'Mei',
         project: 'Project OS v1.2',
-        due: '2026-08-07 16:00',
+        due: '2026-08-01 17:30',
         status: '待处理',
         priority: '高',
         progress: 28,
@@ -1385,6 +1548,7 @@
     const taskListNode = document.querySelector('[data-task-list]');
     const fanStage = document.querySelector('[data-fan-stage]');
     const timelineNode = document.querySelector('[data-timeline-list]');
+    const todayMarkerNode = document.querySelector('[data-today-marker]');
     const toastNode = document.querySelector('.toast');
     const reducedMotionQuery = typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -1463,21 +1627,46 @@
       return '';
     }
 
+    function metricSparkHeights(count, total) {
+      const ratio = total ? count / total : 0;
+      const middle = 4 + Math.round(ratio * 8);
+      return [Math.max(3, middle - 2), middle, Math.min(16, middle + 3)];
+    }
+
     function renderMetrics() {
       const visible = visibleTasks();
-      const average = visible.length
-        ? Math.round(visible.reduce((sum, task) => sum + task.progress, 0) / visible.length)
-        : 0;
+      const todayPending = visible.filter((task) => (
+        task.due.slice(0, 10) === DEMO_REFERENCE_DATE
+        && task.status !== '已完成'
+        && task.status !== '逾期'
+      )).length;
+      const inProgress = visible.filter((task) => task.status === '进行中').length;
+      const completed = visible.filter((task) => task.status === '已完成').length;
+      const overdue = visible.filter((task) => task.status === '逾期').length;
       const metrics = [
-        ['可见任务', String(visible.length).padStart(2, '0')],
-        ['进行中', String(visible.filter((task) => task.status === '进行中').length).padStart(2, '0')],
-        ['高优先级', String(visible.filter((task) => task.priority === '高').length).padStart(2, '0')],
-        ['平均进度', average + '%']
+        { label: '今日待办', value: todayPending, tone: 'is-due-today', mark: '→', trend: todayPending ? '今日聚焦' : '今日清零' },
+        { label: '进行中', value: inProgress, tone: 'is-in-progress', mark: '↗', trend: inProgress ? '持续推进' : '暂无推进' },
+        { label: '已完成', value: completed, tone: 'is-completed', mark: '✓', trend: completed ? '已有交付' : '等待交付' },
+        { label: '逾期', value: overdue, tone: 'is-overdue', mark: '!', trend: overdue ? '需立即关注' : '风险清零' }
       ];
       const fragment = document.createDocumentFragment();
-      metrics.forEach(([label, value]) => {
-        const metric = makeElement('article', 'metric');
-        metric.append(makeElement('span', 'eyebrow', label), makeElement('strong', '', value));
+      metrics.forEach(({ label, value, tone, mark, trend }) => {
+        const metric = makeElement('article', 'metric ' + tone);
+        metric.dataset.metric = label;
+        const copy = makeElement('div', 'metric-copy');
+        copy.append(makeElement('span', 'eyebrow', label), makeElement('strong', '', String(value).padStart(2, '0')));
+        const visual = makeElement('div', 'metric-visual');
+        const trendNode = makeElement('span', 'metric-trend');
+        trendNode.append(makeElement('span', 'trend-mark', mark), document.createTextNode(trend));
+        const spark = makeElement('span', 'metric-spark');
+        spark.setAttribute('aria-hidden', 'true');
+        metricSparkHeights(value, visible.length).forEach((height) => {
+          const bar = makeElement('i');
+          bar.style.height = height + 'px';
+          spark.append(bar);
+        });
+        visual.append(trendNode, spark);
+        metric.append(copy, visual);
         fragment.append(metric);
       });
       metricsNode.replaceChildren(fragment);
@@ -1501,6 +1690,7 @@
           task.id === selectedId ? 'is-current' : '',
           task.status === '逾期' ? 'is-overdue' : ''
         ].filter(Boolean).join(' '));
+        item.dataset.priority = task.priority;
         const button = makeElement('button', 'task-row');
         button.type = 'button';
         button.dataset.taskId = task.id;
@@ -1508,7 +1698,12 @@
         button.setAttribute('aria-label', task.code + ' ' + task.title + '，' + task.status + '，截止 ' + task.due + '，进度 ' + task.progress + '%');
 
         const top = makeElement('span', 'task-row-top');
-        const state = makeElement('span', 'task-status ' + statusClass(task), task.status + ' · ' + task.priority);
+        const state = makeElement('span', 'task-status ' + statusClass(task));
+        state.append(
+          makeElement('span', 'task-state-label', task.status),
+          document.createTextNode(' · '),
+          makeElement('span', 'task-priority', task.priority)
+        );
         top.append(makeElement('span', 'task-code', task.code), state);
         const meta = makeElement('small', 'task-row-meta');
         meta.append(makeElement('span', 'task-due', task.due), makeElement('span', '', '· ' + task.progress + '%'));
@@ -1537,12 +1732,15 @@
         const card = makeElement('button', 'fan-card' + (selected ? ' is-selected' : ''));
         card.type = 'button';
         card.dataset.taskId = task.id;
+        card.dataset.priority = task.priority;
         card.setAttribute('aria-pressed', String(selected));
         card.setAttribute('aria-label', task.code + ' ' + task.title + '，' + task.status + '，截止 ' + task.due + '，进度 ' + task.progress + '%');
         card.style.setProperty('--index', index);
         card.style.setProperty('--count', visible.length);
+        const fanLabel = makeElement('small');
+        fanLabel.append(makeElement('span', 'fan-priority', task.priority + '优先'), document.createTextNode(' · ' + task.code));
         card.append(
-          makeElement('small', '', task.priority + '优先 · ' + task.code),
+          fanLabel,
           makeElement('h3', '', task.title),
           makeElement('span', 'fan-meta', task.status),
           makeElement('span', 'fan-due', '截止 ' + task.due),
@@ -1565,7 +1763,9 @@
         document.querySelector('[data-detail-description]').textContent = '当前范围没有任务，请切换任务范围。';
         document.querySelector('[data-detail-owner]').textContent = '—';
         document.querySelector('[data-detail-project]').textContent = '—';
-        document.querySelector('[data-detail-priority]').textContent = '—';
+        const priorityNode = document.querySelector('[data-detail-priority]');
+        priorityNode.textContent = '—';
+        delete priorityNode.dataset.priority;
         document.querySelector('[data-detail-status]').textContent = '无任务';
         document.querySelector('[data-detail-due]').textContent = '—';
         document.querySelector('[data-detail-progress]').textContent = '—';
@@ -1583,13 +1783,15 @@
       document.querySelector('[data-detail-description]').textContent = task.description;
       document.querySelector('[data-detail-owner]').textContent = task.owner;
       document.querySelector('[data-detail-project]').textContent = task.project;
-      document.querySelector('[data-detail-priority]').textContent = task.priority;
+      const priorityNode = document.querySelector('[data-detail-priority]');
+      priorityNode.textContent = task.priority;
+      priorityNode.dataset.priority = task.priority;
       document.querySelector('[data-detail-status]').textContent = task.status;
       document.querySelector('[data-detail-due]').textContent = task.due;
       document.querySelector('[data-detail-progress]').textContent = task.progress + '%';
 
       const tags = document.createDocumentFragment();
-      task.tags.forEach((tag) => tags.append(makeElement('span', 'tag', tag)));
+      task.tags.forEach((tag) => tags.append(makeElement('li', 'tag', tag)));
       tagsNode.replaceChildren(tags);
 
       let adviceTitle = '按当前节奏继续推进';
@@ -1628,6 +1830,22 @@
       timelineNode.style.setProperty('--timeline-count', Math.max(entries.length, 1));
       timelineNode.dataset.density = config.density;
 
+      const reference = parseDateOnly(DEMO_REFERENCE_DATE);
+      const containsReference = reference >= config.start && reference <= config.end;
+      todayMarkerNode.hidden = !containsReference;
+      if (containsReference) {
+        const rangeDuration = config.end.getTime() - config.start.getTime();
+        const rawProgress = rangeDuration
+          ? (reference.getTime() - config.start.getTime()) / rangeDuration
+          : .5;
+        const progress = Math.max(0, Math.min(1, rawProgress));
+        todayMarkerNode.dataset.date = DEMO_REFERENCE_DATE;
+        todayMarkerNode.style.left = (6.5 + (progress * 87)).toFixed(3) + '%';
+      } else {
+        delete todayMarkerNode.dataset.date;
+        todayMarkerNode.style.removeProperty('left');
+      }
+
       const fragment = document.createDocumentFragment();
       if (!entries.length) {
         const empty = makeElement('li', 'empty-state', '当前时间范围暂无交付节点');
@@ -1637,9 +1855,12 @@
       entries.forEach((task) => {
         const date = task.due.slice(0, 10);
         const item = makeElement('li', [
-          task.id === selectedId ? 'is-active' : '',
-          date === DEMO_REFERENCE_DATE ? 'is-today' : ''
+          task.status === '进行中' ? 'is-active' : '',
+          task.id === selectedId ? 'is-selected' : '',
+          statusClass(task)
         ].filter(Boolean).join(' '));
+        item.dataset.timelineTaskId = task.id;
+        item.dataset.status = task.status;
         let label = date.slice(5).replace('-', '/');
         if (activeRange === 'month') label = Number(date.slice(5, 7)) + ' 月 ' + Number(date.slice(8, 10)) + ' 日';
         if (activeRange === 'quarter') label = date.slice(0, 4) + ' Q' + (Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1) + ' · ' + date.slice(5).replace('-', '/');
@@ -1693,6 +1914,7 @@
       if (actionButton) {
         const task = selectedTask();
         if (actionButton.dataset.action === 'new') showToast('演示模式：新建任务功能未连接后端。');
+        if (actionButton.dataset.action === 'notifications') showToast('你有 2 条待查看通知。');
         if (actionButton.dataset.action === 'edit' && task) showToast('演示模式：可编辑“' + task.title + '”。');
         if (actionButton.dataset.action === 'complete' && task) {
           if (task.status === '已完成') {
