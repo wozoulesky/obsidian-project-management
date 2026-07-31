@@ -6,6 +6,7 @@
   <title>Project OS · 任务管理视觉原型</title>
   <style>
     :root {
+      color-scheme: dark;
       --bg: #070908;
       --surface: #0c100e;
       --surface-raised: #131915;
@@ -26,6 +27,8 @@
     body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; }
     button, input { font: inherit; }
     button { cursor: pointer; }
+    .skip-link { position: fixed; top: 12px; left: 12px; z-index: 20; padding: 10px 14px; border-radius: 8px; transform: translateY(-200%); background: var(--green); color: #031108; font-weight: 700; }
+    .skip-link:focus { transform: translateY(0); }
     .ambient { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 55% 0, rgba(55, 245, 138, .08), transparent 32rem); }
     .console-shell { position: relative; display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; min-height: 100vh; }
     .side-rail, .smart-panel { padding: 24px 18px; background: #080b09; }
@@ -83,6 +86,7 @@
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
   <div class="ambient" aria-hidden="true"></div>
   <div class="console-shell">
     <aside class="side-rail" aria-label="主导航">
