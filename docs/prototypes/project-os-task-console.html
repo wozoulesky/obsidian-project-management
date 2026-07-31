@@ -390,6 +390,24 @@
       min-height: 354px;
     }
 
+    @media (min-width: 1301px) {
+      .task-stage { height: 354px; }
+
+      .task-list {
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+      }
+
+      .task-list ul {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-color: rgba(55, 245, 138, .34) transparent;
+        scrollbar-gutter: stable;
+      }
+    }
+
     .task-list,
     .task-fan,
     .timeline { padding: 17px 18px; }
@@ -580,6 +598,7 @@
     }
 
     .fan-stack {
+      --fan-gap: 58px;
       --tilt-x: 0deg;
       --tilt-y: 0deg;
       position: relative;
@@ -630,14 +649,17 @@
       transform-style: preserve-3d;
       --fan-span: calc(var(--count) - 1);
       --fan-position: calc(var(--index) - (var(--fan-span) / 2));
+      --fan-y: calc((var(--index) - var(--count)) * 3px);
+      --fan-z: calc((var(--count) - var(--index)) * 10px);
+      --fan-scale: calc(1 - (var(--index) * .022));
       z-index: calc(var(--count) - var(--index) + 2);
       transform:
         translate(-50%, -50%)
-        translate3d(calc(var(--fan-position) * 58px), calc((var(--index) - var(--count)) * 3px), calc((var(--count) - var(--index)) * 10px))
+        translate3d(calc(var(--fan-position) * var(--fan-gap)), var(--fan-y), var(--fan-z))
         rotateX(var(--tilt-y))
         rotateY(calc((var(--fan-position) * -7deg) + var(--tilt-x)))
         rotateZ(calc(var(--fan-position) * 2.5deg))
-        scale(calc(1 - (var(--index) * .022)));
+        scale(var(--fan-scale));
       transition: transform 260ms cubic-bezier(.2, .75, .2, 1), border-color 200ms ease, box-shadow 200ms ease, filter 200ms ease;
     }
 
@@ -671,12 +693,17 @@
     }
 
     .fan-stack:hover .fan-card.is-selected {
-      transform: translate(-50%, -50%) translate3d(0, 4px, 102px) rotateX(var(--tilt-y)) rotateY(var(--tilt-x));
+      --fan-y: calc(((var(--index) - var(--count)) * 3px) - 11px);
+      --fan-z: calc(((var(--count) - var(--index)) * 10px) + 22px);
+      --fan-scale: 1.035;
       border-color: rgba(55, 245, 138, .82);
       box-shadow: inset 0 1px rgba(255, 255, 255, .52), 0 0 0 1px rgba(55, 245, 138, .24), 0 0 52px rgba(55, 245, 138, .38), 0 28px 44px rgba(0, 0, 0, .58);
     }
 
     .fan-card.is-selected {
+      --fan-y: calc(((var(--index) - var(--count)) * 3px) - 8px);
+      --fan-z: calc(((var(--count) - var(--index)) * 10px) + 18px);
+      --fan-scale: 1.025;
       z-index: calc(var(--count) + 2);
       border-color: rgba(55, 245, 138, .66);
       background:
@@ -689,7 +716,6 @@
         0 0 42px rgba(55, 245, 138, .3),
         0 26px 42px rgba(0, 0, 0, .58);
       color: #031108;
-      transform: translate(-50%, -50%) translate3d(0, 11px, 96px) rotateX(var(--tilt-y)) rotateY(var(--tilt-x));
     }
 
     .fan-card small {
@@ -997,6 +1023,15 @@
     :focus-visible {
       outline: 2px solid var(--green);
       outline-offset: 3px;
+    }
+
+    @media (min-width: 1301px) {
+      .fan-stack { --fan-gap: 78px; }
+
+      .fan-stack .fan-card {
+        width: 136px;
+        padding-inline: 12px;
+      }
     }
 
     @media (max-width: 1300px) {
