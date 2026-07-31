@@ -419,6 +419,43 @@
       text-transform: uppercase;
     }
 
+    .segmented {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .segment-button {
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(243, 247, 244, .025);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+      transition: border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .segment-button:hover {
+      border-color: var(--line-bright);
+      color: var(--text);
+    }
+
+    .segment-button[aria-pressed="true"] {
+      border-color: rgba(55, 245, 138, .56);
+      background: rgba(55, 245, 138, .11);
+      box-shadow: inset 0 1px rgba(255, 255, 255, .055), 0 0 18px rgba(55, 245, 138, .08);
+      color: var(--green);
+    }
+
+    .scope-controls { margin: -1px 0 10px; }
+
+    .range-controls {
+      justify-content: flex-end;
+      margin-left: auto;
+    }
+
     .task-list ul,
     .timeline ol {
       margin: 0;
@@ -428,9 +465,8 @@
 
     .task-list li {
       position: relative;
-      padding: 12px 8px 12px 17px;
+      padding: 0 0 0 9px;
       border-top: 1px solid var(--line);
-      transition: background 160ms ease, padding-left 160ms ease;
     }
 
     .task-list li::before {
@@ -447,45 +483,40 @@
 
     .task-list li:first-child { border-top: 0; }
 
-    .task-list li:hover {
-      padding-left: 20px;
+    .task-row {
+      display: block;
+      width: 100%;
+      padding: 11px 8px 12px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      transition: background 160ms ease, padding-left 160ms ease;
+    }
+
+    .task-row:hover {
+      padding-left: 11px;
       background: linear-gradient(90deg, rgba(243, 247, 244, .035), transparent);
     }
 
-    .task-list li.is-current,
-    .task-list li:first-child {
+    .task-list li.is-current {
       background: linear-gradient(90deg, rgba(55, 245, 138, .075), transparent 88%);
     }
 
-    .task-list li.is-current::before,
-    .task-list li:first-child::before {
+    .task-list li.is-current::before {
       border-color: var(--green);
       background: var(--green);
       box-shadow: 0 0 10px rgba(55, 245, 138, .56);
     }
 
-    .task-list li.is-current strong,
-    .task-list li:first-child strong { color: var(--green); }
+    .task-list li.is-current strong { color: var(--green); }
 
-    .task-list li.priority-medium::after,
-    .task-list li:nth-child(3)::after {
-      position: absolute;
-      top: 14px;
-      right: 3px;
-      color: var(--amber);
-      content: "P2";
-      font-family: "SFMono-Regular", Consolas, ui-monospace, monospace;
-      font-size: 10px;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: .08em;
-    }
-
-    .task-list li.is-overdue small,
-    .task-list li:last-child small { color: var(--red); }
+    .task-list li.is-overdue .task-due { color: var(--red); }
 
     .task-list strong {
       display: block;
-      padding-right: 24px;
+      margin: 4px 0 0;
       overflow: hidden;
       font-size: 13px;
       font-weight: 630;
@@ -500,6 +531,46 @@
       font-size: 11px;
     }
 
+    .task-row-top,
+    .task-row-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .task-row-top .task-code {
+      font-size: 9px;
+      letter-spacing: .08em;
+    }
+
+    .task-status {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: .04em;
+    }
+
+    .task-status.is-complete { color: var(--green); }
+    .task-status.is-overdue { color: var(--red); }
+
+    .progress-track {
+      display: block;
+      height: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+      border-radius: 3px;
+      background: rgba(224, 234, 227, .09);
+    }
+
+    .progress-track span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+      box-shadow: 0 0 8px rgba(55, 245, 138, .28);
+    }
+
     .task-fan {
       min-width: 0;
       background:
@@ -509,6 +580,8 @@
     }
 
     .fan-stack {
+      --tilt-x: 0deg;
+      --tilt-y: 0deg;
       position: relative;
       min-height: 286px;
       perspective: 1100px;
@@ -551,8 +624,20 @@
         inset -1px 0 rgba(255, 255, 255, .035),
         0 22px 34px rgba(0, 0, 0, .52),
         0 4px 8px rgba(0, 0, 0, .4);
+      color: var(--text);
+      text-align: left;
       backface-visibility: hidden;
       transform-style: preserve-3d;
+      --fan-span: calc(var(--count) - 1);
+      --fan-position: calc(var(--index) - (var(--fan-span) / 2));
+      z-index: calc(var(--count) - var(--index) + 2);
+      transform:
+        translate(-50%, -50%)
+        translate3d(calc(var(--fan-position) * 58px), calc((var(--index) - var(--count)) * 3px), calc((var(--count) - var(--index)) * 10px))
+        rotateX(var(--tilt-y))
+        rotateY(calc((var(--fan-position) * -7deg) + var(--tilt-x)))
+        rotateZ(calc(var(--fan-position) * 2.5deg))
+        scale(calc(1 - (var(--index) * .022)));
       transition: transform 260ms cubic-bezier(.2, .75, .2, 1), border-color 200ms ease, box-shadow 200ms ease, filter 200ms ease;
     }
 
@@ -585,46 +670,14 @@
         linear-gradient(90deg, rgba(224, 234, 227, .08) 0 86%, transparent 86%) 0 87px / 100% 1px no-repeat;
     }
 
-    .fan-card:nth-child(1) {
-      z-index: 9;
-      transform: translate(-50%, -50%) translate3d(0, 11px, 86px) rotateX(1deg);
-    }
-
-    .fan-card:nth-child(2) {
-      z-index: 7;
-      transform: translate(-50%, -50%) translate3d(-91px, -3px, 43px) rotateY(16deg) rotateZ(-5deg) scale(.96);
-    }
-
-    .fan-card:nth-child(3) {
-      z-index: 6;
-      transform: translate(-50%, -50%) translate3d(92px, -2px, 36px) rotateY(-16deg) rotateZ(5deg) scale(.955);
-    }
-
-    .fan-card:nth-child(4) {
-      z-index: 4;
-      transform: translate(-50%, -50%) translate3d(-163px, -16px, -12px) rotateY(25deg) rotateZ(-10deg) scale(.89);
-      filter: brightness(.78);
-    }
-
-    .fan-card:nth-child(5) {
-      z-index: 3;
-      transform: translate(-50%, -50%) translate3d(165px, -15px, -18px) rotateY(-25deg) rotateZ(10deg) scale(.885);
-      filter: brightness(.76);
-    }
-
-    .fan-card:nth-child(6) {
-      z-index: 1;
-      transform: translate(-50%, -50%) translate3d(0, -30px, -62px) rotateX(-4deg) scale(.86);
-      filter: brightness(.62);
-    }
-
     .fan-stack:hover .fan-card.is-selected {
-      transform: translate(-50%, -50%) translate3d(0, 4px, 102px) rotateX(-1deg);
+      transform: translate(-50%, -50%) translate3d(0, 4px, 102px) rotateX(var(--tilt-y)) rotateY(var(--tilt-x));
       border-color: rgba(55, 245, 138, .82);
       box-shadow: inset 0 1px rgba(255, 255, 255, .52), 0 0 0 1px rgba(55, 245, 138, .24), 0 0 52px rgba(55, 245, 138, .38), 0 28px 44px rgba(0, 0, 0, .58);
     }
 
     .fan-card.is-selected {
+      z-index: calc(var(--count) + 2);
       border-color: rgba(55, 245, 138, .66);
       background:
         linear-gradient(132deg, rgba(255, 255, 255, .42), transparent 31%),
@@ -636,6 +689,7 @@
         0 0 42px rgba(55, 245, 138, .3),
         0 26px 42px rgba(0, 0, 0, .58);
       color: #031108;
+      transform: translate(-50%, -50%) translate3d(0, 11px, 96px) rotateX(var(--tilt-y)) rotateY(var(--tilt-x));
     }
 
     .fan-card small {
@@ -661,12 +715,28 @@
       position: relative;
       z-index: 2;
       max-width: 92%;
-      margin: 10px 0 0;
+      margin: 9px 0 12px;
       font-size: 13px;
       font-weight: 680;
       line-height: 1.48;
       text-wrap: balance;
     }
+
+    .fan-meta,
+    .fan-due,
+    .fan-progress {
+      position: relative;
+      z-index: 2;
+      display: block;
+      font-size: 10px;
+      line-height: 1.55;
+    }
+
+    .fan-meta { font-weight: 700; }
+    .fan-due,
+    .fan-progress { color: rgba(224, 234, 227, .66); }
+    .fan-card.is-selected .fan-due,
+    .fan-card.is-selected .fan-progress { color: rgba(3, 17, 8, .68); }
 
     .timeline {
       min-height: 151px;
@@ -683,9 +753,14 @@
     .timeline ol {
       position: relative;
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(var(--timeline-count, 4), minmax(0, 1fr));
       gap: 0;
       padding-top: 4px;
+    }
+
+    .timeline ol[data-density="dense"] li {
+      padding-inline: 8px;
+      font-size: 10px;
     }
 
     .timeline ol::before {
@@ -877,6 +952,29 @@
 
     .panel-actions .button { padding-inline: 8px; }
 
+    .button:disabled {
+      cursor: not-allowed;
+      filter: saturate(.5);
+      opacity: .58;
+      transform: none;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+    }
+
+    .tag {
+      padding: 4px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(243, 247, 244, .025);
+      color: var(--muted);
+      font-size: 10px;
+    }
+
     .toast {
       position: fixed;
       right: 24px;
@@ -894,6 +992,8 @@
       font-size: 11px;
     }
 
+    .toast[hidden] { display: none; }
+
     :focus-visible {
       outline: 2px solid var(--green);
       outline-offset: 3px;
@@ -904,8 +1004,6 @@
       .task-stage { grid-template-columns: minmax(0, 1fr); }
       .task-fan { min-height: 340px; }
       .fan-card { width: clamp(174px, 45%, 218px); }
-      .fan-card:nth-child(4) { transform: translate(-50%, -50%) translate3d(-142px, -16px, -12px) rotateY(25deg) rotateZ(-10deg) scale(.86); }
-      .fan-card:nth-child(5) { transform: translate(-50%, -50%) translate3d(144px, -15px, -18px) rotateY(-25deg) rotateZ(10deg) scale(.855); }
     }
 
     @media (max-width: 1179px) {
@@ -951,21 +1049,19 @@
     @media (max-width: 520px) {
       .topbar label .eyebrow { display: none; }
       .topbar > .button { width: 100%; }
+      .timeline .section-head { flex-wrap: wrap; }
+      .timeline .range-controls {
+        flex-basis: 100%;
+        justify-content: flex-start;
+        margin-left: 0;
+      }
       .timeline { overflow-x: auto; }
       .timeline ol { min-width: 560px; }
       .fan-card { width: min(176px, calc(100% - 48px)); }
-      .fan-card:nth-child(2) { transform: translate(-50%, -50%) translate3d(-42px, -3px, 43px) rotateY(14deg) rotateZ(-4deg) scale(.94); }
-      .fan-card:nth-child(3) { transform: translate(-50%, -50%) translate3d(43px, -2px, 36px) rotateY(-14deg) rotateZ(4deg) scale(.935); }
-      .fan-card:nth-child(4) { transform: translate(-50%, -50%) translate3d(-68px, -16px, -12px) rotateY(20deg) rotateZ(-8deg) scale(.82); }
-      .fan-card:nth-child(5) { transform: translate(-50%, -50%) translate3d(69px, -15px, -18px) rotateY(-20deg) rotateZ(8deg) scale(.815); }
     }
 
     @media (max-width: 380px) {
       .fan-card { width: 140px; }
-      .fan-card:nth-child(2) { transform: translate(-50%, -50%) translate3d(-20px, -3px, 43px) rotateY(10deg) rotateZ(-2deg) scale(.94); }
-      .fan-card:nth-child(3) { transform: translate(-50%, -50%) translate3d(21px, -2px, 36px) rotateY(-10deg) rotateZ(2deg) scale(.935); }
-      .fan-card:nth-child(4) { transform: translate(-50%, -50%) translate3d(-32px, -16px, -12px) rotateY(15deg) rotateZ(-5deg) scale(.82); }
-      .fan-card:nth-child(5) { transform: translate(-50%, -50%) translate3d(33px, -15px, -18px) rotateY(-15deg) rotateZ(5deg) scale(.815); }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1031,72 +1127,433 @@
       <header class="topbar">
         <h1>任务控制台</h1>
         <label><span class="eyebrow">搜索</span> <input class="search" type="search" aria-label="搜索任务、成员或标签" placeholder="任务、成员或标签"></label>
-        <button class="button primary" type="button">＋ 新建任务</button>
+        <button class="button primary" type="button" data-action="new">＋ 新建任务</button>
       </header>
 
-      <section class="metrics" aria-label="任务指标">
-        <article class="metric"><span class="eyebrow">进行中</span><strong>12</strong></article>
-        <article class="metric"><span class="eyebrow">本周完成</span><strong>28</strong></article>
-        <article class="metric"><span class="eyebrow">高优先级</span><strong>05</strong></article>
-        <article class="metric"><span class="eyebrow">平均周期</span><strong>2.4d</strong></article>
-      </section>
+      <section class="metrics" aria-label="任务指标" data-metrics></section>
 
       <section class="task-stage" aria-label="任务工作区">
         <article class="task-list">
-          <div class="section-head"><h2>待推进</h2><span class="eyebrow">7 项</span></div>
-          <ul>
-            <li><strong>统一任务状态字典</strong><small>产品系统 · 今天</small></li>
-            <li><strong>补齐验收检查点</strong><small>交付流程 · 明天</small></li>
-            <li><strong>迁移项目负责人字段</strong><small>数据层 · 周四</small></li>
-            <li><strong>更新本地运行手册</strong><small>文档 · 周五</small></li>
-          </ul>
+          <div class="section-head"><h2>任务清单</h2><span class="eyebrow" data-visible-count></span></div>
+          <div class="segmented scope-controls" aria-label="任务范围">
+            <button class="segment-button" type="button" data-scope="all" aria-pressed="true">全部</button>
+            <button class="segment-button" type="button" data-scope="mine" aria-pressed="false">我的</button>
+            <button class="segment-button" type="button" data-scope="joined" aria-pressed="false">参与</button>
+          </div>
+          <ul data-task-list></ul>
         </article>
 
         <article class="task-fan">
           <div class="section-head"><h2>任务扇面</h2><span class="eyebrow">按优先级</span></div>
-          <div class="fan-stack">
-            <article class="fan-card is-selected"><small>P0 · CORE-218</small><h3>构建任务管理视觉原型</h3></article>
-            <article class="fan-card"><small>P1 · CORE-214</small><h3>完善责任人筛选器</h3></article>
-            <article class="fan-card"><small>P1 · CORE-211</small><h3>梳理依赖阻塞关系</h3></article>
-            <article class="fan-card"><small>P2 · CORE-209</small><h3>校准计划时间轴</h3></article>
-            <article class="fan-card"><small>P2 · CORE-203</small><h3>优化快捷任务入口</h3></article>
-            <article class="fan-card"><small>P3 · CORE-198</small><h3>归档季度交付记录</h3></article>
-          </div>
+          <div class="fan-stack" data-fan-stage></div>
         </article>
       </section>
 
       <section class="timeline" aria-labelledby="timeline-title" tabindex="0">
-        <div class="section-head"><h2 id="timeline-title">交付时间线</h2><span class="eyebrow">本周</span></div>
-        <ol>
-          <li><time datetime="2026-08-03">周一</time>原型结构</li>
-          <li><time datetime="2026-08-04">周二</time>视觉校准</li>
-          <li><time datetime="2026-08-05">周三</time>交互联调</li>
-          <li><time datetime="2026-08-07">周五</time>评审交付</li>
-        </ol>
+        <div class="section-head">
+          <h2 id="timeline-title">交付时间线</h2>
+          <span class="eyebrow" data-range-label></span>
+          <div class="segmented range-controls" aria-label="时间范围">
+            <button class="segment-button" type="button" data-range="week" aria-pressed="true">周</button>
+            <button class="segment-button" type="button" data-range="month" aria-pressed="false">月</button>
+            <button class="segment-button" type="button" data-range="quarter" aria-pressed="false">季度</button>
+          </div>
+        </div>
+        <ol data-timeline-list></ol>
       </section>
     </main>
 
     <aside class="smart-panel" aria-label="智能详情">
-      <span class="task-code">CORE-218</span>
-      <h2>构建任务管理视觉原型</h2>
-      <p class="description">建立任务控制台的语义骨架，明确三栏信息层级与选中任务上下文。</p>
+      <span class="task-code" data-detail-code></span>
+      <h2 data-detail-title></h2>
+      <p class="description" data-detail-description></p>
       <dl class="facts">
-        <div><dt>负责人</dt><dd>林简</dd></div>
-        <div><dt>优先级</dt><dd>P0</dd></div>
-        <div><dt>状态</dt><dd>进行中</dd></div>
-        <div><dt>截止</dt><dd>8 月 5 日</dd></div>
+        <div><dt>负责人</dt><dd data-detail-owner></dd></div>
+        <div><dt>项目</dt><dd data-detail-project></dd></div>
+        <div><dt>优先级</dt><dd data-detail-priority></dd></div>
+        <div><dt>状态</dt><dd data-detail-status></dd></div>
+        <div><dt>截止</dt><dd data-detail-due></dd></div>
+        <div><dt>进度</dt><dd data-detail-progress></dd></div>
       </dl>
+      <div class="tag-list" data-detail-tags aria-label="任务标签"></div>
       <section class="ai-advice" aria-labelledby="ai-title">
         <span class="eyebrow">AI 建议</span>
-        <h3 id="ai-title">先锁定结构，再补交互</h3>
-        <p>当前依赖清晰。建议优先确认信息密度与右侧详情字段，随后接入任务选择状态。</p>
+        <h3 id="ai-title" data-advice-title></h3>
+        <p data-advice-text></p>
       </section>
       <div class="panel-actions">
-        <button class="button" type="button">编辑任务</button>
-        <button class="button primary" type="button">标记完成</button>
+        <button class="button" type="button" data-action="edit">编辑任务</button>
+        <button class="button primary" type="button" data-action="complete">标记完成</button>
       </div>
     </aside>
   </div>
-  <div class="toast" role="status" aria-live="polite">已载入本地任务视图</div>
+  <div class="toast" role="status" aria-live="polite" hidden></div>
+  <script>
+    const tasks = [
+      {
+        id: 'task-001',
+        code: 'POS-2026-081',
+        title: '统一任务工作台视觉规范',
+        description: '完成任务中心的信息层级、状态语言与组件验收。',
+        owner: 'Lin',
+        project: 'Project OS v1.2',
+        due: '2026-08-06 18:00',
+        status: '进行中',
+        priority: '高',
+        progress: 72,
+        scope: ['all', 'mine'],
+        tags: ['设计系统', '关键路径']
+      },
+      {
+        id: 'task-002',
+        code: 'POS-2026-082',
+        title: 'MCP 接入验收',
+        description: '核对本地 MCP 工具清单、权限边界与异常回退路径。',
+        owner: 'Mei',
+        project: 'Project OS v1.2',
+        due: '2026-08-07 16:00',
+        status: '待处理',
+        priority: '高',
+        progress: 28,
+        scope: ['all', 'joined'],
+        tags: ['集成', '验收']
+      },
+      {
+        id: 'task-003',
+        code: 'OPS-2026-043',
+        title: '备份恢复演练',
+        description: '在隔离环境复核备份完整性并记录恢复时间目标。',
+        owner: 'Lin',
+        project: '基础设施韧性',
+        due: '2026-08-01 12:00',
+        status: '逾期',
+        priority: '高',
+        progress: 44,
+        scope: ['all', 'mine'],
+        tags: ['可靠性', '演练']
+      },
+      {
+        id: 'task-004',
+        code: 'UX-2026-119',
+        title: '移动端布局验证',
+        description: '验证窄屏断点、触控目标和横向时间线的可用性。',
+        owner: 'Qiao',
+        project: '体验质量',
+        due: '2026-08-10 15:30',
+        status: '进行中',
+        priority: '中',
+        progress: 65,
+        scope: ['all', 'joined'],
+        tags: ['移动端', '无障碍']
+      },
+      {
+        id: 'task-005',
+        code: 'PRD-2026-067',
+        title: '需求评审闭环',
+        description: '归档评审结论并确认所有决策项均有负责人和截止时间。',
+        owner: 'Lin',
+        project: '需求治理',
+        due: '2026-08-03 11:00',
+        status: '已完成',
+        priority: '中',
+        progress: 100,
+        scope: ['all', 'mine', 'joined'],
+        tags: ['评审', '决策记录']
+      },
+      {
+        id: 'task-006',
+        code: 'REL-2026-031',
+        title: '发布检查清单',
+        description: '补齐上线前验证项、责任人签核和故障回滚入口。',
+        owner: 'Yun',
+        project: 'Release Train',
+        due: '2026-08-14 19:00',
+        status: '待处理',
+        priority: '低',
+        progress: 12,
+        scope: ['all', 'joined'],
+        tags: ['发布', '检查清单']
+      }
+    ];
+
+    let activeScope = 'all';
+    let selectedId = 'task-001';
+    let activeRange = 'week';
+    let toastTimer;
+
+    const metricsNode = document.querySelector('[data-metrics]');
+    const taskListNode = document.querySelector('[data-task-list]');
+    const fanStage = document.querySelector('[data-fan-stage]');
+    const timelineNode = document.querySelector('[data-timeline-list]');
+    const toastNode = document.querySelector('.toast');
+    const reducedMotionQuery = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
+
+    function visibleTasks() {
+      return tasks.filter((task) => task.scope.includes(activeScope));
+    }
+
+    function selectedTask() {
+      return tasks.find((task) => task.id === selectedId) || visibleTasks()[0] || null;
+    }
+
+    function makeElement(tagName, className, text) {
+      const element = document.createElement(tagName);
+      if (className) element.className = className;
+      if (text !== undefined) element.textContent = text;
+      return element;
+    }
+
+    function statusClass(task) {
+      if (task.status === '已完成') return 'is-complete';
+      if (task.status === '逾期') return 'is-overdue';
+      return '';
+    }
+
+    function renderMetrics() {
+      const visible = visibleTasks();
+      const average = visible.length
+        ? Math.round(visible.reduce((sum, task) => sum + task.progress, 0) / visible.length)
+        : 0;
+      const metrics = [
+        ['可见任务', String(visible.length).padStart(2, '0')],
+        ['进行中', String(visible.filter((task) => task.status === '进行中').length).padStart(2, '0')],
+        ['高优先级', String(visible.filter((task) => task.priority === '高').length).padStart(2, '0')],
+        ['平均进度', average + '%']
+      ];
+      const fragment = document.createDocumentFragment();
+      metrics.forEach(([label, value]) => {
+        const metric = makeElement('article', 'metric');
+        metric.append(makeElement('span', 'eyebrow', label), makeElement('strong', '', value));
+        fragment.append(metric);
+      });
+      metricsNode.replaceChildren(fragment);
+    }
+
+    function renderTaskList() {
+      const visible = visibleTasks();
+      document.querySelector('[data-visible-count]').textContent = visible.length + ' 项';
+      document.querySelectorAll('[data-scope]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.scope === activeScope));
+      });
+
+      const fragment = document.createDocumentFragment();
+      visible.forEach((task) => {
+        const item = makeElement('li', [
+          task.id === selectedId ? 'is-current' : '',
+          task.status === '逾期' ? 'is-overdue' : ''
+        ].filter(Boolean).join(' '));
+        const button = makeElement('button', 'task-row');
+        button.type = 'button';
+        button.dataset.taskId = task.id;
+        button.setAttribute('aria-pressed', String(task.id === selectedId));
+        button.setAttribute('aria-label', task.code + ' ' + task.title + '，' + task.status + '，截止 ' + task.due + '，进度 ' + task.progress + '%');
+
+        const top = makeElement('span', 'task-row-top');
+        const state = makeElement('span', 'task-status ' + statusClass(task), task.status + ' · ' + task.priority);
+        top.append(makeElement('span', 'task-code', task.code), state);
+        const meta = makeElement('small', 'task-row-meta');
+        meta.append(makeElement('span', 'task-due', task.due), makeElement('span', '', '· ' + task.progress + '%'));
+        const progress = makeElement('span', 'progress-track');
+        progress.setAttribute('aria-hidden', 'true');
+        const progressValue = makeElement('span');
+        progressValue.style.width = task.progress + '%';
+        progress.append(progressValue);
+        button.append(top, makeElement('strong', '', task.title), meta, progress);
+        item.append(button);
+        fragment.append(item);
+      });
+      taskListNode.replaceChildren(fragment);
+    }
+
+    function renderFan() {
+      const visible = visibleTasks();
+      const fragment = document.createDocumentFragment();
+      visible.forEach((task, index) => {
+        const selected = task.id === selectedId;
+        const card = makeElement('button', 'fan-card' + (selected ? ' is-selected' : ''));
+        card.type = 'button';
+        card.dataset.taskId = task.id;
+        card.setAttribute('aria-pressed', String(selected));
+        card.setAttribute('aria-label', task.code + ' ' + task.title + '，' + task.status + '，截止 ' + task.due + '，进度 ' + task.progress + '%');
+        card.style.setProperty('--index', index);
+        card.style.setProperty('--count', visible.length);
+        card.append(
+          makeElement('small', '', task.priority + '优先 · ' + task.code),
+          makeElement('h3', '', task.title),
+          makeElement('span', 'fan-meta', task.status),
+          makeElement('span', 'fan-due', '截止 ' + task.due),
+          makeElement('span', 'fan-progress', '进度 ' + task.progress + '%')
+        );
+        fragment.append(card);
+      });
+      fanStage.replaceChildren(fragment);
+    }
+
+    function renderDetails() {
+      const task = selectedTask();
+      if (!task) return;
+      document.querySelector('[data-detail-code]').textContent = task.code;
+      document.querySelector('[data-detail-title]').textContent = task.title;
+      document.querySelector('[data-detail-description]').textContent = task.description;
+      document.querySelector('[data-detail-owner]').textContent = task.owner;
+      document.querySelector('[data-detail-project]').textContent = task.project;
+      document.querySelector('[data-detail-priority]').textContent = task.priority;
+      document.querySelector('[data-detail-status]').textContent = task.status;
+      document.querySelector('[data-detail-due]').textContent = task.due;
+      document.querySelector('[data-detail-progress]').textContent = task.progress + '%';
+
+      const tagsNode = document.querySelector('[data-detail-tags]');
+      const tags = document.createDocumentFragment();
+      task.tags.forEach((tag) => tags.append(makeElement('span', 'tag', tag)));
+      tagsNode.replaceChildren(tags);
+
+      let adviceTitle = '按当前节奏继续推进';
+      let adviceText = '建议围绕下一验收点同步进度，并保持依赖与风险信息可见。';
+      if (task.status === '已完成') {
+        adviceTitle = '归档成果与复盘要点';
+        adviceText = '任务已完成。建议补充验收证据，并将可复用经验同步到项目知识库。';
+      } else if (task.status === '逾期') {
+        adviceTitle = '先解除阻塞并重排截止时间';
+        adviceText = '当前任务已逾期。建议确认阻塞责任人、恢复路径和新的可承诺时间。';
+      } else if (task.priority === '高') {
+        adviceTitle = '优先锁定关键验收点';
+        adviceText = '这是高优先级任务。建议先确认验收证据与依赖边界，再集中推进剩余工作。';
+      }
+      document.querySelector('[data-advice-title]').textContent = adviceTitle;
+      document.querySelector('[data-advice-text]').textContent = adviceText;
+
+      const completeButton = document.querySelector('[data-action="complete"]');
+      completeButton.disabled = task.status === '已完成';
+      completeButton.textContent = task.status === '已完成' ? '已完成' : '标记完成';
+    }
+
+    function renderTimeline() {
+      const rangeConfig = {
+        week: { label: '本周', limit: 4, density: 'compact' },
+        month: { label: '本月', limit: 5, density: 'regular' },
+        quarter: { label: '本季度', limit: 6, density: 'dense' }
+      };
+      const config = rangeConfig[activeRange];
+      const entries = visibleTasks()
+        .slice()
+        .sort((a, b) => a.due.localeCompare(b.due))
+        .slice(0, config.limit);
+      document.querySelector('[data-range-label]').textContent = config.label + ' · ' + entries.length + ' 个节点';
+      document.querySelectorAll('[data-range]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.range === activeRange));
+      });
+      timelineNode.style.setProperty('--timeline-count', Math.max(entries.length, 1));
+      timelineNode.dataset.density = config.density;
+
+      const fragment = document.createDocumentFragment();
+      entries.forEach((task, index) => {
+        const item = makeElement('li', [
+          task.id === selectedId ? 'is-active' : '',
+          index === 0 ? 'is-today' : ''
+        ].filter(Boolean).join(' '));
+        const date = task.due.slice(0, 10);
+        let label = date.slice(5).replace('-', '/');
+        if (activeRange === 'month') label = Number(date.slice(5, 7)) + ' 月 ' + Number(date.slice(8, 10)) + ' 日';
+        if (activeRange === 'quarter') label = date.slice(0, 4) + ' Q' + (Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1) + ' · ' + date.slice(5).replace('-', '/');
+        const time = makeElement('time', '', label);
+        time.dateTime = date;
+        item.append(time, document.createTextNode(task.title + ' · ' + task.status));
+        fragment.append(item);
+      });
+      timelineNode.replaceChildren(fragment);
+    }
+
+    function renderAll() {
+      renderMetrics();
+      renderTaskList();
+      renderFan();
+      renderDetails();
+      renderTimeline();
+    }
+
+    function showToast(message) {
+      window.clearTimeout(toastTimer);
+      toastNode.textContent = message;
+      toastNode.hidden = false;
+      toastTimer = window.setTimeout(() => {
+        toastNode.hidden = true;
+      }, 2400);
+    }
+
+    document.addEventListener('click', (event) => {
+      const actionButton = event.target.closest('[data-action]');
+      if (actionButton) {
+        const task = selectedTask();
+        if (actionButton.dataset.action === 'new') showToast('演示模式：新建任务功能未连接后端。');
+        if (actionButton.dataset.action === 'edit' && task) showToast('演示模式：可编辑“' + task.title + '”。');
+        if (actionButton.dataset.action === 'complete' && task) {
+          if (task.status === '已完成') {
+            showToast('该任务已经完成。');
+          } else {
+            task.status = '已完成';
+            task.progress = 100;
+            renderAll();
+            showToast('已将“' + task.title + '”标记为完成。');
+          }
+        }
+        return;
+      }
+
+      const scopeButton = event.target.closest('[data-scope]');
+      if (scopeButton) {
+        activeScope = scopeButton.dataset.scope;
+        const nextVisible = visibleTasks();
+        if (!nextVisible.some((task) => task.id === selectedId)) selectedId = nextVisible[0].id;
+        renderAll();
+        return;
+      }
+
+      const rangeButton = event.target.closest('[data-range]');
+      if (rangeButton) {
+        activeRange = rangeButton.dataset.range;
+        renderTimeline();
+        return;
+      }
+
+      const taskButton = event.target.closest('[data-task-id]');
+      if (taskButton) {
+        selectedId = taskButton.dataset.taskId;
+        renderTaskList();
+        renderFan();
+        renderDetails();
+        renderTimeline();
+      }
+    });
+
+    function resetFanTilt() {
+      fanStage.style.setProperty('--tilt-x', '0deg');
+      fanStage.style.setProperty('--tilt-y', '0deg');
+    }
+
+    function handleFanPointerMove(event) {
+      const rect = fanStage.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) - .5;
+      const y = ((event.clientY - rect.top) / rect.height) - .5;
+      fanStage.style.setProperty('--tilt-x', (x * 2.4).toFixed(2) + 'deg');
+      fanStage.style.setProperty('--tilt-y', (y * -2.4).toFixed(2) + 'deg');
+    }
+
+    function syncFanMotion() {
+      fanStage.removeEventListener('pointermove', handleFanPointerMove);
+      resetFanTilt();
+      if (!reducedMotionQuery || !reducedMotionQuery.matches) {
+        fanStage.addEventListener('pointermove', handleFanPointerMove);
+      }
+    }
+
+    fanStage.addEventListener('pointerleave', resetFanTilt);
+    if (reducedMotionQuery && typeof reducedMotionQuery.addEventListener === 'function') {
+      reducedMotionQuery.addEventListener('change', syncFanMotion);
+    }
+    syncFanMotion();
+    renderAll();
+  </script>
 </body>
 </html>
