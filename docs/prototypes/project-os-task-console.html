@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>Project OS · 任务管理视觉原型</title>
   <style>
     :root {
@@ -1061,7 +1062,8 @@
       .workspace { padding-inline: 20px; }
       .task-stage { grid-template-columns: minmax(0, 1fr); }
       .task-fan { min-height: 340px; }
-      .fan-card { width: clamp(174px, 45%, 218px); }
+      .fan-stack { --fan-gap: 80px; }
+      .fan-card { width: 136px; }
     }
 
     @media (max-width: 1179px) {
@@ -1425,7 +1427,8 @@
 
       if (activeRange === 'week') {
         start = new Date(reference);
-        end = new Date(reference);
+        start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+        end = new Date(start);
         end.setUTCDate(end.getUTCDate() + 6);
         label = '本周 ' + formatDateOnly(start).slice(5).replace('-', '/') + '–' + formatDateOnly(end).slice(5).replace('-', '/');
         density = 'compact';
