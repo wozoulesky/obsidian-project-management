@@ -13,6 +13,10 @@ import {
   LoadingState,
   RefreshState,
 } from '../../components/data/DataState'
+import { MetricGrid } from '../../components/layout/MetricGrid'
+import { PageHeader } from '../../components/layout/PageHeader'
+import { GlassPanel } from '../../components/ui/GlassPanel'
+import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import type { Task } from '../../data/domain'
 import {
   useGanttTasks,
@@ -30,6 +34,7 @@ import {
   type GanttRange,
   type GanttVisibleRow,
 } from './GanttTimeline'
+import './gantt-glass.css'
 
 const AS_OF = '2026-07-28'
 const ROW_HEIGHT = '2.75rem'
@@ -41,11 +46,19 @@ const FALLBACK_VISIBLE_ROWS = Math.ceil(
   FALLBACK_VIEWPORT_HEIGHT / ROW_HEIGHT_PX,
 )
 const EMPTY_TASKS: Task[] = []
-const scaleLabels = {
-  day: '日',
-  week: '周',
-  month: '月',
-} as const satisfies Record<GanttScale, string>
+const rangeOptions = [
+  { label: '周', value: 'week' },
+  { label: '月', value: 'month' },
+  { label: '季度', value: 'quarter' },
+] as const
+
+type GanttRangeMode = (typeof rangeOptions)[number]['value']
+
+const scaleByRange = {
+  week: 'week',
+  month: 'week',
+  quarter: 'month',
+} as const satisfies Record<GanttRangeMode, GanttScale>
 
 interface PendingProposal extends GanttTaskDates {
   kind: DateProposalKind
@@ -74,16 +87,16 @@ function monthOffset(date: string, offset: number): string {
 
 function ganttRange(
   tasks: readonly Task[],
-  scale: GanttScale,
+  rangeMode: GanttRangeMode,
   asOf = AS_OF,
 ): GanttRange {
-  if (scale === 'day') {
+  if (rangeMode === 'month') {
     return {
       start: shiftDate(asOf, -3) ?? asOf,
-      end: shiftDate(asOf, 11) ?? asOf,
+      end: shiftDate(asOf, 31) ?? asOf,
     }
   }
-  if (scale === 'month') {
+  if (rangeMode === 'quarter') {
     return {
       start: monthOffset(asOf, -1),
       end: monthOffset(asOf, 4),
@@ -96,6 +109,27 @@ function ganttRange(
     start: shiftDate(first, -7) ?? first,
     end: shiftDate(last, 7) ?? last,
   }
+}
+
+function ganttMetrics(tasks: readonly Task[]) {
+  return [
+    { key: 'planned', label: '计划任务', value: tasks.length },
+    {
+      key: 'active',
+      label: '进行中',
+      value: tasks.filter((task) => task.status === 'in_progress').length,
+    },
+    {
+      key: 'done',
+      label: '已完成',
+      value: tasks.filter((task) => task.status === 'done').length,
+    },
+    {
+      key: 'overdue',
+      label: '逾期',
+      value: tasks.filter((task) => task.status === 'overdue').length,
+    },
+  ]
 }
 
 function groupRows(
@@ -198,7 +232,7 @@ function GanttTaskInspector({
 export function GanttPage() {
   const tasksQuery = useGanttTasks()
   const updateDates = useUpdateTaskDates()
-  const [scale, setScale] = useState<GanttScale>('week')
+  const [rangeMode, setRangeMode] = useState<GanttRangeMode>('week')
   const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(
     () => new Set(),
   )
@@ -221,7 +255,12 @@ export function GanttPage() {
     () => groupRows(tasks, collapsedMilestones),
     [collapsedMilestones, tasks],
   )
-  const range = useMemo(() => ganttRange(tasks, scale), [scale, tasks])
+  const range = useMemo(
+    () => ganttRange(tasks, rangeMode),
+    [rangeMode, tasks],
+  )
+  const scale = scaleByRange[rangeMode]
+  const metrics = ganttMetrics(tasks)
   const shouldVirtualize = visibleRows.length > VIRTUALIZE_AFTER
   const windowStart = shouldVirtualize
     ? Math.min(rowWindow.start, Math.max(0, visibleRows.length - 1))
@@ -360,44 +399,67 @@ export function GanttPage() {
         isError={tasksQuery.isError}
         isFetching={tasksQuery.isFetching}
       />
-      <header className="gantt-page__header">
-        <div>
-          <p className="gantt-page__eyebrow">PLAN / DEPENDENCY</p>
-          <h1 id="gantt-page-heading" tabIndex={-1}>
-            项目排期
-          </h1>
-          <p data-testid="gantt-range">
-            {range.start}–{range.end}
-          </p>
-        </div>
-        <div className="gantt-page__controls">
-          <div aria-label="时间轴刻度" className="gantt-scale">
-            {(Object.keys(scaleLabels) as GanttScale[]).map((value) => (
-              <button
-                aria-pressed={scale === value}
-                key={value}
-                onClick={() => setScale(value)}
-                type="button"
-              >
-                {scaleLabels[value]}
-              </button>
-            ))}
+      <PageHeader
+        actions={(
+          <div className="gantt-page__controls">
+            <SegmentedControl
+              ariaLabel="甘特时间范围"
+              onChange={(value) => setRangeMode(value as GanttRangeMode)}
+              options={rangeOptions}
+              value={rangeMode}
+            />
+            <button
+              aria-expanded={!taskTreeCollapsed}
+              className="button button--ghost gantt-task-tree-toggle"
+              onClick={() => setTaskTreeCollapsed((current) => !current)}
+              type="button"
+            >
+              {taskTreeCollapsed ? '展开任务树' : '折叠任务树'}
+            </button>
           </div>
-          <button
-            aria-expanded={!taskTreeCollapsed}
-            className="button button--ghost gantt-task-tree-toggle"
-            onClick={() => setTaskTreeCollapsed((current) => !current)}
-            type="button"
+        )}
+        eyebrow="PLAN / DEPENDENCY"
+        subtitle={(
+          <span className="gantt-page__subtitle">
+            <span>校准任务范围、依赖、进度与截止风险</span>
+            <span data-testid="gantt-range">
+              {range.start}–{range.end}
+            </span>
+          </span>
+        )}
+        title={(
+          <span id="gantt-page-heading" tabIndex={-1}>
+            甘特排程
+          </span>
+        )}
+      />
+
+      <MetricGrid ariaLabel="甘特关键指标" className="gantt-metrics">
+        {metrics.map((metric) => (
+          <GlassPanel
+            as="div"
+            className={`gantt-metric gantt-metric--${metric.key}`}
+            data-metric={metric.label}
+            key={metric.key}
           >
-            {taskTreeCollapsed ? '展开任务树' : '折叠任务树'}
-          </button>
-        </div>
-      </header>
+            <span>{metric.label}</span>
+            <strong data-testid="gantt-metric-value">{metric.value}</strong>
+          </GlassPanel>
+        ))}
+      </MetricGrid>
+
+      <ul aria-label="排期状态图例" className="gantt-legend">
+        <li><span className="gantt-legend__swatch gantt-legend__swatch--active" />进行中</li>
+        <li><span className="gantt-legend__swatch gantt-legend__swatch--overdue" />逾期</li>
+        <li><span className="gantt-legend__swatch gantt-legend__swatch--done" />已完成</li>
+        <li><span className="gantt-legend__swatch gantt-legend__swatch--pending" />待开始</li>
+      </ul>
 
       {tasks.length === 0 ? (
         <EmptyState title="当前项目暂无排期任务" />
       ) : (
-        <div className="gantt-page__workspace data-grid-with-inspector">
+        <GlassPanel ariaLabel="甘特排程工作区" className="gantt-stage">
+          <div className="gantt-page__workspace data-grid-with-inspector">
           <div
             aria-label="甘特图排期滚动区域"
             className="gantt-scroll-region"
@@ -546,7 +608,8 @@ export function GanttPage() {
               task={selectedTask}
             />
           ) : null}
-        </div>
+          </div>
+        </GlassPanel>
       )}
 
       {proposal && proposalTask ? (

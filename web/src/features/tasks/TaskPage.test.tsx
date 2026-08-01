@@ -24,6 +24,7 @@ import { filterTasks } from './TaskFilters'
 import { TaskInspector } from './TaskInspector'
 import { TaskPage } from './TaskPage'
 import { TaskTable } from './TaskTable'
+import tasksGlassCss from './tasks-glass.css?raw'
 
 const fixtureTasks = createFixtureSeed().tasks
 
@@ -129,6 +130,104 @@ describe('filterTasks', () => {
 })
 
 describe('TaskPage workflow', () => {
+  it('uses the shared glass header and derives four metrics from task data', async () => {
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({
+        id: 'today',
+        code: 'TASK-TODAY',
+        title: '今日交付',
+        dueDate: '2026-07-28',
+        status: 'not_started',
+        progress: 0,
+      }),
+      task({
+        id: 'active',
+        code: 'TASK-ACTIVE',
+        title: '持续推进',
+        dueDate: '2026-07-30',
+      }),
+      task({
+        id: 'done',
+        code: 'TASK-DONE',
+        title: '完成交付',
+        status: 'done',
+        progress: 100,
+      }),
+      task({
+        id: 'overdue',
+        code: 'TASK-OVERDUE',
+        title: '风险任务',
+        status: 'overdue',
+      }),
+    ])
+    const { container } = renderApp(<TaskPage />)
+
+    expect(
+      await screen.findByRole('heading', { name: '任务控制台' }),
+    ).toBeVisible()
+    expect(container.querySelector('.page-header')).toBeInTheDocument()
+    const metrics = screen.getByRole('group', { name: '任务关键指标' })
+    expect(metrics).toHaveClass('metric-grid')
+    const values = Object.fromEntries(
+      Array.from(metrics.querySelectorAll<HTMLElement>('[data-metric]')).map(
+        (metric) => [
+          metric.dataset.metric,
+          within(metric).getByTestId('metric-value').textContent,
+        ],
+      ),
+    )
+    expect(values).toEqual({
+      今日待办: '1',
+      进行中: '1',
+      已完成: '1',
+      逾期: '1',
+    })
+    expect(metrics.querySelectorAll('.glass-panel')).toHaveLength(4)
+  })
+
+  it('keeps the complete filtered table beside the six-card fan', async () => {
+    renderApp(<TaskPage />)
+
+    const fan = await screen.findByRole('region', { name: '任务扇面' })
+    expect(within(fan).getAllByRole('button')).toHaveLength(6)
+    expect(
+      screen.getByRole('button', { name: '查看 甘特图渲染' }),
+    ).toBeVisible()
+    expect(screen.getByRole('table', { name: '任务列表' })).toBeVisible()
+  })
+
+  it('links a fan selection through the URL, table, and inspector', async () => {
+    const user = userEvent.setup()
+    const { container } = renderApp(<TaskPage />, {
+      route: '/tasks?priority=P0&sort=due_desc',
+    })
+
+    const fanTrigger = await screen.findByRole('button', {
+      name: '选择 TASK-047 断线恢复测试',
+    })
+    await user.click(fanTrigger)
+
+    expect(window.location.search).toContain('priority=P0')
+    expect(window.location.search).toContain('sort=due_desc')
+    expect(window.location.search).toContain('selected=task-047')
+    expect(fanTrigger).toHaveAttribute('aria-pressed', 'true')
+    expect(container.querySelector('tr.is-selected')).toHaveTextContent(
+      '断线恢复测试',
+    )
+    expect(
+      screen.getByRole('dialog', { name: '断线恢复测试' }),
+    ).toBeVisible()
+  })
+
+  it('keeps page width bounded while signature regions own their scrolling', () => {
+    expect(tasksGlassCss).toMatch(
+      /\.task-page\s*{[^}]*overflow-x:\s*clip/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-fan__scroll,[^}]*\.delivery-timeline__scroll\s*{[^}]*overflow-x:\s*auto/s,
+    )
+  })
+
   it('uses shared loading, error with retry, and empty states', async () => {
     const user = userEvent.setup()
     vi.spyOn(projectRepository, 'listTasks').mockImplementationOnce(
@@ -305,7 +404,7 @@ describe('TaskPage workflow', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: '任务工作台' }),
+      screen.getByText('任务控制台'),
     ).toHaveFocus()
 
     await user.click(screen.getByRole('button', { name: '已延期' }))

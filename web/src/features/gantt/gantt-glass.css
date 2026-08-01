@@ -1,0 +1,201 @@
+.gantt-page {
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.gantt-page .page-header__title > span:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 0.3rem;
+}
+
+.gantt-page__subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.gantt-page__subtitle > span:last-child {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.gantt-page__controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.gantt-metric {
+  display: grid;
+  min-height: 7rem;
+  align-content: space-between;
+  padding: var(--space-4);
+}
+
+.gantt-metric > span {
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+}
+
+.gantt-metric > strong {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.gantt-metric--active > strong {
+  color: var(--primary);
+}
+
+.gantt-metric--overdue > strong {
+  color: var(--critical);
+}
+
+.gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  list-style: none;
+}
+
+.gantt-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.gantt-legend__swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  background: color-mix(in srgb, var(--text-secondary) 40%, transparent);
+  border: 1px solid var(--glass-line-bright);
+  border-radius: 999px;
+}
+
+.gantt-legend__swatch--active {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.gantt-legend__swatch--overdue {
+  background: var(--critical);
+  border-color: var(--critical);
+}
+
+.gantt-legend__swatch--done {
+  background: color-mix(in srgb, var(--text-primary) 72%, transparent);
+}
+
+.gantt-stage {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.gantt-stage .gantt-page__workspace {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: inherit;
+  box-shadow: none;
+}
+
+.gantt-stage .gantt-scroll-region {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.gantt-stage .gantt-layout,
+.gantt-stage .gantt-task-tree {
+  background: color-mix(in srgb, var(--glass-surface-raised) 88%, transparent);
+}
+
+.gantt-stage .gantt-task-tree__header,
+.gantt-stage .gantt-timeline__header {
+  background: color-mix(in srgb, var(--glass-surface-raised) 95%, transparent);
+  border-bottom-color: var(--glass-line);
+}
+
+.gantt-stage .gantt-task-bar--in_progress {
+  background: color-mix(in srgb, var(--primary) 16%, var(--glass-surface-raised));
+  border-color: color-mix(in srgb, var(--primary) 62%, var(--glass-line));
+}
+
+.gantt-stage .gantt-task-bar--in_progress .gantt-task-bar__progress {
+  background: color-mix(in srgb, var(--primary) 44%, transparent);
+  border-right-color: color-mix(in srgb, var(--primary) 72%, transparent);
+}
+
+.gantt-stage .gantt-task-bar--overdue {
+  background: color-mix(in srgb, var(--critical) 14%, var(--glass-surface-raised));
+  border-color: color-mix(in srgb, var(--critical) 68%, var(--glass-line));
+}
+
+.gantt-stage .gantt-task-bar--done {
+  background: color-mix(in srgb, var(--text-primary) 9%, var(--glass-surface-raised));
+  border-color: color-mix(in srgb, var(--text-primary) 36%, var(--glass-line));
+}
+
+.gantt-stage .gantt-task-bar--done .gantt-task-bar__progress {
+  background: color-mix(in srgb, var(--text-primary) 26%, transparent);
+  border-right-color: color-mix(in srgb, var(--text-primary) 38%, transparent);
+}
+
+.gantt-stage .gantt-task-bar--not_started {
+  background: color-mix(in srgb, var(--text-secondary) 8%, var(--glass-surface-raised));
+  border-color: var(--glass-line-bright);
+}
+
+.gantt-stage .gantt-task-bar--not_started .gantt-task-bar__progress {
+  background: color-mix(in srgb, var(--text-secondary) 16%, transparent);
+  border-right-color: var(--glass-line);
+}
+
+.gantt-stage .gantt-dependencies path {
+  stroke: color-mix(in srgb, var(--text-primary) 48%, transparent);
+}
+
+.gantt-stage .gantt-dependencies path.is-risk {
+  stroke: var(--critical);
+}
+
+.gantt-stage .gantt-timeline__today {
+  background: var(--primary);
+  box-shadow: 0 0 0.8rem color-mix(in srgb, var(--primary) 34%, transparent);
+}
+
+.gantt-stage .gantt-timeline__today::before {
+  background: var(--primary);
+}
+
+@media (width < 48rem) {
+  .gantt-page {
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .gantt-page__controls,
+  .gantt-page .page-header__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .gantt-metric {
+    min-height: 6.5rem;
+  }
+
+  .gantt-stage {
+    max-width: 100%;
+  }
+}

@@ -67,6 +67,63 @@ function mockTasks(tasks: Task[] = ganttTasks) {
 }
 
 describe('GanttPage layout', () => {
+  it('uses the shared glass header, real metrics, legend, and local stage', async () => {
+    mockTasks([
+      task(),
+      task({ id: 'done', code: 'DONE', title: '完成任务', status: 'done' }),
+      task({
+        id: 'overdue',
+        code: 'OVERDUE',
+        title: '逾期任务',
+        status: 'overdue',
+      }),
+      task({
+        id: 'pending',
+        code: 'PENDING',
+        title: '待开始任务',
+        status: 'not_started',
+      }),
+    ])
+    const { container } = renderApp(<GanttPage />)
+
+    expect(
+      await screen.findByRole('heading', { name: '甘特排程' }),
+    ).toBeVisible()
+    expect(container.querySelector('.page-header')).toBeInTheDocument()
+    const metrics = screen.getByRole('group', { name: '甘特关键指标' })
+    const values = Object.fromEntries(
+      Array.from(metrics.querySelectorAll<HTMLElement>('[data-metric]')).map(
+        (metric) => [
+          metric.dataset.metric,
+          within(metric).getByTestId('gantt-metric-value').textContent,
+        ],
+      ),
+    )
+    expect(values).toEqual({
+      计划任务: '4',
+      进行中: '1',
+      已完成: '1',
+      逾期: '1',
+    })
+    expect(metrics.querySelectorAll('.glass-panel')).toHaveLength(4)
+    expect(
+      screen.getByRole('list', { name: '排期状态图例' }),
+    ).toHaveTextContent('进行中逾期已完成待开始')
+    const stage = screen.getByRole('region', { name: '甘特排程工作区' })
+    expect(stage).toHaveClass('glass-panel', 'gantt-stage')
+    expect(
+      within(stage).getByLabelText('甘特图排期滚动区域'),
+    ).toHaveClass('gantt-scroll-region')
+    expect(container.querySelector('.gantt-task-bar--in_progress'))
+      .toBeInTheDocument()
+    expect(container.querySelector('.gantt-task-bar--overdue'))
+      .toBeInTheDocument()
+    expect(container.querySelector('.gantt-task-bar--done'))
+      .toBeInTheDocument()
+    expect(container.querySelector('.gantt-task-bar--not_started'))
+      .toBeInTheDocument()
+  })
+
   it('keeps 100-plus synchronized rows bounded and moves the window on scroll', async () => {
     const largeTasks = Array.from({ length: 240 }, (_, index) =>
       task({
@@ -235,7 +292,7 @@ describe('GanttPage layout', () => {
     expect(container.querySelectorAll('.gantt-timeline__rows [data-row-id]')).toHaveLength(3)
   })
 
-  it('changes tick density and visible range when the typed scale changes', async () => {
+  it('changes tick density and visible range with the shared range control', async () => {
     mockTasks()
     const user = userEvent.setup()
     const { container } = renderApp(<GanttPage />)
@@ -243,18 +300,21 @@ describe('GanttPage layout', () => {
     await screen.findByRole('button', { name: '查看 MCP 权限校验' })
     const weekTicks = container.querySelectorAll('.gantt-timeline__tick')
     const initialRange = screen.getByTestId('gantt-range').textContent
-    expect(screen.getByRole('button', { name: '周' })).toHaveAttribute(
+    const rangeControl = screen.getByRole('group', {
+      name: '甘特时间范围',
+    })
+    expect(within(rangeControl).getByRole('button', { name: '周' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
 
-    await user.click(screen.getByRole('button', { name: '日' }))
+    await user.click(within(rangeControl).getByRole('button', { name: '季度' }))
 
-    expect(screen.getByRole('button', { name: '日' })).toHaveAttribute(
+    expect(within(rangeControl).getByRole('button', { name: '季度' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-    expect(container.querySelectorAll('.gantt-timeline__tick').length).toBeGreaterThan(
+    expect(container.querySelectorAll('.gantt-timeline__tick').length).not.toBe(
       weekTicks.length,
     )
     expect(screen.getByTestId('gantt-range').textContent).not.toBe(initialRange)
@@ -312,7 +372,7 @@ describe('GanttPage layout', () => {
     renderApp(<GanttPage />)
 
     await screen.findByRole('button', { name: '查看 范围前任务' })
-    await user.click(screen.getByRole('button', { name: '日' }))
+    await user.click(screen.getByRole('button', { name: '月' }))
     const timeline = screen.getByRole('region', { name: '甘特时间轴' })
     expect(
       within(timeline).queryByRole('button', { name: '移动 范围前任务' }),
@@ -614,7 +674,7 @@ describe('Gantt route', () => {
     renderApp(<AppRoutes />, { route: '/gantt' })
 
     expect(
-      await screen.findByRole('heading', { name: '项目排期' }),
+      await screen.findByRole('heading', { name: '甘特排程' }),
     ).toBeInTheDocument()
   })
 })
