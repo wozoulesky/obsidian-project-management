@@ -1,37 +1,68 @@
+import { useState } from 'react'
+
+import { PageHeader } from '../../components/layout/PageHeader'
+import { GlassPanel } from '../../components/ui/GlassPanel'
 import { AppearanceSettings } from './AppearanceSettings'
 import { DataSettings } from './DataSettings'
+import { GeneralSettings } from './GeneralSettings'
 import { McpSettings } from './McpSettings'
+import {
+  SettingsCategoryNav,
+} from './SettingsCategoryNav'
+import {
+  settingsCategories,
+  type SettingsCategoryId,
+} from './settings-categories'
 import { SkillSettings } from './SkillSettings'
+import './settings-glass.css'
+
+function SettingsCategoryContent({ category }: {
+  category: SettingsCategoryId
+}) {
+  if (category === 'appearance') return <AppearanceSettings />
+  if (category === 'data') {
+    return (
+      <div className="settings-category-stack">
+        <GeneralSettings />
+        <DataSettings />
+      </div>
+    )
+  }
+  if (category === 'mcp') return <McpSettings />
+  return <SkillSettings />
+}
 
 export function SettingsPage() {
+  const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>(
+    'appearance',
+  )
+  const activeLabel = settingsCategories.find(
+    (category) => category.id === activeCategory,
+  )?.label ?? '外观'
+
   return (
     <section aria-labelledby="settings-page-title" className="settings-page">
-      <header className="settings-page__header">
-        <div>
-          <p className="route-shell__eyebrow">SETTINGS</p>
-          <h1 id="settings-page-title">设置</h1>
-        </div>
-        <p>管理本机外观、数据安全和 Agent 连接。所有敏感令牌只显示一次。</p>
-      </header>
+      <PageHeader
+        eyebrow="SETTINGS"
+        subtitle="管理本机外观、数据安全和 Agent 连接。所有敏感令牌只显示一次。"
+        title={<span id="settings-page-title">设置中心</span>}
+      />
 
-      <div className="settings-page__grid">
-        <AppearanceSettings />
-        <section
-          aria-labelledby="general-settings-title"
-          className="settings-card"
+      <div className="settings-page__workspace">
+        <SettingsCategoryNav
+          activeCategory={activeCategory}
+          onChange={setActiveCategory}
+        />
+        <GlassPanel
+          ariaLabel={`${activeLabel}设置`}
+          aria-labelledby={`settings-tab-${activeCategory}`}
+          className="settings-page__panel"
+          id={`settings-panel-${activeCategory}`}
+          role="tabpanel"
+          tabIndex={0}
         >
-          <header>
-            <h2 id="general-settings-title">常规</h2>
-            <p>当前工作区通过本机服务运行，设置会同步到 SQLite。</p>
-          </header>
-          <dl className="settings-facts">
-            <div><dt>运行模式</dt><dd>本地优先</dd></div>
-            <div><dt>保存策略</dt><dd>显式保存并校验版本</dd></div>
-          </dl>
-        </section>
-        <DataSettings />
-        <McpSettings />
-        <SkillSettings />
+          <SettingsCategoryContent category={activeCategory} />
+        </GlassPanel>
       </div>
     </section>
   )

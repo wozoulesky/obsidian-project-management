@@ -85,28 +85,54 @@ afterEach(() => {
 })
 
 describe('RequirementPage lifecycle board', () => {
-  it('groups the default board and keeps draft and accepted in compact summaries', async () => {
+  it('renders the real five-stage pipeline with static endpoints', async () => {
     renderApp(<RequirementPage />)
 
+    expect(await screen.findByRole('heading', { name: '需求管线' }))
+      .toBeVisible()
+    const draft = screen.getByRole('region', { name: '收集需求' })
     const reviewed = await screen.findByRole('region', {
-      name: '已评审需求',
+      name: '评审需求',
     })
     const developing = screen.getByRole('region', { name: '开发中需求' })
     const delivered = screen.getByRole('region', { name: '已交付需求' })
+    const accepted = screen.getByRole('region', { name: '已验收需求' })
 
-    expect(within(reviewed).getByRole('heading', { name: '已评审' }))
+    expect(within(draft).getByRole('heading', { name: '收集' }))
+      .toHaveTextContent('2')
+    expect(within(reviewed).getByRole('heading', { name: '评审' }))
       .toHaveTextContent('3')
     expect(within(developing).getByRole('heading', { name: '开发中' }))
       .toHaveTextContent('1')
     expect(within(delivered).getByRole('heading', { name: '已交付' }))
       .toHaveTextContent('7')
-    expect(screen.getByText('草稿 2')).toBeVisible()
-    expect(screen.getByText('已验收 7')).toBeVisible()
+    expect(within(accepted).getByRole('heading', { name: '已验收' }))
+      .toHaveTextContent('7')
     expect(
       screen.getByRole('button', { name: '查看 Agent 身份注册' }),
     ).toBeVisible()
-    expect(screen.queryByText('项目能力需求 02')).not.toBeInTheDocument()
-    expect(screen.queryByText('项目能力需求 15')).not.toBeInTheDocument()
+    expect(within(draft).getByText('项目能力需求 15')).toBeVisible()
+    expect(within(accepted).getByText('项目能力需求 02')).toBeVisible()
+    expect(within(draft).queryByRole('button', { name: /^拖动 / }))
+      .not.toBeInTheDocument()
+    expect(within(accepted).queryByRole('button', { name: /^拖动 / }))
+      .not.toBeInTheDocument()
+    expect(within(reviewed).getAllByRole('button', { name: /^拖动 / }))
+      .toHaveLength(3)
+  })
+
+  it('shows metrics derived from the current requirement query', async () => {
+    renderApp(<RequirementPage />)
+
+    const metrics = await screen.findByRole('group', {
+      name: '需求管线指标',
+    })
+    expect(within(metrics).getByText('需求总数').nextElementSibling)
+      .toHaveTextContent('20')
+    expect(within(metrics).getByText('开发中').nextElementSibling)
+      .toHaveTextContent('1')
+    expect(within(metrics).getByText('已验收').nextElementSibling)
+      .toHaveTextContent('7')
   })
 
   it('shows complete card identity and linked-task progress', async () => {
@@ -406,8 +432,7 @@ describe('RequirementPage lifecycle board', () => {
     )
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '需求生命周期' }))
-      .toHaveFocus()
+    expect(document.getElementById('requirement-page-heading')).toHaveFocus()
   })
 
   it('restores focus to the stable card trigger when the inspector closes', async () => {
@@ -430,7 +455,7 @@ describe('RequirementPage lifecycle board', () => {
     renderApp(<AppRoutes />, { route: '/requirements' })
 
     expect(await screen.findByRole('heading', {
-      name: '需求生命周期',
+      name: '需求管线',
     })).toBeVisible()
     expect(screen.getByRole('region', { name: '开发中需求' })).toBeVisible()
   })
@@ -487,7 +512,7 @@ describe('RequirementPage query and terminal states', () => {
     const user = userEvent.setup()
     renderApp(<RequirementPage />)
 
-    await screen.findByRole('heading', { name: '需求生命周期' })
+    await screen.findByRole('heading', { name: '需求管线' })
     expect(screen.queryByText('被拒绝的需求')).not.toBeInTheDocument()
     expect(screen.queryByText('已搁置的需求')).not.toBeInTheDocument()
 

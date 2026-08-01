@@ -8,10 +8,12 @@ import {
   LoadingState,
   RefreshState,
 } from '../../components/data/DataState'
+import { MetricGrid } from '../../components/layout/MetricGrid'
+import { PageHeader } from '../../components/layout/PageHeader'
+import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import type {
   Defect,
   DefectStatus,
-  Severity,
   Task,
 } from '../../data/domain'
 import {
@@ -20,42 +22,22 @@ import {
   useRequirements,
   useTasks,
 } from '../../data/query-hooks'
+import {
+  DefectMatrix,
+} from './DefectMatrix'
+import {
+  severityLabels,
+  severityOrder,
+  statusLabels,
+  statusOrder,
+} from './defect-matrix-config'
+import './defects-glass.css'
 
-const severityOrder = [
-  'fatal',
-  'serious',
-  'normal',
-  'suggestion',
-] as const satisfies readonly Severity[]
-const statusOrder = [
-  'open',
-  'fixing',
-  'verifying',
-  'closed',
-  'rejected',
-  'not_a_defect',
-] as const satisfies readonly DefectStatus[]
 const terminalStatuses = new Set<DefectStatus>([
   'closed',
   'rejected',
   'not_a_defect',
 ])
-
-const severityLabels: Record<Severity, string> = {
-  fatal: '致命',
-  serious: '严重',
-  normal: '一般',
-  suggestion: '建议',
-}
-
-const statusLabels: Record<DefectStatus, string> = {
-  open: '待处理',
-  fixing: '修复中',
-  verifying: '验证中',
-  closed: '已关闭',
-  rejected: '已驳回',
-  not_a_defect: '非缺陷',
-}
 
 function enumRank<T extends string>(order: readonly T[], value: T): number {
   const rank = order.indexOf(value)
@@ -417,119 +399,70 @@ export function DefectPage() {
           </button>
         </div>
       ) : null}
-      <header className="defect-page__header">
-        <div>
-          <p className="defect-page__eyebrow">QUALITY / RISK</p>
-          <h1 id="defect-page-heading" tabIndex={-1}>
-            缺陷风险队列
-          </h1>
-        </div>
-        <div className="defect-page__scope" aria-label="缺陷范围">
-          <button
-            aria-pressed={scope === 'all'}
-            onClick={() => setScope('all')}
-            type="button"
-          >
-            全部缺陷
-          </button>
-          <button
-            aria-pressed={scope === 'active'}
-            onClick={() => {
-              setScope('active')
+      <PageHeader
+        actions={(
+          <SegmentedControl
+            ariaLabel="缺陷范围"
+            onChange={(value) => {
+              const nextScope = value as 'all' | 'active'
+              setScope(nextScope)
               if (
+                nextScope === 'active' &&
                 selectedDefect &&
                 terminalStatuses.has(selectedDefect.status)
               ) {
                 setSelectedDefectId(null)
               }
             }}
-            type="button"
-          >
-            活跃缺陷
-          </button>
-        </div>
-      </header>
+            options={[
+              { label: '全部缺陷', value: 'all' },
+              { label: '活跃缺陷', value: 'active' },
+            ]}
+            value={scope}
+          />
+        )}
+        eyebrow="QUALITY / RISK"
+        subtitle="按真实严重度与处置状态交叉定位缺陷，选择卡片进入现有分诊流程。"
+        title={(
+          <span id="defect-page-heading" tabIndex={-1}>缺陷矩阵</span>
+        )}
+      />
 
-      <dl className="defect-summary">
-        <div>
-          <dt>致命/严重</dt>
-          <dd>{summary.severe}</dd>
-        </div>
-        <div>
-          <dt>待处理</dt>
-          <dd>{summary.open}</dd>
-        </div>
-        <div>
-          <dt>修复中</dt>
-          <dd>{summary.fixing}</dd>
-        </div>
-        <div>
-          <dt>验证中</dt>
-          <dd>{summary.verifying}</dd>
-        </div>
-      </dl>
+      <MetricGrid ariaLabel="缺陷矩阵指标" className="defect-summary">
+        <article className="metric-card">
+          <span className="metric-card__label">致命/严重</span>
+          <strong className="metric-value">{summary.severe}</strong>
+        </article>
+        <article className="metric-card">
+          <span className="metric-card__label">待处理</span>
+          <strong className="metric-value">{summary.open}</strong>
+        </article>
+        <article className="metric-card">
+          <span className="metric-card__label">修复中</span>
+          <strong className="metric-value">{summary.fixing}</strong>
+        </article>
+        <article className="metric-card">
+          <span className="metric-card__label">验证中</span>
+          <strong className="metric-value">{summary.verifying}</strong>
+        </article>
+      </MetricGrid>
 
       <div className="defect-page__workspace data-grid-with-inspector">
-        <div className="defect-table data-grid">
+        <div className="defect-page__matrix">
           {allDefects.length === 0 ? (
             <EmptyState title="当前项目暂无缺陷" />
           ) : visibleDefects.length === 0 ? (
             <p className="defect-page__empty">当前范围暂无缺陷</p>
           ) : (
-            <table aria-label="缺陷风险队列">
-              <thead>
-                <tr>
-                  <th scope="col">缺陷</th>
-                  <th scope="col">严重度</th>
-                  <th scope="col">状态</th>
-                  <th scope="col">负责人</th>
-                  <th scope="col">更新时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleDefects.map((defect) => (
-                  <tr
-                    className={
-                      defect.id === selectedDefectId ? 'is-selected' : undefined
-                    }
-                    key={defect.id}
-                  >
-                    <td>
-                      <button
-                        aria-controls={`defect-inspector-${defect.id}`}
-                        aria-expanded={defect.id === selectedDefectId}
-                        aria-label={`查看 ${defect.title}`}
-                        className="defect-table__view"
-                        id={`defect-trigger-${defect.id}`}
-                        onClick={() =>
-                          setSelectedDefectId((current) =>
-                            current === defect.id ? null : defect.id,
-                          )
-                        }
-                        type="button"
-                      >
-                        <small>{defect.code}</small>
-                        <span>查看 {defect.title}</span>
-                      </button>
-                    </td>
-                    <td>
-                      <span
-                        className={`defect-severity defect-severity--${defect.severity}`}
-                      >
-                        {severityLabels[defect.severity] ?? '未知'}
-                      </span>
-                    </td>
-                    <td>{statusLabels[defect.status] ?? '未知'}</td>
-                    <td>{defect.assignee.name}</td>
-                    <td>
-                      <time dateTime={defect.updatedAt}>
-                        {formatUpdatedAt(defect.updatedAt)}
-                      </time>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DefectMatrix
+              defects={visibleDefects}
+              onSelect={(defectId) =>
+                setSelectedDefectId((current) =>
+                  current === defectId ? null : defectId,
+                )
+              }
+              selectedDefectId={selectedDefectId}
+            />
           )}
         </div>
 

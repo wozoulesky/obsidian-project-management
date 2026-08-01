@@ -136,24 +136,65 @@ describe('sortDefects', () => {
 })
 
 describe('DefectPage workflow', () => {
-  it('renders the fatal risk first in a semantic five-column queue', async () => {
+  it('renders a semantic severity by status matrix from real defect fields', async () => {
     renderApp(<AppRoutes />, { route: '/defects' })
 
-    const table = await screen.findByRole('table', { name: '缺陷风险队列' })
-    expect(within(table).getAllByRole('columnheader').map((cell) => cell.textContent))
-      .toEqual(['缺陷', '严重度', '状态', '负责人', '更新时间'])
+    expect(await screen.findByRole('heading', { name: '缺陷矩阵' }))
+      .toBeVisible()
+    const matrix = screen.getByRole('table', {
+      name: '缺陷严重度与状态矩阵',
+    })
+    expect(within(matrix).getAllByRole('columnheader').map((cell) => cell.textContent))
+      .toEqual([
+        '严重度 / 状态',
+        '待处理',
+        '修复中',
+        '验证中',
+        '已关闭',
+        '已驳回',
+        '非缺陷',
+      ])
+    expect(within(matrix).getAllByRole('rowheader').map((cell) => cell.textContent))
+      .toEqual(['致命', '严重', '一般', '建议'])
+    const fatalOpen = within(matrix).getByRole('cell', {
+      name: '致命 · 待处理',
+    })
+    expect(within(fatalOpen).getByRole('button', {
+      name: '查看 离线恢复失败',
+    })).toBeVisible()
+  })
 
-    const firstDataRow = within(table).getAllByRole('row')[1]!
-    expect(firstDataRow).toHaveTextContent('离线恢复失败')
-    expect(firstDataRow).toHaveTextContent('致命')
-    expect(firstDataRow).not.toHaveClass('is-fatal')
+  it('uses severity tones and synchronizes matrix selection with the inspector', async () => {
+    const user = userEvent.setup()
+    renderApp(<AppRoutes />, { route: '/defects' })
+
+    const fatal = await screen.findByRole('button', {
+      name: '查看 离线恢复失败',
+    })
+    const serious = screen.getByRole('button', {
+      name: '查看 待处理缺陷 1',
+    })
+    const normal = screen.getByRole('button', {
+      name: '查看 甘特图标签截断',
+    })
+    const suggestion = screen.getByRole('button', {
+      name: '查看 待处理缺陷 2',
+    })
+    expect(fatal).toHaveClass('defect-matrix__card--critical')
+    expect(serious).toHaveClass('defect-matrix__card--critical')
+    expect(normal).toHaveClass('defect-matrix__card--warning')
+    expect(suggestion).toHaveClass('defect-matrix__card--silver')
+
+    await user.click(fatal)
+    expect(fatal).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('dialog', { name: '离线恢复失败' })).toBeVisible()
   })
 
   it('shows compact status summaries and explicit all/active scope', async () => {
     const user = userEvent.setup()
     renderApp(<AppRoutes />, { route: '/defects' })
 
-    await screen.findByRole('table', { name: '缺陷风险队列' })
+    await screen.findByRole('table', { name: '缺陷严重度与状态矩阵' })
     const summary = document.querySelector('.defect-summary') as HTMLElement
     expect(within(summary).getByText('致命/严重')).toBeVisible()
     expect(within(summary).getByText('待处理')).toBeVisible()
@@ -183,7 +224,7 @@ describe('DefectPage workflow', () => {
     const user = userEvent.setup()
     renderApp(<AppRoutes />, { route: '/defects' })
 
-    await screen.findByRole('table', { name: '缺陷风险队列' })
+    await screen.findByRole('table', { name: '缺陷严重度与状态矩阵' })
     const summary = document.querySelector('.defect-summary') as HTMLElement
     const severeLabel = within(summary).getByText('致命/严重')
     expect(severeLabel.nextElementSibling).toHaveTextContent('3')
@@ -395,7 +436,7 @@ describe('DefectPage workflow', () => {
     renderApp(<AppRoutes />, { route: '/defects' })
 
     expect(
-      await screen.findByRole('table', { name: '缺陷风险队列' }),
+      await screen.findByRole('table', { name: '缺陷严重度与状态矩阵' }),
     ).toBeVisible()
     expect(
       screen.getByRole('status', { name: '正在加载关联工作' }),
@@ -419,7 +460,7 @@ describe('DefectPage workflow', () => {
     renderApp(<AppRoutes />, { route: '/defects' })
 
     expect(
-      await screen.findByRole('table', { name: '缺陷风险队列' }),
+      await screen.findByRole('table', { name: '缺陷严重度与状态矩阵' }),
     ).toBeVisible()
     expect(screen.getByText('关联任务数据库不可访问')).toBeVisible()
     expect(screen.getByText('关联需求数据库不可访问')).toBeVisible()
@@ -442,7 +483,7 @@ describe('DefectPage workflow', () => {
       await within(dialog).findByText('需求：暂无关联需求'),
     ).toBeVisible()
     expect(
-      screen.getByRole('table', { name: '缺陷风险队列' }),
+      screen.getByRole('table', { name: '缺陷严重度与状态矩阵' }),
     ).toBeVisible()
   })
 
@@ -464,7 +505,7 @@ describe('DefectPage workflow', () => {
     })
 
     expect(
-      await screen.findByRole('table', { name: '缺陷风险队列' }),
+      await screen.findByRole('table', { name: '缺陷严重度与状态矩阵' }),
     ).toBeVisible()
     const warning = await screen.findByRole('status', {
       name: '关联数据刷新失败',
@@ -494,7 +535,7 @@ describe('DefectPage workflow', () => {
     expect(listTasks).toHaveBeenCalledTimes(2)
     expect(listRequirements).toHaveBeenCalledTimes(2)
     expect(
-      screen.getByRole('table', { name: '缺陷风险队列' }),
+      screen.getByRole('table', { name: '缺陷严重度与状态矩阵' }),
     ).toBeVisible()
   })
 })

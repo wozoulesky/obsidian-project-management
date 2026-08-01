@@ -1,0 +1,78 @@
+.requirement-page {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.requirement-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.requirement-page__workspace,
+.requirement-page__content {
+  min-width: 0;
+}
+
+.requirement-page__content {
+  overflow: hidden;
+  background: var(--glass-surface);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--glass-panel-radius);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.requirement-page__board-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.requirement-page__board-scroll:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.requirement-board {
+  grid-template-columns: repeat(5, minmax(14rem, 1fr));
+  min-width: 74rem;
+  padding: var(--space-4);
+}
+
+.requirement-column {
+  background: color-mix(in srgb, var(--glass-surface-raised) 84%, transparent);
+  border-color: var(--glass-line);
+}
+
+.requirement-column:first-child,
+.requirement-column:last-child {
+  background: color-mix(in srgb, var(--glass-surface) 72%, transparent);
+}
+
+.requirement-card {
+  background: var(--glass-surface-raised);
+  border-color: var(--glass-line);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--rail) 9%, transparent);
+}
+
+@media (max-width: 44rem) {
+  .requirement-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .requirement-page__controls,
+  .requirement-page__controls label {
+    width: 100%;
+  }
+
+  .requirement-page__controls select {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .requirement-card {
+    transition: none;
+  }
+}

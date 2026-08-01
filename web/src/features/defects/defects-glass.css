@@ -1,0 +1,136 @@
+.defect-page {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.defect-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.defect-page__workspace,
+.defect-page__matrix {
+  min-width: 0;
+}
+
+.defect-page__matrix {
+  overflow: hidden;
+  background: var(--glass-surface);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--glass-panel-radius);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.defect-matrix-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.defect-matrix-scroll:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+.defect-matrix {
+  width: 100%;
+  min-width: 72rem;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.defect-matrix th,
+.defect-matrix td {
+  min-width: 10.5rem;
+  padding: var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  border-right: 1px solid var(--glass-line);
+  border-bottom: 1px solid var(--glass-line);
+}
+
+.defect-matrix th:first-child {
+  min-width: 8rem;
+}
+
+.defect-matrix thead th,
+.defect-matrix tbody th {
+  position: sticky;
+  z-index: 1;
+  background: var(--glass-surface-raised);
+}
+
+.defect-matrix thead th {
+  top: 0;
+}
+
+.defect-matrix tbody th {
+  left: 0;
+}
+
+.defect-matrix thead th:first-child {
+  left: 0;
+  z-index: 2;
+}
+
+.defect-matrix__cell-stack {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 4.5rem;
+}
+
+.defect-matrix__card {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3);
+  color: var(--text-primary);
+  text-align: left;
+  background: var(--glass-surface-raised);
+  border: 1px solid var(--glass-line);
+  border-left-width: 0.25rem;
+  border-radius: var(--glass-card-radius);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--rail) 8%, transparent);
+}
+
+.defect-matrix__card--critical {
+  border-left-color: var(--critical);
+}
+
+.defect-matrix__card--warning {
+  border-left-color: var(--warning);
+}
+
+.defect-matrix__card--silver {
+  border-left-color: color-mix(in srgb, var(--text-secondary) 58%, var(--border));
+}
+
+.defect-matrix__card[aria-pressed="true"] {
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+}
+
+.defect-matrix__card:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.defect-matrix__code,
+.defect-matrix__card small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 44rem) {
+  .defect-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .defect-matrix__card {
+    transition: none;
+  }
+}

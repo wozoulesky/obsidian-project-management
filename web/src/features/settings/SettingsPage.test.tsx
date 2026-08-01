@@ -19,13 +19,40 @@ describe('SettingsPage', () => {
     }
   })
 
-  it('renders all non-empty settings sections', async () => {
+  it('renders categories on the left and mounts only the selected form group', async () => {
+    const user = userEvent.setup()
     renderApp(<SettingsPage />)
 
-    for (const name of ['外观', '常规', '数据', 'MCP', 'Agent Skills']) {
-      const heading = await screen.findByRole('heading', { name })
-      expect(heading.closest('section')).toHaveTextContent(/\S/)
-    }
+    const navigation = await screen.findByRole('tablist', {
+      name: '设置分类',
+    })
+    expect(within(navigation).getAllByRole('tab').map((tab) => tab.textContent))
+      .toEqual(['外观', '数据', 'MCP', 'Skills'])
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(1)
+    expect(screen.getByRole('heading', { name: '外观' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: '数据' }))
+      .not.toBeInTheDocument()
+
+    await user.click(within(navigation).getByRole('tab', { name: '数据' }))
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(1)
+    expect(screen.getByRole('heading', { name: '常规' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: '数据' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: '外观' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('supports roving keyboard focus and activates the focused category', async () => {
+    const user = userEvent.setup()
+    renderApp(<SettingsPage />)
+
+    const appearance = await screen.findByRole('tab', { name: '外观' })
+    appearance.focus()
+    await user.keyboard('{ArrowDown}')
+
+    const data = screen.getByRole('tab', { name: '数据' })
+    expect(data).toHaveFocus()
+    expect(data).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: '数据' })).toBeVisible()
   })
 
   it('previews presets immediately and explicitly saves the current version', async () => {
@@ -85,6 +112,8 @@ describe('SettingsPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderApp(<SettingsPage />)
 
+    await user.click(await screen.findByRole('tab', { name: '数据' }))
+
     const dataSection = (await screen.findByRole('heading', { name: '数据' }))
       .closest('section')
     if (!dataSection) throw new Error('Expected data settings section')
@@ -112,6 +141,8 @@ describe('SettingsPage', () => {
     const user = userEvent.setup()
     renderApp(<SettingsPage />)
 
+    await user.click(await screen.findByRole('tab', { name: '数据' }))
+
     await user.upload(
       await screen.findByLabelText('选择要导入的 JSON 文件'),
       new File(['{}'], 'project-os.json', { type: 'application/json' }),
@@ -127,6 +158,11 @@ describe('SettingsPage', () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText')
       .mockResolvedValue()
     renderApp(<SettingsPage />)
+
+    await user.click(await screen.findByRole('tab', { name: 'MCP' }))
+
+    expect(screen.getByText('http://127.0.0.1:4310/mcp')).toBeVisible()
+    expect(screen.queryByText(/5173\/mcp/)).not.toBeInTheDocument()
 
     await user.type(await screen.findByLabelText('令牌名称'), 'local-codex')
     await user.click(screen.getByRole('button', { name: '签发令牌' }))
@@ -158,12 +194,12 @@ describe('SettingsPage', () => {
     }))
     renderApp(<SettingsPage />)
 
+    await user.click(await screen.findByRole('tab', { name: 'Skills' }))
+
     const skillSection = (await screen.findByRole('heading', {
       name: 'Agent Skills',
     })).closest('section')
     if (!skillSection) throw new Error('Expected Skill settings section')
-    expect(screen.getByText('http://127.0.0.1:4310/mcp')).toBeVisible()
-    expect(screen.queryByText(/5173\/mcp/)).not.toBeInTheDocument()
     await within(skillSection).findByText(
       'codex: server-generated stdio configuration',
     )
@@ -195,6 +231,8 @@ describe('SettingsPage', () => {
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => undefined)
     renderApp(<SettingsPage />)
+
+    await user.click(await screen.findByRole('tab', { name: 'Skills' }))
 
     const skillSection = (await screen.findByRole('heading', {
       name: 'Agent Skills',

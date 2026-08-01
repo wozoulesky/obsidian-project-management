@@ -1,0 +1,102 @@
+.settings-page {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.settings-page__workspace {
+  display: grid;
+  grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+  min-width: 0;
+}
+
+.settings-category-nav {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--glass-surface);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--glass-panel-radius);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.settings-category-nav__item {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--glass-card-radius);
+}
+
+.settings-category-nav__item span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.settings-category-nav__item[aria-selected="true"] {
+  background: var(--glass-surface-raised);
+  border-color: var(--glass-line-bright);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--rail) 8%, transparent);
+}
+
+.settings-category-nav__item:focus-visible,
+.settings-page__panel:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.settings-page__panel {
+  min-width: 0;
+  padding: var(--space-5);
+}
+
+.settings-page__panel > .settings-card,
+.settings-category-stack > .settings-card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.settings-category-stack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.settings-category-stack > .settings-card + .settings-card {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--glass-line);
+}
+
+@media (max-width: 48rem) {
+  .settings-page__workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-category-nav {
+    display: flex;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .settings-category-nav__item {
+    flex: 0 0 10rem;
+  }
+
+  .settings-page__panel {
+    padding: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-category-nav__item {
+    transition: none;
+  }
+}

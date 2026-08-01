@@ -28,6 +28,8 @@ import {
 } from '../../components/data/DataState'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { MetricGrid } from '../../components/layout/MetricGrid'
+import { PageHeader } from '../../components/layout/PageHeader'
 import type {
   Requirement,
   RequirementStatus,
@@ -36,9 +38,10 @@ import {
   useRequirements,
   useUpdateRequirementStatus,
 } from '../../data/query-hooks'
+import './requirements-glass.css'
 
 const boardStates = [
-  { status: 'reviewed', label: '已评审' },
+  { status: 'reviewed', label: '评审' },
   { status: 'developing', label: '开发中' },
   { status: 'delivered', label: '已交付' },
 ] as const satisfies ReadonlyArray<{
@@ -48,6 +51,22 @@ const boardStates = [
 
 const boardStatusSet = new Set<RequirementStatus>(
   boardStates.map(({ status }) => status),
+)
+
+const pipelineStates = [
+  { status: 'draft', label: '收集', draggable: false },
+  { status: 'reviewed', label: '评审', draggable: true },
+  { status: 'developing', label: '开发中', draggable: true },
+  { status: 'delivered', label: '已交付', draggable: true },
+  { status: 'accepted', label: '已验收', draggable: false },
+] as const satisfies ReadonlyArray<{
+  status: RequirementStatus
+  label: string
+  draggable: boolean
+}>
+
+const pipelineStatusSet = new Set<RequirementStatus>(
+  pipelineStates.map(({ status }) => status),
 )
 
 const statusLabels: Record<RequirementStatus, string> = {
@@ -317,6 +336,7 @@ function StaticRequirementCard({
 }
 
 function RequirementColumn({
+  draggable,
   dragDisabled,
   label,
   onSelect,
@@ -324,14 +344,18 @@ function RequirementColumn({
   selectedRequirementId,
   status,
 }: {
+  draggable: boolean
   dragDisabled: boolean
   label: string
   onSelect: (id: string) => void
   requirements: Requirement[]
   selectedRequirementId: string | null
-  status: BoardStatus
+  status: RequirementStatus
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id: status })
+  const { isOver, setNodeRef } = useDroppable({
+    disabled: !draggable,
+    id: status,
+  })
 
   return (
     <section
@@ -348,9 +372,16 @@ function RequirementColumn({
         {requirements.length === 0 ? (
           <p className="requirement-column__empty">暂无需求</p>
         ) : (
-          requirements.map((requirement) => (
+          requirements.map((requirement) => draggable ? (
             <DraggableRequirementCard
               disabled={dragDisabled}
+              key={requirement.id}
+              onSelect={onSelect}
+              requirement={requirement}
+              selected={selectedRequirementId === requirement.id}
+            />
+          ) : (
+            <StaticRequirementCard
               key={requirement.id}
               onSelect={onSelect}
               requirement={requirement}
@@ -585,7 +616,7 @@ export function RequirementPage() {
   const visibleRequirements =
     terminalFilter === 'board'
       ? requirements.filter((requirement) =>
-          boardStatusSet.has(requirement.status),
+          pipelineStatusSet.has(requirement.status),
         )
       : requirements.filter(
           (requirement) => requirement.status === terminalFilter,
@@ -594,8 +625,8 @@ export function RequirementPage() {
     visibleRequirements.find(
       (requirement) => requirement.id === selectedRequirementId,
     ) ?? null
-  const draftCount = requirements.filter(
-    (requirement) => requirement.status === 'draft',
+  const developingCount = requirements.filter(
+    (requirement) => requirement.status === 'developing',
   ).length
   const acceptedCount = requirements.filter(
     (requirement) => requirement.status === 'accepted',
@@ -609,15 +640,9 @@ export function RequirementPage() {
         isError={requirementsQuery.isError}
         isFetching={requirementsQuery.isFetching}
       />
-      <header className="requirement-page__header">
-        <div>
-          <p className="requirement-page__eyebrow">计划 / 需求</p>
-          <h1 id="requirement-page-heading" tabIndex={-1}>
-            需求生命周期
-          </h1>
-        </div>
-        <div className="requirement-page__controls">
-          <span className="requirement-page__compact-count">草稿 {draftCount}</span>
+      <PageHeader
+        actions={(
+          <div className="requirement-page__controls">
           <label>
             终态筛选
             <select
@@ -627,18 +652,36 @@ export function RequirementPage() {
               }}
               value={terminalFilter}
             >
-              <option value="board">默认三列</option>
+              <option value="board">五阶段管线</option>
               <option value="rejected">已拒绝</option>
               <option value="shelved">已搁置</option>
             </select>
           </label>
-        </div>
-      </header>
+          </div>
+        )}
+        eyebrow="计划 / 需求"
+        subtitle="从收集到验收追踪真实需求状态，异常终态保留独立筛选。"
+        title={(
+          <span id="requirement-page-heading" tabIndex={-1}>
+            需求管线
+          </span>
+        )}
+      />
 
-      <p className="requirement-page__summary">
-        <span>{`共 ${requirements.length} 项`}</span>
-        <span>{`已验收 ${acceptedCount}`}</span>
-      </p>
+      <MetricGrid ariaLabel="需求管线指标" className="requirement-metrics">
+        <article className="metric-card">
+          <span className="metric-card__label">需求总数</span>
+          <strong className="metric-value">{requirements.length}</strong>
+        </article>
+        <article className="metric-card">
+          <span className="metric-card__label">开发中</span>
+          <strong className="metric-value">{developingCount}</strong>
+        </article>
+        <article className="metric-card">
+          <span className="metric-card__label">已验收</span>
+          <strong className="metric-value">{acceptedCount}</strong>
+        </article>
+      </MetricGrid>
 
       <div className="data-grid-with-inspector requirement-page__workspace">
         <div className="requirement-page__content">
@@ -675,9 +718,11 @@ export function RequirementPage() {
               }}
               sensors={sensors}
             >
-              <div className="requirement-board">
-                {boardStates.map(({ label, status }) => (
+              <div className="requirement-page__board-scroll" tabIndex={0}>
+                <div className="requirement-board">
+                {pipelineStates.map(({ draggable, label, status }) => (
                   <RequirementColumn
+                    draggable={draggable}
                     dragDisabled={isStatusPending}
                     key={status}
                     label={label}
@@ -689,6 +734,7 @@ export function RequirementPage() {
                     status={status}
                   />
                 ))}
+                </div>
               </div>
             </DndContext>
           ) : (
