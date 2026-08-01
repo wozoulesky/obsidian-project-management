@@ -20,12 +20,14 @@ const statusLabels: Record<Task['status'], string> = {
 }
 
 export interface TaskTableProps {
-  onSelect: (taskId: string) => void
+  onSelect: (taskId: string, triggerId: string) => void
   selectedTaskId: string | null
   tasks: Task[]
 }
 
-function taskColumns(onSelect: (taskId: string) => void): ColumnDef<Task>[] {
+function taskColumns(
+  onSelect: (taskId: string, triggerId: string) => void,
+): ColumnDef<Task>[] {
   return [
     {
       accessorKey: 'title',
@@ -35,7 +37,9 @@ function taskColumns(onSelect: (taskId: string) => void): ColumnDef<Task>[] {
           aria-label={`查看 ${row.original.title}`}
           className="task-table__task-button"
           id={`task-trigger-${row.original.id}`}
-          onClick={() => onSelect(row.original.id)}
+          onClick={(event) =>
+            onSelect(row.original.id, event.currentTarget.id)
+          }
           type="button"
         >
           <span>{row.original.title}</span>

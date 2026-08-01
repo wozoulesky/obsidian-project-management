@@ -46,19 +46,11 @@ const FALLBACK_VISIBLE_ROWS = Math.ceil(
   FALLBACK_VIEWPORT_HEIGHT / ROW_HEIGHT_PX,
 )
 const EMPTY_TASKS: Task[] = []
-const rangeOptions = [
+const scaleOptions = [
+  { label: '日', value: 'day' },
   { label: '周', value: 'week' },
   { label: '月', value: 'month' },
-  { label: '季度', value: 'quarter' },
-] as const
-
-type GanttRangeMode = (typeof rangeOptions)[number]['value']
-
-const scaleByRange = {
-  week: 'week',
-  month: 'week',
-  quarter: 'month',
-} as const satisfies Record<GanttRangeMode, GanttScale>
+] as const satisfies ReadonlyArray<{ label: string; value: GanttScale }>
 
 interface PendingProposal extends GanttTaskDates {
   kind: DateProposalKind
@@ -87,16 +79,16 @@ function monthOffset(date: string, offset: number): string {
 
 function ganttRange(
   tasks: readonly Task[],
-  rangeMode: GanttRangeMode,
+  scale: GanttScale,
   asOf = AS_OF,
 ): GanttRange {
-  if (rangeMode === 'month') {
+  if (scale === 'day') {
     return {
       start: shiftDate(asOf, -3) ?? asOf,
-      end: shiftDate(asOf, 31) ?? asOf,
+      end: shiftDate(asOf, 11) ?? asOf,
     }
   }
-  if (rangeMode === 'quarter') {
+  if (scale === 'month') {
     return {
       start: monthOffset(asOf, -1),
       end: monthOffset(asOf, 4),
@@ -232,7 +224,7 @@ function GanttTaskInspector({
 export function GanttPage() {
   const tasksQuery = useGanttTasks()
   const updateDates = useUpdateTaskDates()
-  const [rangeMode, setRangeMode] = useState<GanttRangeMode>('week')
+  const [scale, setScale] = useState<GanttScale>('week')
   const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(
     () => new Set(),
   )
@@ -255,11 +247,7 @@ export function GanttPage() {
     () => groupRows(tasks, collapsedMilestones),
     [collapsedMilestones, tasks],
   )
-  const range = useMemo(
-    () => ganttRange(tasks, rangeMode),
-    [rangeMode, tasks],
-  )
-  const scale = scaleByRange[rangeMode]
+  const range = useMemo(() => ganttRange(tasks, scale), [scale, tasks])
   const metrics = ganttMetrics(tasks)
   const shouldVirtualize = visibleRows.length > VIRTUALIZE_AFTER
   const windowStart = shouldVirtualize
@@ -403,10 +391,10 @@ export function GanttPage() {
         actions={(
           <div className="gantt-page__controls">
             <SegmentedControl
-              ariaLabel="甘特时间范围"
-              onChange={(value) => setRangeMode(value as GanttRangeMode)}
-              options={rangeOptions}
-              value={rangeMode}
+              ariaLabel="时间轴刻度"
+              onChange={(value) => setScale(value as GanttScale)}
+              options={scaleOptions}
+              value={scale}
             />
             <button
               aria-expanded={!taskTreeCollapsed}

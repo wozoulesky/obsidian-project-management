@@ -11,7 +11,7 @@ const statusLabels: Record<Task['status'], string> = {
 }
 
 export interface TaskFanProps {
-  onSelect: (taskId: string) => void
+  onSelect: (taskId: string, triggerId: string) => void
   selectedTaskId: string | null
   tasks: readonly Task[]
 }
@@ -64,7 +64,9 @@ export function TaskFan({
                     aria-pressed={isSelected}
                     className="task-fan__button"
                     id={`task-fan-trigger-${task.id}`}
-                    onClick={() => onSelect(task.id)}
+                    onClick={(event) =>
+                      onSelect(task.id, event.currentTarget.id)
+                    }
                     type="button"
                   >
                     <span className="task-fan__surface">

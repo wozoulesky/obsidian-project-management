@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import {
@@ -51,6 +52,10 @@ function taskMetrics(tasks: readonly Task[]) {
 export function TaskPage() {
   const tasksQuery = useTasks()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [selectionTrigger, setSelectionTrigger] = useState<{
+    id: string
+    taskId: string
+  } | null>(null)
   const tasks = tasksQuery.data ?? []
   const filteredTasks = filterTasks(tasks, searchParams)
   const selectedTaskId = searchParams.get('selected')
@@ -68,6 +73,11 @@ export function TaskPage() {
       }
       return next
     })
+  }
+
+  const selectTask = (taskId: string, triggerId: string) => {
+    setSelectionTrigger({ id: triggerId, taskId })
+    setSelectedTaskId(taskId)
   }
 
   if (tasksQuery.isPending && !tasksQuery.data) {
@@ -128,7 +138,7 @@ export function TaskPage() {
       </MetricGrid>
       <div className="task-console__hero">
         <TaskFan
-          onSelect={setSelectedTaskId}
+          onSelect={selectTask}
           selectedTaskId={selectedTaskId}
           tasks={filteredTasks}
         />
@@ -153,7 +163,7 @@ export function TaskPage() {
             <p className="task-page__empty">没有符合筛选条件的任务。</p>
           ) : (
             <TaskTable
-              onSelect={setSelectedTaskId}
+              onSelect={selectTask}
               selectedTaskId={selectedTaskId}
               tasks={filteredTasks}
             />
@@ -162,6 +172,11 @@ export function TaskPage() {
             <TaskInspector
               fallbackFocusId="task-page-heading"
               onClose={() => setSelectedTaskId(null)}
+              returnFocusId={
+                selectionTrigger?.taskId === selectedTask.id
+                  ? selectionTrigger.id
+                  : undefined
+              }
               task={selectedTask}
             />
           ) : null}

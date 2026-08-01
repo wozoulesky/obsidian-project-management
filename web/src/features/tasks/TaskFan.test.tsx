@@ -64,7 +64,10 @@ describe('TaskFan', () => {
     await user.click(
       screen.getByRole('button', { name: '选择 TASK-1 扇面任务 1' }),
     )
-    expect(onSelect).toHaveBeenCalledWith('task-1')
+    expect(onSelect).toHaveBeenCalledWith(
+      'task-1',
+      'task-fan-trigger-task-1',
+    )
   })
 
   it('uses full-size non-overlapping hit targets around visual-only surfaces', () => {

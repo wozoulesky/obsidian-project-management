@@ -219,6 +219,30 @@ describe('TaskPage workflow', () => {
     ).toBeVisible()
   })
 
+  it('restores focus to the fan trigger after its inspector closes', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, {
+      route: '/tasks?priority=P0&sort=due_desc',
+    })
+
+    const fanTrigger = await screen.findByRole('button', {
+      name: '选择 TASK-047 断线恢复测试',
+    })
+    expect(fanTrigger).toHaveAttribute('id', 'task-fan-trigger-task-047')
+    await user.click(fanTrigger)
+
+    const dialog = screen.getByRole('dialog', { name: '断线恢复测试' })
+    await user.click(
+      within(dialog).getByRole('button', { name: '关闭 断线恢复测试' }),
+    )
+
+    expect(
+      screen.getByRole('button', {
+        name: '选择 TASK-047 断线恢复测试',
+      }),
+    ).toHaveFocus()
+  })
+
   it('keeps page width bounded while signature regions own their scrolling', () => {
     expect(tasksGlassCss).toMatch(
       /\.task-page\s*{[^}]*overflow-x:\s*clip/s,
@@ -337,9 +361,11 @@ describe('TaskPage workflow', () => {
       route: '/tasks?priority=P0&sort=due_desc',
     })
 
-    await user.click(
-      await screen.findByRole('button', { name: '查看 断线恢复测试' }),
-    )
+    const tableTrigger = await screen.findByRole('button', {
+      name: '查看 断线恢复测试',
+    })
+    expect(tableTrigger).toHaveAttribute('id', 'task-trigger-task-047')
+    await user.click(tableTrigger)
     expect(window.location.search).toContain('priority=P0')
     expect(window.location.search).toContain('sort=due_desc')
     expect(window.location.search).toContain('selected=task-047')
@@ -351,6 +377,9 @@ describe('TaskPage workflow', () => {
     expect(window.location.search).toContain('priority=P0')
     expect(window.location.search).toContain('sort=due_desc')
     expect(window.location.search).not.toContain('selected=')
+    expect(
+      screen.getByRole('button', { name: '查看 断线恢复测试' }),
+    ).toHaveFocus()
   })
 
   it('writes the overdue filter to the URL and only shows overdue work', async () => {

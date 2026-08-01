@@ -66,6 +66,13 @@ function mockTasks(tasks: Task[] = ganttTasks) {
   vi.spyOn(projectRepository, 'listGanttTasks').mockResolvedValue(tasks)
 }
 
+function tickLabels(container: HTMLElement): string[] {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>('.gantt-timeline__tick'),
+    (tick) => tick.textContent ?? '',
+  )
+}
+
 describe('GanttPage layout', () => {
   it('uses the shared glass header, real metrics, legend, and local stage', async () => {
     mockTasks([
@@ -292,32 +299,79 @@ describe('GanttPage layout', () => {
     expect(container.querySelectorAll('.gantt-timeline__rows [data-row-id]')).toHaveLength(3)
   })
 
-  it('changes tick density and visible range with the shared range control', async () => {
+  it('uses task bounds with seven-day padding for the default week scale', async () => {
+    mockTasks()
+    const { container } = renderApp(<GanttPage />)
+
+    await screen.findByRole('button', { name: '查看 MCP 权限校验' })
+    const rangeControl = screen.getByRole('group', { name: '时间轴刻度' })
+    expect(within(rangeControl).getByRole('button', { name: '周' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByTestId('gantt-range')).toHaveTextContent(
+      '2026-07-17–2026-08-14',
+    )
+    expect(tickLabels(container)).toEqual([
+      '7/17',
+      '7/24',
+      '7/31',
+      '8/7',
+      '8/14',
+    ])
+  })
+
+  it('uses the fixed today window and daily labels for the day scale', async () => {
     mockTasks()
     const user = userEvent.setup()
     const { container } = renderApp(<GanttPage />)
 
     await screen.findByRole('button', { name: '查看 MCP 权限校验' })
-    const weekTicks = container.querySelectorAll('.gantt-timeline__tick')
-    const initialRange = screen.getByTestId('gantt-range').textContent
-    const rangeControl = screen.getByRole('group', {
-      name: '甘特时间范围',
-    })
-    expect(within(rangeControl).getByRole('button', { name: '周' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    const scaleControl = screen.getByRole('group', { name: '时间轴刻度' })
+    await user.click(within(scaleControl).getByRole('button', { name: '日' }))
 
-    await user.click(within(rangeControl).getByRole('button', { name: '季度' }))
+    expect(screen.getByTestId('gantt-range')).toHaveTextContent(
+      '2026-07-25–2026-08-08',
+    )
+    expect(tickLabels(container)).toEqual([
+      '7/25',
+      '7/26',
+      '7/27',
+      '7/28',
+      '7/29',
+      '7/30',
+      '7/31',
+      '8/1',
+      '8/2',
+      '8/3',
+      '8/4',
+      '8/5',
+      '8/6',
+      '8/7',
+      '8/8',
+    ])
+  })
 
-    expect(within(rangeControl).getByRole('button', { name: '季度' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+  it('uses calendar month boundaries and monthly labels for the month scale', async () => {
+    mockTasks()
+    const user = userEvent.setup()
+    const { container } = renderApp(<GanttPage />)
+
+    await screen.findByRole('button', { name: '查看 MCP 权限校验' })
+    const scaleControl = screen.getByRole('group', { name: '时间轴刻度' })
+    await user.click(within(scaleControl).getByRole('button', { name: '月' }))
+
+    expect(screen.getByTestId('gantt-range')).toHaveTextContent(
+      '2026-06-01–2026-11-01',
     )
-    expect(container.querySelectorAll('.gantt-timeline__tick').length).not.toBe(
-      weekTicks.length,
-    )
-    expect(screen.getByTestId('gantt-range').textContent).not.toBe(initialRange)
+    expect(tickLabels(container)).toEqual([
+      '2026.6',
+      '2026.7',
+      '2026.8',
+      '2026.9',
+      '2026.10',
+      '2026.11',
+    ])
   })
 
   it('shows today, milestones, progress, and an accessible risky dependency', async () => {
@@ -372,7 +426,7 @@ describe('GanttPage layout', () => {
     renderApp(<GanttPage />)
 
     await screen.findByRole('button', { name: '查看 范围前任务' })
-    await user.click(screen.getByRole('button', { name: '月' }))
+    await user.click(screen.getByRole('button', { name: '日' }))
     const timeline = screen.getByRole('region', { name: '甘特时间轴' })
     expect(
       within(timeline).queryByRole('button', { name: '移动 范围前任务' }),

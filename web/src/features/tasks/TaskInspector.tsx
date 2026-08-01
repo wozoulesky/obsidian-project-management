@@ -15,6 +15,7 @@ const statusLabels: Record<TaskStatus, string> = {
 export interface TaskInspectorProps {
   fallbackFocusId?: string
   onClose: () => void
+  returnFocusId?: string
   task: Task
 }
 
@@ -140,13 +141,14 @@ function TaskInspectorFields({ task }: { task: Task }) {
 export function TaskInspector({
   fallbackFocusId,
   onClose,
+  returnFocusId,
   task,
 }: TaskInspectorProps) {
   return (
     <EntityInspector
       fallbackFocusId={fallbackFocusId}
       onClose={onClose}
-      returnFocusId={`task-trigger-${task.id}`}
+      returnFocusId={returnFocusId ?? `task-trigger-${task.id}`}
       title={task.title}
     >
       <TaskInspectorFields key={task.id} task={task} />
