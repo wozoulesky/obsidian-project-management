@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
     <title>Project OS · 多页面视觉预览</title>
     <style>
       :root {
@@ -698,6 +699,462 @@
         color: var(--text);
       }
 
+      .overview-shell {
+        min-width: 0;
+      }
+
+      .overview-shell .metric-grid {
+        margin-bottom: 14px;
+      }
+
+      .dashboard-health-stage {
+        min-height: 286px;
+      }
+
+      .health-trend-layout {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(300px, 0.86fr) minmax(420px, 1.14fr);
+        gap: 24px;
+        min-width: 0;
+        padding-top: 20px;
+      }
+
+      .trend-summary {
+        min-width: 0;
+        padding: 16px;
+        border: 1px solid rgba(226, 240, 233, 0.11);
+        border-radius: var(--radius-card);
+        background: rgba(0, 0, 0, 0.14);
+      }
+
+      .trend-summary-head,
+      .project-card-head,
+      .actor-node-head,
+      .select-item-head,
+      .feed-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .trend-summary-head strong {
+        font-size: 13px;
+      }
+
+      .trend-summary-head span {
+        color: var(--green);
+        font-size: 10px;
+      }
+
+      .trend-bars {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(24px, 1fr));
+        align-items: end;
+        gap: 8px;
+        height: 145px;
+        margin-top: 13px;
+      }
+
+      .trend-column {
+        display: grid;
+        grid-template-rows: 1fr auto;
+        gap: 7px;
+        height: 100%;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 9px;
+        text-align: center;
+      }
+
+      .trend-bar-slot {
+        position: relative;
+        min-height: 0;
+        border-bottom: 1px solid rgba(226, 240, 233, 0.15);
+        background: linear-gradient(to top, rgba(255, 255, 255, 0.025), transparent);
+      }
+
+      .trend-bar {
+        position: absolute;
+        right: 18%;
+        bottom: 0;
+        left: 18%;
+        height: var(--trend-level);
+        min-height: 4px;
+        border-radius: 7px 7px 2px 2px;
+        background: linear-gradient(to top, rgba(16, 185, 101, 0.38), rgba(55, 245, 138, 0.9));
+        box-shadow: 0 0 16px rgba(55, 245, 138, 0.12);
+      }
+
+      .trend-bar::before {
+        position: absolute;
+        top: -13px;
+        right: 50%;
+        color: #b9c3bd;
+        content: attr(data-value);
+        font-size: 8px;
+        transform: translateX(50%);
+      }
+
+      .health-lanes {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .health-lane {
+        display: grid;
+        grid-template-columns: minmax(92px, 0.9fr) minmax(132px, 1.6fr) auto;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(226, 240, 233, 0.1);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.024);
+      }
+
+      .health-lane-name,
+      .project-card strong,
+      .actor-node strong,
+      .select-item strong,
+      .feed-row strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .health-lane-name {
+        font-size: 10px;
+      }
+
+      .progress-rail {
+        display: block;
+        width: 100%;
+        height: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      .progress-rail span {
+        display: block;
+        width: var(--progress);
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--green-deep), var(--green));
+      }
+
+      .is-attention .progress-rail span {
+        background: linear-gradient(90deg, rgba(255, 180, 92, 0.46), var(--amber));
+      }
+
+      .is-critical .progress-rail span {
+        background: linear-gradient(90deg, rgba(255, 92, 97, 0.5), var(--red));
+      }
+
+      .dashboard-detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.58fr) minmax(260px, 0.72fr);
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .dashboard-ops-grid,
+      .dashboard-feed-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .dashboard-feed-grid {
+        margin-top: 14px;
+      }
+
+      .dashboard-ops-grid .glass-panel,
+      .dashboard-feed-grid .glass-panel {
+        min-width: 0;
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.075), 0 16px 38px rgba(0, 0, 0, 0.28);
+      }
+
+      .select-list,
+      .compact-list {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .select-item {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        padding: 10px 11px;
+        border: 1px solid rgba(226, 240, 233, 0.11);
+        border-radius: 11px;
+        color: inherit;
+        background: rgba(255, 255, 255, 0.022);
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .select-item:hover,
+      .select-item[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.28);
+        background: rgba(55, 245, 138, 0.055);
+      }
+
+      .select-item.is-critical[aria-pressed="true"] {
+        border-color: rgba(255, 92, 97, 0.34);
+        background: rgba(255, 92, 97, 0.055);
+      }
+
+      .select-item-head strong {
+        font-size: 11px;
+      }
+
+      .select-item-meta,
+      .feed-row span {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .select-item-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px 10px;
+        margin-top: 5px;
+      }
+
+      .feed-row {
+        min-width: 0;
+        padding: 9px 0;
+        border-bottom: 1px solid rgba(226, 240, 233, 0.08);
+      }
+
+      .feed-row:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .feed-row-copy {
+        display: grid;
+        min-width: 0;
+      }
+
+      .feed-row strong {
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      .dashboard-context .context-list dd,
+      .project-summary .context-list dd,
+      .actor-summary .context-list dd {
+        max-width: 62%;
+        overflow-wrap: anywhere;
+      }
+
+      .portfolio-layout,
+      .actor-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.32fr);
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .portfolio-stage,
+      .actor-network-stage {
+        min-width: 0;
+      }
+
+      .portfolio-stage {
+        min-height: 430px;
+      }
+
+      .project-matrix-scroll {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+        scrollbar-width: thin;
+      }
+
+      .project-matrix {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(250px, 1fr));
+        gap: 11px;
+        min-width: 540px;
+        padding-top: 18px;
+      }
+
+      .project-card {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+        padding: 15px;
+        border: 1px solid rgba(226, 240, 233, 0.13);
+        border-radius: 13px;
+        color: inherit;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018));
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .project-card:hover,
+      .project-card[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.34);
+        background: linear-gradient(145deg, rgba(55, 245, 138, 0.085), rgba(255, 255, 255, 0.025));
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 12px 24px rgba(0, 0, 0, 0.22);
+      }
+
+      .project-card.is-critical[aria-pressed="true"] {
+        border-color: rgba(255, 92, 97, 0.4);
+      }
+
+      .project-card strong {
+        font-size: 13px;
+      }
+
+      .project-card-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin: 0;
+      }
+
+      .project-card-meta div {
+        min-width: 0;
+      }
+
+      .project-card-meta dt {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .project-card-meta dd {
+        margin: 2px 0 0;
+        overflow: hidden;
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .progress-copy {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .actor-network-stage {
+        min-height: 452px;
+      }
+
+      .network-scroll {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+        scrollbar-width: thin;
+      }
+
+      .actor-network-canvas {
+        position: relative;
+        min-width: 650px;
+        height: 356px;
+        margin-top: 12px;
+      }
+
+      .network-connectors {
+        position: absolute;
+        z-index: 0;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+      }
+
+      .network-connectors line {
+        stroke: rgba(226, 240, 233, 0.23);
+        stroke-width: 0.42;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .network-connectors line.is-primary {
+        stroke: rgba(55, 245, 138, 0.42);
+      }
+
+      .actor-node {
+        position: absolute;
+        z-index: 2;
+        top: var(--node-y);
+        left: var(--node-x);
+        display: grid;
+        width: 142px;
+        min-height: 84px;
+        padding: 11px;
+        border: 1px solid rgba(226, 240, 233, 0.15);
+        border-radius: 13px;
+        color: inherit;
+        background: linear-gradient(145deg, rgba(34, 41, 37, 0.96), rgba(11, 15, 13, 0.96));
+        box-shadow: 0 13px 28px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+        text-align: left;
+        transform: translate(-50%, -50%);
+      }
+
+      .actor-node:hover,
+      .actor-node[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.42);
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 0 24px rgba(55, 245, 138, 0.08);
+      }
+
+      .actor-node strong {
+        font-size: 11px;
+      }
+
+      .actor-node small {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .actor-node .progress-rail {
+        margin-top: 8px;
+      }
+
+      .skill-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 14px;
+      }
+
+      .skill-chip {
+        padding: 4px 8px;
+        border: 1px solid rgba(55, 245, 138, 0.16);
+        border-radius: 999px;
+        color: #bfc9c3;
+        background: rgba(55, 245, 138, 0.045);
+        font-size: 9px;
+      }
+
+      .summary-note {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 10px;
+        overflow-wrap: anywhere;
+      }
+
       .toast {
         position: fixed;
         z-index: 50;
@@ -728,6 +1185,19 @@
 
         .content-frame {
           grid-template-columns: 1fr;
+        }
+
+        .health-trend-layout,
+        .dashboard-detail-grid,
+        .portfolio-layout,
+        .actor-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .dashboard-context,
+        .project-summary,
+        .actor-summary {
+          min-height: auto;
         }
       }
 
@@ -805,6 +1275,24 @@
         .header-actions {
           justify-content: flex-start;
         }
+
+        .dashboard-ops-grid,
+        .dashboard-feed-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .health-trend-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .health-lane {
+          grid-template-columns: minmax(90px, 0.9fr) minmax(120px, 1.4fr) auto;
+        }
+
+        .project-matrix {
+          grid-template-columns: 1fr;
+          min-width: 0;
+        }
       }
 
       @media (max-width: 520px) {
@@ -823,6 +1311,32 @@
         .glass-panel,
         .context-panel {
           padding: 16px;
+        }
+
+        .signature-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .health-lane {
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .health-lane .progress-rail {
+          grid-column: 1 / -1;
+          grid-row: 2;
+        }
+
+        .trend-summary {
+          padding: 12px;
+        }
+
+        .trend-bars {
+          gap: 4px;
+        }
+
+        .project-card-meta {
+          grid-template-columns: 1fr;
         }
       }
 
@@ -1037,6 +1551,75 @@
         },
       }
 
+      const projects = [
+        { id:'project-os', name:'Project OS v1.2', owner:'Lin', progress:72, health:'正常', risk:2, due:'2026-08-31' },
+        { id:'mcp-bridge', name:'MCP 接入矩阵', owner:'dev-agent', progress:48, health:'关注', risk:4, due:'2026-09-12' },
+        { id:'mobile-review', name:'移动端体验验收', owner:'Chen', progress:64, health:'正常', risk:1, due:'2026-08-20' },
+        { id:'release-flow', name:'发布流程自动化', owner:'qa-agent', progress:36, health:'高风险', risk:5, due:'2026-08-18' },
+      ]
+
+      const actors = [
+        { id:'lin', name:'Lin', type:'human', status:'在线', load:68, skills:['产品','架构'] },
+        { id:'chen', name:'Chen', type:'human', status:'专注', load:54, skills:['设计','前端'] },
+        { id:'dev-agent', name:'dev-agent', type:'agent', status:'运行中', load:76, skills:['编码','重构'] },
+        { id:'qa-agent', name:'qa-agent', type:'agent', status:'待命', load:32, skills:['测试','验收'] },
+      ]
+
+      const healthTrend = [
+        { id:'health-01', label:'07.26', value:69 },
+        { id:'health-02', label:'07.27', value:71 },
+        { id:'health-03', label:'07.28', value:70 },
+        { id:'health-04', label:'07.29', value:74 },
+        { id:'health-05', label:'07.30', value:73 },
+        { id:'health-06', label:'07.31', value:76 },
+        { id:'health-07', label:'08.01', value:78 },
+      ]
+
+      const riskQueue = [
+        { id:'risk-01', projectId:'release-flow', severity:'危急', title:'回滚验证尚未闭环', owner:'qa-agent', due:'2026-08-18', detail:'发布流程缺少最后一轮回滚证据，需在候选版本冻结前完成。' },
+        { id:'risk-02', projectId:'mcp-bridge', severity:'关注', title:'接入矩阵覆盖不足', owner:'dev-agent', due:'2026-08-14', detail:'两个外部能力仍缺少权限降级路径与失败态说明。' },
+        { id:'risk-03', projectId:'project-os', severity:'关注', title:'跨页面焦点回归待验证', owner:'Lin', due:'2026-08-09', detail:'键盘用户的路由与局部重渲染焦点需要完成一次回归。' },
+      ]
+
+      const deliverables = [
+        { id:'deliverable-01', projectId:'mobile-review', name:'390px 验收快照', status:'已通过', time:'今天 10:40' },
+        { id:'deliverable-02', projectId:'project-os', name:'信息架构签核', status:'已归档', time:'昨天 18:15' },
+        { id:'deliverable-03', projectId:'mcp-bridge', name:'能力兼容性清单', status:'评审中', time:'昨天 15:30' },
+      ]
+
+      const activityRecords = [
+        { id:'activity-01', actorId:'chen', projectId:'mobile-review', text:'Chen 完成移动端对比验收', time:'12 分钟前' },
+        { id:'activity-02', actorId:'dev-agent', projectId:'mcp-bridge', text:'dev-agent 更新权限降级说明', time:'36 分钟前' },
+        { id:'activity-03', actorId:'lin', projectId:'project-os', text:'Lin 确认 v1.2 信息架构', time:'1 小时前' },
+        { id:'activity-04', actorId:'qa-agent', projectId:'release-flow', text:'qa-agent 提交回滚检查清单', time:'2 小时前' },
+      ]
+
+      const actorNodePositions = Object.freeze({
+        lin: { x: 22, y: 32 },
+        chen: { x: 76, y: 28 },
+        'dev-agent': { x: 42, y: 74 },
+        'qa-agent': { x: 78, y: 74 },
+      })
+
+      const actorConnections = [
+        { from:'lin', to:'chen', primary:false },
+        { from:'lin', to:'dev-agent', primary:true },
+        { from:'chen', to:'dev-agent', primary:false },
+        { from:'chen', to:'qa-agent', primary:true },
+        { from:'dev-agent', to:'qa-agent', primary:false },
+      ]
+
+      const previewState = {
+        dashboardSelection:'risk-01',
+        projectFilter:'all',
+        selectedProjectId:'project-os',
+        actorFilter:'all',
+        selectedActorId:'lin',
+      }
+
+      const projectFilterValues = new Set(['all', 'healthy', 'attention', 'risk'])
+      const actorFilterValues = new Set(['all', 'human', 'agent'])
+
       const htmlEscapes = Object.freeze({
         '&': '&amp;',
         '<': '&lt;',
@@ -1168,12 +1751,290 @@
         `)
       }
 
+      function clampPercent(value) {
+        const numericValue = Number(value)
+        return Number.isFinite(numericValue)
+          ? Math.min(100, Math.max(0, Math.round(numericValue)))
+          : 0
+      }
+
+      function projectToneClass(project) {
+        if (project.health === '高风险') return 'is-critical'
+        if (project.health === '关注') return 'is-attention'
+        return ''
+      }
+
+      function statusBadgeTone(value) {
+        if (value === '高风险' || value === '危急') return 'is-risk'
+        if (value === '关注' || value === '评审中') return 'is-attention'
+        return 'is-live'
+      }
+
+      function projectMatchesFilter(project, filter) {
+        if (filter === 'healthy') return project.health === '正常'
+        if (filter === 'attention') return project.health === '关注'
+        if (filter === 'risk') return project.health === '高风险'
+        return true
+      }
+
+      function renderOverviewHeader(route, description, actionLabel) {
+        const safeRoute = escapeHtml(route)
+        const safeTitle = escapeHtml(pageTitles[route])
+        const safeDescription = escapeHtml(description)
+        const safeAction = escapeHtml(actionLabel)
+        return `
+          <header class="page-header">
+            <div>
+              <p class="page-kicker">Project OS / ${safeRoute}</p>
+              <h1 id="${safeRoute}-title" tabindex="-1">${safeTitle}</h1>
+              <p class="page-description">${safeDescription}</p>
+            </div>
+            <div class="header-actions">
+              <button class="secondary-action" type="button" data-prototype-action="导出快照">导出快照</button>
+              <button class="primary-action" type="button" data-prototype-action="${safeAction}">${safeAction}</button>
+            </div>
+          </header>
+        `
+      }
+
+      function renderDashboardContext() {
+        const selectedRisk = riskQueue.find((risk) => risk.id === previewState.dashboardSelection)
+        const selectedActor = actors.find((actor) => actor.id === previewState.dashboardSelection)
+
+        if (selectedActor) {
+          const ownedProjects = projects.filter((project) => project.owner === selectedActor.name)
+          const recentActivity = activityRecords.find((activity) => activity.actorId === selectedActor.id)
+          return {
+            title: selectedActor.name,
+            badge: selectedActor.status,
+            badgeClass: selectedActor.status === '待命' ? '' : 'is-live',
+            rows: [
+              ['类型', selectedActor.type === 'human' ? '人类协作者' : 'Agent'],
+              ['当前负载', `${clampPercent(selectedActor.load)}%`],
+              ['技能', selectedActor.skills.join(' · ')],
+              ['负责项目', ownedProjects.map((project) => project.name).join('、') || '暂无'],
+            ],
+            note: recentActivity?.text || '暂无最近活动',
+          }
+        }
+
+        const risk = selectedRisk || riskQueue[0]
+        const project = projects.find((item) => item.id === risk.projectId)
+        return {
+          title: risk.title,
+          badge: risk.severity,
+          badgeClass: statusBadgeTone(risk.severity),
+          rows: [
+            ['项目', project?.name || '未知项目'],
+            ['负责人', risk.owner],
+            ['要求日期', risk.due],
+            ['风险级别', risk.severity],
+          ],
+          note: risk.detail,
+        }
+      }
+
       function renderDashboard() {
-        return renderPageShell('dashboard')
+        const metrics = [
+          ['项目总数', String(projects.length).padStart(2, '0'), '全局范围'],
+          ['进行中', String(projects.filter((project) => project.progress > 0 && project.progress < 100).length).padStart(2, '0'), '持续交付'],
+          ['待处理风险', String(riskQueue.length).padStart(2, '0'), `${riskQueue.filter((risk) => risk.severity === '危急').length} 项危急`],
+          ['活跃协作者', String(actors.filter((actor) => actor.status !== '待命').length).padStart(2, '0'), `${actors.length} 位已接入`],
+        ]
+        const context = renderDashboardContext()
+        const averageHealth = Math.round(healthTrend.reduce((sum, item) => sum + item.value, 0) / healthTrend.length)
+        const previousHealth = healthTrend.at(-2)?.value || averageHealth
+        const latestHealth = healthTrend.at(-1)?.value || averageHealth
+
+        const trendMarkup = healthTrend.map((point) => {
+          const safeValue = clampPercent(point.value)
+          return `
+            <div class="trend-column">
+              <div class="trend-bar-slot">
+                <span class="trend-bar" style="--trend-level: ${safeValue}%" data-value="${safeValue}"></span>
+              </div>
+              <span>${escapeHtml(point.label)}</span>
+            </div>
+          `
+        }).join('')
+
+        const healthLanes = projects.map((project) => {
+          const safeProgress = clampPercent(project.progress)
+          const toneClass = projectToneClass(project)
+          return `
+            <div class="health-lane ${toneClass}">
+              <span class="health-lane-name" title="${escapeHtml(project.name)}">${escapeHtml(project.name)}</span>
+              <span class="progress-rail" aria-hidden="true"><span style="--progress: ${safeProgress}%"></span></span>
+              <span class="status-badge ${statusBadgeTone(project.health)}">${escapeHtml(project.health)} · ${safeProgress}%</span>
+            </div>
+          `
+        }).join('')
+
+        const riskMarkup = riskQueue.map((risk) => `
+          <li>
+            <button class="select-item ${risk.severity === '危急' ? 'is-critical' : 'is-attention'}" type="button"
+              data-dashboard-select="${escapeHtml(risk.id)}" aria-pressed="${previewState.dashboardSelection === risk.id}">
+              <span class="select-item-head">
+                <strong>${escapeHtml(risk.title)}</strong>
+                <span class="status-badge ${statusBadgeTone(risk.severity)}">${escapeHtml(risk.severity)}</span>
+              </span>
+              <span class="select-item-meta"><span>${escapeHtml(risk.owner)}</span><span>${escapeHtml(risk.due)}</span></span>
+            </button>
+          </li>
+        `).join('')
+
+        const actorMarkup = actors.map((actor) => {
+          const actorProjects = projects.filter((project) => project.owner === actor.name)
+          return `
+            <li>
+              <button class="select-item" type="button" data-dashboard-select="${escapeHtml(actor.id)}"
+                aria-pressed="${previewState.dashboardSelection === actor.id}">
+                <span class="select-item-head">
+                  <strong>${escapeHtml(actor.name)}</strong>
+                  <span class="status-badge ${actor.status === '待命' ? '' : 'is-live'}">${escapeHtml(actor.status)}</span>
+                </span>
+                <span class="select-item-meta"><span>${clampPercent(actor.load)}% 负载</span><span>${actorProjects.length} 个项目</span></span>
+              </button>
+            </li>
+          `
+        }).join('')
+
+        const deliverableMarkup = deliverables.map((deliverable) => {
+          const project = projects.find((item) => item.id === deliverable.projectId)
+          return `
+            <li class="feed-row">
+              <span class="feed-row-copy"><strong>${escapeHtml(deliverable.name)}</strong><span>${escapeHtml(project?.name || '未知项目')}</span></span>
+              <span>${escapeHtml(deliverable.status)} · ${escapeHtml(deliverable.time)}</span>
+            </li>
+          `
+        }).join('')
+
+        const activityMarkup = activityRecords.slice(0, 3).map((activity) => `
+          <li class="feed-row">
+            <span class="feed-row-copy"><strong>${escapeHtml(activity.text)}</strong><span>${escapeHtml(activity.time)}</span></span>
+          </li>
+        `).join('')
+
+        return elementFromHTML(`
+          <section class="page-view overview-shell" data-page="dashboard" aria-labelledby="dashboard-title">
+            ${renderOverviewHeader('dashboard', '项目健康、协作状态与交付风险', '创建项目')}
+            <div class="metric-grid" aria-label="全局驾驶舱关键指标">${renderMetricCards(metrics)}</div>
+
+            <section class="signature-stage dashboard-health-stage" aria-labelledby="dashboard-signature-title">
+              <div class="signature-heading">
+                <h2 id="dashboard-signature-title">健康趋势</h2>
+                <span>最近 7 天 · 确定性演示快照</span>
+              </div>
+              <div class="health-trend-layout">
+                <div class="trend-summary" aria-label="七日健康趋势柱状图">
+                  <div class="trend-summary-head"><strong>组合健康指数 ${averageHealth}</strong><span>${latestHealth >= previousHealth ? '向好' : '回落'} ${Math.abs(latestHealth - previousHealth)} 点</span></div>
+                  <div class="trend-bars">${trendMarkup}</div>
+                </div>
+                <div class="health-lanes" aria-label="项目健康轨道">${healthLanes}</div>
+              </div>
+            </section>
+
+            <div class="dashboard-detail-grid">
+              <div class="dashboard-ops-grid">
+                <section class="glass-panel" aria-labelledby="risk-queue-title">
+                  <div class="panel-heading"><div><h2 id="risk-queue-title">风险队列</h2><p>选择风险查看上下文</p></div><span class="status-badge is-risk">${riskQueue.length} 项</span></div>
+                  <ul class="select-list">${riskMarkup}</ul>
+                </section>
+                <section class="glass-panel" aria-labelledby="actor-presence-title">
+                  <div class="panel-heading"><div><h2 id="actor-presence-title">协作者在线状态</h2><p>人类与 Agent 当前负载</p></div><span class="status-badge is-live">已同步</span></div>
+                  <ul class="select-list">${actorMarkup}</ul>
+                </section>
+              </div>
+              <aside class="context-panel dashboard-context" data-dashboard-context aria-live="polite" aria-labelledby="dashboard-context-title">
+                <div class="panel-heading"><h2 id="dashboard-context-title">${escapeHtml(context.title)}</h2><span class="status-badge ${context.badgeClass}">${escapeHtml(context.badge)}</span></div>
+                <dl class="context-list">${renderContextRows(context.rows)}</dl>
+                <p class="summary-note">${escapeHtml(context.note)}</p>
+              </aside>
+            </div>
+
+            <div class="dashboard-feed-grid">
+              <section class="glass-panel" aria-labelledby="deliverables-title"><div class="panel-heading"><div><h2 id="deliverables-title">最近交付物</h2><p>验收与评审状态</p></div></div><ul class="compact-list">${deliverableMarkup}</ul></section>
+              <section class="glass-panel" aria-labelledby="activity-title"><div class="panel-heading"><div><h2 id="activity-title">活动流</h2><p>跨项目协作记录</p></div></div><ul class="compact-list">${activityMarkup}</ul></section>
+            </div>
+          </section>
+        `)
       }
 
       function renderProjects() {
-        return renderPageShell('projects')
+        const filterOptions = [
+          ['all', '全部'],
+          ['healthy', '正常'],
+          ['attention', '关注'],
+          ['risk', '高风险'],
+        ]
+        const visibleProjects = projects.filter((project) => projectMatchesFilter(project, previewState.projectFilter))
+        const selectedProject = projects.find((project) => project.id === previewState.selectedProjectId) || projects[0]
+        const averageProgress = Math.round(projects.reduce((sum, project) => sum + project.progress, 0) / projects.length)
+        const metrics = [
+          ['项目总数', String(projects.length).padStart(2, '0'), '组合范围'],
+          ['正常', String(projects.filter((project) => project.health === '正常').length).padStart(2, '0'), '节奏稳定'],
+          ['需关注', String(projects.filter((project) => project.health === '关注').length).padStart(2, '0'), '主动跟进'],
+          ['高风险', String(projects.filter((project) => project.health === '高风险').length).padStart(2, '0'), '立即介入'],
+        ]
+
+        const filters = filterOptions.map(([value, label]) => `
+          <button type="button" data-project-filter="${escapeHtml(value)}" aria-pressed="${previewState.projectFilter === value}">${escapeHtml(label)}</button>
+        `).join('')
+
+        const cards = visibleProjects.map((project) => {
+          const safeProgress = clampPercent(project.progress)
+          const toneClass = projectToneClass(project)
+          return `
+            <button class="project-card ${toneClass}" type="button" data-project-id="${escapeHtml(project.id)}"
+              aria-pressed="${selectedProject.id === project.id}" aria-label="查看 ${escapeHtml(project.name)} 摘要">
+              <span class="project-card-head"><strong title="${escapeHtml(project.name)}">${escapeHtml(project.name)}</strong><span class="status-badge ${statusBadgeTone(project.health)}">${escapeHtml(project.health)}</span></span>
+              <span>
+                <span class="progress-copy"><span>交付进度</span><strong>${safeProgress}%</strong></span>
+                <span class="progress-rail" aria-hidden="true"><span style="--progress: ${safeProgress}%"></span></span>
+              </span>
+              <dl class="project-card-meta">
+                <div><dt>负责人</dt><dd>${escapeHtml(project.owner)}</dd></div>
+                <div><dt>开放风险</dt><dd>${escapeHtml(project.risk)} 项</dd></div>
+                <div><dt>目标日期</dt><dd>${escapeHtml(project.due)}</dd></div>
+                <div><dt>组合差异</dt><dd>${safeProgress - averageProgress >= 0 ? '+' : ''}${safeProgress - averageProgress}%</dd></div>
+              </dl>
+            </button>
+          `
+        }).join('')
+
+        const selectedActivity = activityRecords.find((activity) => activity.projectId === selectedProject.id)
+        const selectedDeliverable = deliverables.find((deliverable) => deliverable.projectId === selectedProject.id)
+        const projectSummaryRows = [
+          ['负责人', selectedProject.owner],
+          ['进度', `${clampPercent(selectedProject.progress)}%`],
+          ['健康状态', selectedProject.health],
+          ['开放风险', `${selectedProject.risk} 项`],
+          ['目标日期', selectedProject.due],
+          ['最近交付物', selectedDeliverable?.name || '暂无'],
+        ]
+
+        return elementFromHTML(`
+          <section class="page-view overview-shell" data-page="projects" aria-labelledby="projects-title">
+            ${renderOverviewHeader('projects', '横向比较项目进度、负责人、目标日期与风险暴露', '新建项目')}
+            <div class="metric-grid" aria-label="项目组合关键指标">${renderMetricCards(metrics)}</div>
+            <div class="portfolio-layout">
+              <section class="signature-stage portfolio-stage" aria-labelledby="projects-signature-title">
+                <div class="signature-heading">
+                  <div><h2 id="projects-signature-title">玻璃项目矩阵</h2><span>${visibleProjects.length} / ${projects.length} 个项目</span></div>
+                  <div class="segmented" aria-label="项目健康筛选">${filters}</div>
+                </div>
+                <div class="project-matrix-scroll" tabindex="0" aria-label="项目矩阵，可在窄屏横向滚动">
+                  <div class="project-matrix">${cards || '<div class="empty-state"><div><strong>没有匹配项目</strong>请切换健康筛选。</div></div>'}</div>
+                </div>
+              </section>
+              <aside class="context-panel project-summary" aria-live="polite" aria-labelledby="project-summary-title">
+                <div class="panel-heading"><h2 id="project-summary-title">${escapeHtml(selectedProject.name)}</h2><span class="status-badge ${statusBadgeTone(selectedProject.health)}">${escapeHtml(selectedProject.health)}</span></div>
+                <dl class="context-list">${renderContextRows(projectSummaryRows)}</dl>
+                <p class="summary-note">${escapeHtml(selectedActivity?.text || '暂无最近活动')}</p>
+              </aside>
+            </div>
+          </section>
+        `)
       }
 
       function renderProjectDetail() {
@@ -1181,7 +2042,82 @@
       }
 
       function renderActors() {
-        return renderPageShell('actors')
+        const filterOptions = [
+          ['all', '全部'],
+          ['human', '人类'],
+          ['agent', 'Agent'],
+        ]
+        const visibleActors = actors.filter((actor) => previewState.actorFilter === 'all' || actor.type === previewState.actorFilter)
+        const visibleActorIds = new Set(visibleActors.map((actor) => actor.id))
+        const selectedActor = actors.find((actor) => actor.id === previewState.selectedActorId) || actors[0]
+        const activeActors = actors.filter((actor) => actor.status !== '待命')
+        const averageLoad = Math.round(actors.reduce((sum, actor) => sum + actor.load, 0) / actors.length)
+        const metrics = [
+          ['协作者', String(actors.length).padStart(2, '0'), `${actors.filter((actor) => actor.type === 'human').length} 人 / ${actors.filter((actor) => actor.type === 'agent').length} Agent`],
+          ['活跃中', String(activeActors.length).padStart(2, '0'), '实时状态'],
+          ['平均负载', `${averageLoad}%`, '可调度'],
+          ['待命节点', String(actors.length - activeActors.length).padStart(2, '0'), '可接力'],
+        ]
+
+        const filters = filterOptions.map(([value, label]) => `
+          <button type="button" data-actor-filter="${escapeHtml(value)}" aria-pressed="${previewState.actorFilter === value}">${escapeHtml(label)}</button>
+        `).join('')
+
+        const connectors = actorConnections.filter((connection) => visibleActorIds.has(connection.from) && visibleActorIds.has(connection.to)).map((connection) => {
+          const from = actorNodePositions[connection.from]
+          const to = actorNodePositions[connection.to]
+          return `<line class="${connection.primary ? 'is-primary' : ''}" x1="${clampPercent(from.x)}" y1="${clampPercent(from.y)}" x2="${clampPercent(to.x)}" y2="${clampPercent(to.y)}"></line>`
+        }).join('')
+
+        const nodes = visibleActors.map((actor) => {
+          const position = actorNodePositions[actor.id] || { x: 50, y: 50 }
+          const safeLoad = clampPercent(actor.load)
+          return `
+            <button class="actor-node" type="button" data-actor-id="${escapeHtml(actor.id)}" aria-pressed="${selectedActor.id === actor.id}"
+              style="--node-x: ${clampPercent(position.x)}%; --node-y: ${clampPercent(position.y)}%" aria-label="查看 ${escapeHtml(actor.name)} 协作摘要">
+              <span class="actor-node-head"><strong title="${escapeHtml(actor.name)}">${escapeHtml(actor.name)}</strong><span class="status-badge ${actor.status === '待命' ? '' : 'is-live'}">${escapeHtml(actor.status)}</span></span>
+              <small>${actor.type === 'human' ? '人类' : 'Agent'} · ${safeLoad}% 负载</small>
+              <span class="progress-rail" aria-hidden="true"><span style="--progress: ${safeLoad}%"></span></span>
+            </button>
+          `
+        }).join('')
+
+        const actorProjects = projects.filter((project) => project.owner === selectedActor.name)
+        const recentActivity = activityRecords.find((activity) => activity.actorId === selectedActor.id)
+        const actorSummaryRows = [
+          ['身份', selectedActor.type === 'human' ? '人类' : 'Agent'],
+          ['当前状态', selectedActor.status],
+          ['工作负载', `${clampPercent(selectedActor.load)}%`],
+          ['参与项目', actorProjects.map((project) => project.name).join('、') || '暂无'],
+        ]
+        const skillMarkup = selectedActor.skills.map((skill) => `<span class="skill-chip">${escapeHtml(skill)}</span>`).join('')
+
+        return elementFromHTML(`
+          <section class="page-view overview-shell" data-page="actors" aria-labelledby="actors-title">
+            ${renderOverviewHeader('actors', '观察人类与 Agent 的负载、技能和协作关系', '邀请协作者')}
+            <div class="metric-grid" aria-label="协作者网络关键指标">${renderMetricCards(metrics)}</div>
+            <div class="actor-layout">
+              <section class="signature-stage actor-network-stage" aria-labelledby="actors-signature-title">
+                <div class="signature-heading">
+                  <div><h2 id="actors-signature-title">协作网络</h2><span>${visibleActors.length} 个节点 · ${actorConnections.filter((connection) => visibleActorIds.has(connection.from) && visibleActorIds.has(connection.to)).length} 条连接</span></div>
+                  <div class="segmented" aria-label="协作者类型筛选">${filters}</div>
+                </div>
+                <div class="network-scroll" tabindex="0" aria-label="协作者关系图，可在窄屏横向滚动">
+                  <div class="actor-network-canvas">
+                    <svg class="network-connectors" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${connectors}</svg>
+                    ${nodes}
+                  </div>
+                </div>
+              </section>
+              <aside class="context-panel actor-summary" aria-live="polite" aria-labelledby="actor-summary-title">
+                <div class="panel-heading"><h2 id="actor-summary-title">${escapeHtml(selectedActor.name)}</h2><span class="status-badge ${selectedActor.status === '待命' ? '' : 'is-live'}">${escapeHtml(selectedActor.status)}</span></div>
+                <dl class="context-list">${renderContextRows(actorSummaryRows)}</dl>
+                <div class="skill-chips" aria-label="技能">${skillMarkup}</div>
+                <p class="summary-note">最近活动：${escapeHtml(recentActivity?.text || '暂无')}</p>
+              </aside>
+            </div>
+          </section>
+        `)
       }
 
       function renderTasks() {
@@ -1268,7 +2204,74 @@
         mainContent.focus()
       })
 
+      function rerenderCurrentPageAndRestoreFocus(attribute, value) {
+        renderCurrentPage()
+        const target = Array.from(pageRoot.querySelectorAll(`[${attribute}]`))
+          .find((element) => element.getAttribute(attribute) === value)
+        target?.focus()
+      }
+
       document.addEventListener('click', (event) => {
+        const dashboardSelection = event.target.closest('[data-dashboard-select]')
+        if (dashboardSelection) {
+          const selection = dashboardSelection.dataset.dashboardSelect
+          const isKnownRisk = riskQueue.some((risk) => risk.id === selection)
+          const isKnownActor = actors.some((actor) => actor.id === selection)
+          if (isKnownRisk || isKnownActor) {
+            previewState.dashboardSelection = selection
+            rerenderCurrentPageAndRestoreFocus('data-dashboard-select', selection)
+          }
+          return
+        }
+
+        const projectFilter = event.target.closest('[data-project-filter]')
+        if (projectFilter) {
+          const filter = projectFilter.dataset.projectFilter
+          if (projectFilterValues.has(filter)) {
+            previewState.projectFilter = filter
+            const visibleProjects = projects.filter((project) => projectMatchesFilter(project, filter))
+            if (!visibleProjects.some((project) => project.id === previewState.selectedProjectId)) {
+              previewState.selectedProjectId = visibleProjects[0]?.id || previewState.selectedProjectId
+            }
+            rerenderCurrentPageAndRestoreFocus('data-project-filter', filter)
+          }
+          return
+        }
+
+        const projectSelection = event.target.closest('[data-project-id]')
+        if (projectSelection) {
+          const projectId = projectSelection.dataset.projectId
+          if (projects.some((project) => project.id === projectId)) {
+            previewState.selectedProjectId = projectId
+            rerenderCurrentPageAndRestoreFocus('data-project-id', projectId)
+          }
+          return
+        }
+
+        const actorFilter = event.target.closest('[data-actor-filter]')
+        if (actorFilter) {
+          const filter = actorFilter.dataset.actorFilter
+          if (actorFilterValues.has(filter)) {
+            previewState.actorFilter = filter
+            const visibleActors = actors.filter((actor) => filter === 'all' || actor.type === filter)
+            if (!visibleActors.some((actor) => actor.id === previewState.selectedActorId)) {
+              previewState.selectedActorId = visibleActors[0]?.id || previewState.selectedActorId
+            }
+            rerenderCurrentPageAndRestoreFocus('data-actor-filter', filter)
+          }
+          return
+        }
+
+        const actorSelection = event.target.closest('[data-actor-id]')
+        if (actorSelection) {
+          const actorId = actorSelection.dataset.actorId
+          if (actors.some((actor) => actor.id === actorId)) {
+            previewState.selectedActorId = actorId
+            rerenderCurrentPageAndRestoreFocus('data-actor-id', actorId)
+          }
+          return
+        }
+
         const action = event.target.closest('[data-prototype-action]')
         if (action) showToast(`${action.dataset.prototypeAction}：预览模式，未写入数据`)
       })
