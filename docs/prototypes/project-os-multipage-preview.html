@@ -931,6 +931,8 @@
       }
 
       const pageRoot = document.querySelector('[data-page-root]')
+      const skipLink = document.querySelector('.skip-link')
+      const mainContent = document.querySelector('#main-content')
       const toast = document.querySelector('.toast')
 
       const pageRenderers = {
@@ -1185,6 +1187,11 @@
         toast.classList.add('is-visible')
         window.setTimeout(() => toast.classList.remove('is-visible'), 1900)
       }
+
+      skipLink.addEventListener('click', (event) => {
+        event.preventDefault()
+        mainContent.focus()
+      })
 
       document.addEventListener('click', (event) => {
         const action = event.target.closest('[data-prototype-action]')
