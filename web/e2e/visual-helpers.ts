@@ -8,9 +8,7 @@ export const screenshotOptions = {
 } as const
 
 export async function freezeVisualTime(page: Page) {
-  await page.addInitScript(() => {
-    Date.now = () => Date.parse('2026-07-28T12:15:00+08:00')
-  })
+  await page.clock.setFixedTime(new Date(2026, 6, 28, 12, 15))
 }
 
 export async function openReadyPage(page: Page, path: string) {
