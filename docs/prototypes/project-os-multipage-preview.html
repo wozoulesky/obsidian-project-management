@@ -1434,9 +1434,9 @@
       }
 
       .task-fan-canvas {
-        --fan-gap: 46px;
+        --fan-gap: 56px;
         position: relative;
-        min-width: 430px;
+        min-width: 450px;
         min-height: 292px;
         perspective: 1050px;
         perspective-origin: 50% 45%;
@@ -1463,6 +1463,30 @@
         top: 51%;
         left: 50%;
         z-index: calc(var(--count) - var(--index) + 2);
+        width: 44px;
+        min-height: 205px;
+        padding: 0;
+        overflow: visible;
+        border: 0;
+        color: inherit;
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+        transform: translate(-50%, -50%) translate3d(calc(var(--fan-position) * var(--fan-gap)), calc(var(--index) * -2px), calc((var(--count) - var(--index)) * 8px)) rotateY(calc(var(--fan-position) * -6deg)) rotateZ(calc(var(--fan-position) * 2deg));
+        transform-style: preserve-3d;
+        transition: transform 220ms ease;
+      }
+
+      .task-fan-card[aria-pressed="true"] {
+        z-index: calc(var(--count) + 3);
+        transform: translate(-50%, -50%) translate3d(calc(var(--fan-position) * var(--fan-gap)), -10px, 40px) rotateY(calc(var(--fan-position) * -6deg)) rotateZ(calc(var(--fan-position) * 2deg));
+      }
+
+      .task-fan-card-visual {
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 50%;
         width: 160px;
         min-height: 205px;
         padding: 42px 14px 14px;
@@ -1470,24 +1494,28 @@
         border: 1px solid var(--line-bright);
         border-radius: 14px;
         clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
-        color: inherit;
         background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(25, 31, 27, 0.95));
         box-shadow: inset 0 1px rgba(255, 255, 255, 0.16), 0 20px 34px rgba(0, 0, 0, 0.5);
-        cursor: pointer;
-        text-align: left;
-        transform: translate(-50%, -50%) translate3d(calc(var(--fan-position) * var(--fan-gap)), calc(var(--index) * -2px), calc((var(--count) - var(--index)) * 8px)) rotateY(calc(var(--fan-position) * -6deg)) rotateZ(calc(var(--fan-position) * 2deg));
-        transform-style: preserve-3d;
-        transition: transform 220ms ease, border-color 180ms ease, box-shadow 180ms ease;
+        pointer-events: none;
+        transform: translateX(-50%);
+        transition: border-color 180ms ease, box-shadow 180ms ease;
       }
 
-      .task-fan-card[aria-pressed="true"] {
-        z-index: calc(var(--count) + 3);
+      .task-fan-card[aria-pressed="true"] .task-fan-card-visual {
         border-color: rgba(55, 245, 138, 0.86);
         box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(55, 245, 138, 0.24), 0 0 36px rgba(55, 245, 138, 0.32), 0 24px 38px rgba(0, 0, 0, 0.58);
-        transform: translate(-50%, -50%) translate3d(calc(var(--fan-position) * var(--fan-gap)), -10px, 40px) rotateY(calc(var(--fan-position) * -6deg)) rotateZ(calc(var(--fan-position) * 2deg));
       }
 
-      .task-fan-card::before {
+      .task-fan-card:focus-visible {
+        outline: none;
+      }
+
+      .task-fan-card:focus-visible .task-fan-card-visual {
+        outline: 2px solid var(--green);
+        outline-offset: 3px;
+      }
+
+      .task-fan-card-visual::before {
         position: absolute;
         top: 0;
         right: 0;
@@ -1499,27 +1527,27 @@
         content: "";
       }
 
-      .task-fan-card small,
-      .task-fan-card strong,
-      .task-fan-card span {
+      .task-fan-card-visual > small,
+      .task-fan-card-visual > strong,
+      .task-fan-card-visual > span {
         position: relative;
         z-index: 1;
         display: block;
         overflow-wrap: anywhere;
       }
 
-      .task-fan-card small {
+      .task-fan-card-visual > small {
         color: var(--muted);
         font-size: 8px;
         letter-spacing: 0.05em;
       }
 
-      .task-fan-card strong {
+      .task-fan-card-visual > strong {
         margin: 8px 0 13px;
         font-size: 11px;
       }
 
-      .task-fan-card span {
+      .task-fan-card-visual > span {
         margin-top: 4px;
         color: #b9c2bc;
         font-size: 9px;
@@ -2219,6 +2247,15 @@
           scroll-snap-align: center;
         }
 
+        .task-fan-card-visual {
+          position: relative;
+          top: auto;
+          left: auto;
+          width: auto;
+          min-height: 204px;
+          transform: none;
+        }
+
         .task-fan-scroll {
           scroll-snap-type: x mandatory;
         }
@@ -2263,6 +2300,16 @@
           top: auto;
           left: auto;
           z-index: auto;
+          width: auto;
+          min-height: 165px;
+          padding: 0;
+          transform: none;
+        }
+
+        .task-fan-card-visual {
+          position: relative;
+          top: auto;
+          left: auto;
           width: auto;
           min-height: 165px;
           padding: 36px 11px 11px;
@@ -3066,14 +3113,102 @@
         `)
       }
 
-      function safeRecords(collection) {
-        return Array.isArray(collection)
-          ? collection.filter((item) => item && typeof item === 'object' && typeof item.id === 'string' && item.id)
-          : []
-      }
-
       function safeStringList(collection) {
         return Array.isArray(collection) ? collection.filter((item) => typeof item === 'string' && item) : []
+      }
+
+      function safeText(value, fallback) {
+        return typeof value === 'string' && value.trim() ? value : fallback
+      }
+
+      function safeNumber(value, fallback = 0) {
+        return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+      }
+
+      function normalizeExecutionRecord(item, kind) {
+        if (kind === 'task') return {
+          ...item,
+          code:safeText(item.code, 'TASK-UNKNOWN'),
+          title:safeText(item.title, '未命名任务'),
+          description:safeText(item.description, '暂无任务说明'),
+          owner:safeText(item.owner, '未指派'),
+          projectId:safeText(item.projectId, ''),
+          project:safeText(item.project, '未知项目'),
+          start:safeText(item.start, '日期未知'),
+          due:safeText(item.due, '日期未知'),
+          status:safeText(item.status, '待处理'),
+          priority:safeText(item.priority, '未知'),
+          progress:safeNumber(item.progress),
+          scope:safeStringList(item.scope),
+          dependencies:safeStringList(item.dependencies),
+          tags:safeStringList(item.tags),
+        }
+        if (kind === 'requirement') return {
+          ...item,
+          code:safeText(item.code, 'REQ-UNKNOWN'),
+          title:safeText(item.title, '未命名需求'),
+          status:safeText(item.status, '收集'),
+          owner:safeText(item.owner, '未指派'),
+          priority:safeText(item.priority, '未知'),
+          taskIds:safeStringList(item.taskIds),
+          acceptanceCriteria:safeStringList(item.acceptanceCriteria),
+          changeRisk:safeText(item.changeRisk, '未知'),
+        }
+        if (kind === 'defect') return {
+          ...item,
+          code:safeText(item.code, 'BUG-UNKNOWN'),
+          title:safeText(item.title, '未命名缺陷'),
+          severity:safeText(item.severity, '未知'),
+          impact:safeText(item.impact, '未知'),
+          status:safeText(item.status, '待分诊'),
+          owner:safeText(item.owner, '未指派'),
+          version:safeText(item.version, '未知版本'),
+          requirementId:safeText(item.requirementId, ''),
+          projectId:safeText(item.projectId, ''),
+          steps:safeStringList(item.steps),
+        }
+        if (kind === 'milestone') return {
+          ...item,
+          phase:safeText(item.phase, '未知阶段'),
+          name:safeText(item.name, '未命名里程碑'),
+          date:safeText(item.date, '日期未知'),
+          status:safeText(item.status, '未知'),
+          summary:safeText(item.summary, '暂无里程碑说明'),
+          owner:safeText(item.owner, '未指派'),
+          risk:safeText(item.risk, '未知'),
+        }
+        if (kind === 'deliverable') return {
+          ...item,
+          projectId:safeText(item.projectId, ''),
+          name:safeText(item.name, '未命名交付物'),
+          status:safeText(item.status, '未知'),
+          time:safeText(item.time, '时间未知'),
+          owner:safeText(item.owner, '未指派'),
+        }
+        if (kind === 'handoff') return {
+          ...item,
+          projectId:safeText(item.projectId, ''),
+          from:safeText(item.from, '未知交接方'),
+          to:safeText(item.to, '未知接收方'),
+          time:safeText(item.time, '时间未知'),
+          summary:safeText(item.summary, '暂无交接说明'),
+          status:safeText(item.status, '未知'),
+        }
+        return { ...item }
+      }
+
+      function safeRecords(collection) {
+        if (!Array.isArray(collection)) return []
+        const recordKind = collection === tasks ? 'task'
+          : collection === requirements ? 'requirement'
+          : collection === defects ? 'defect'
+          : collection === milestones ? 'milestone'
+          : collection === deliverables ? 'deliverable'
+          : collection === handoffs ? 'handoff'
+          : 'generic'
+        return collection
+          .filter((item) => item && typeof item === 'object' && typeof item.id === 'string' && item.id)
+          .map((item) => normalizeExecutionRecord(item, recordKind))
       }
 
       function normalizeRecordSelection(stateKey, records) {
@@ -3366,7 +3501,7 @@
         const fanCards = visibleTasks.length ? visibleTasks.map((task, index) => {
           const status = effectiveTaskStatus(task)
           return `<button class="task-fan-card" type="button" data-task-id="${escapeHtml(task.id)}" data-focus-key="tasks-fan-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--index:${index};--count:${visibleTasks.length}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}">
-            <small>${escapeHtml(task.priority)}优先 · ${escapeHtml(task.code)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(status)}</span><span>截止 ${escapeHtml(task.due)}</span><span>进度 ${clampPercent(task.progress)}%</span>
+            <span class="task-fan-card-visual"><small>${escapeHtml(task.priority)}优先 · ${escapeHtml(task.code)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(status)}</span><span>截止 ${escapeHtml(task.due)}</span><span>进度 ${clampPercent(task.progress)}%</span></span>
           </button>`
         }).join('') : '<div class="empty-state"><div><strong>没有可展示任务卡</strong>当前范围不会生成空的三维卡片。</div></div>'
         const taskRows = selectedTask ? [
@@ -3737,6 +3872,9 @@
       }
 
       document.addEventListener('click', (event) => {
+        const disabledControl = event.target instanceof Element ? event.target.closest('[aria-disabled="true"]') : null
+        if (disabledControl) return
+
         const dashboardSelection = event.target.closest('[data-dashboard-select]')
         if (dashboardSelection) {
           const selection = dashboardSelection.dataset.dashboardSelect
@@ -3875,14 +4013,12 @@
           const taskId = taskComplete.dataset.taskComplete
           const task = safeRecords(tasks).find((item) => item.id === taskId)
           if (task) {
+            if (effectiveTaskStatus(task) === '已完成') return
             if (!(previewState.completedTaskIds instanceof Set)) previewState.completedTaskIds = new Set()
-            const wasComplete = effectiveTaskStatus(task) === '已完成'
             previewState.completedTaskIds.add(taskId)
             previewState.selectedTaskId = taskId
             rerenderCurrentPageAndRestoreFocus('data-task-complete', taskId, taskComplete.dataset.focusKey)
-            announceSelection(wasComplete
-              ? `${task.code} 已是预览完成态；仍未写入系统`
-              : `${task.code} 已标记为预览完成态；仅保存在本页内存，未写入系统`)
+            announceSelection(`${task.code} 已标记为预览完成态；仅保存在本页内存，未写入系统`)
           }
           return
         }
