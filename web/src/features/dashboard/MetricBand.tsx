@@ -1,9 +1,14 @@
-import type { DashboardSnapshot } from '../../data/domain'
+import { MetricGrid } from '../../components/layout/MetricGrid'
+import type { DashboardSnapshot, Project, RiskItem } from '../../data/domain'
 
 export function MetricBand({
   metrics,
+  projects,
+  risks,
 }: {
   metrics: DashboardSnapshot['metrics']
+  projects: Project[]
+  risks: RiskItem[]
 }) {
   const completionRate =
     metrics.totalTasks === 0
@@ -11,41 +16,38 @@ export function MetricBand({
       : Math.round((metrics.completedTasks / metrics.totalTasks) * 100)
   const metricItems = [
     {
-      label: '任务完成率',
+      label: '项目总数',
+      value: String(projects.length),
+      detail: `${projects.filter(({ status }) => status === 'in_progress').length} 个进行中`,
+    },
+    {
+      label: '当前项目任务完成率',
       value: `${completionRate}%`,
       detail: `${metrics.completedTasks} / ${metrics.totalTasks} 项`,
     },
     {
-      label: '需求交付',
-      value: `${metrics.deliveredRequirements} / ${metrics.totalRequirements}`,
-      detail: '已交付 / 总数',
+      label: '当前项目待处理风险',
+      value: String(risks.length),
+      detail: `${risks.filter(({ level }) => level === 'critical').length} 项严重`,
     },
     {
-      label: '活跃缺陷',
-      value: String(metrics.activeDefects),
-      detail: `${metrics.seriousDefects} 个严重`,
-    },
-    {
-      label: '每周速度',
-      value: String(metrics.velocityPerWeek),
-      detail: '项 / 周',
-    },
-    {
-      label: '活跃协作者',
+      label: '当前项目活跃协作者',
       value: String(metrics.activeActors),
       detail: `${metrics.activeAgents} 个 Agent`,
     },
   ]
 
   return (
-    <section className="metrics-grid" aria-label="项目指标">
-      {metricItems.map(({ detail, label, value }) => (
-        <article className="metric-card" key={label}>
-          <span className="metric-card__label">{label}</span>
-          <strong className="metric-value">{value}</strong>
-          <span className="metric-card__detail">{detail}</span>
-        </article>
-      ))}
+    <section aria-label="项目指标">
+      <MetricGrid ariaLabel="全局驾驶舱关键指标">
+        {metricItems.map(({ detail, label, value }) => (
+          <article className="metric-card dashboard-metric" key={label}>
+            <span className="metric-card__label">{label}</span>
+            <strong className="metric-value">{value}</strong>
+            <span className="metric-card__detail">{detail}</span>
+          </article>
+        ))}
+      </MetricGrid>
     </section>
   )
 }

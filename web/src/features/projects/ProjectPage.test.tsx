@@ -74,6 +74,71 @@ function mockPortfolio() {
 }
 
 describe('ProjectPage', () => {
+  it('selects an evidence-based summary without navigating and keeps a real detail link', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    vi.mocked(projectRepository.listAllTasks).mockResolvedValue([
+      {
+        id: 'atlas-overdue',
+        code: 'TASK-011',
+        projectId: 'atlas',
+        title: '补齐回滚证据',
+        description: '',
+        assignee: actors[0]!,
+        assigneeId: actors[0]!.id,
+        startDate: '2026-07-10',
+        dueDate: '2026-07-20',
+        priority: 'P0',
+        status: 'overdue',
+        progress: 40,
+        milestoneId: 'release',
+        dependencyIds: [],
+      },
+      {
+        id: 'atlas-next',
+        code: 'TASK-012',
+        projectId: 'atlas',
+        title: '发布复核',
+        description: '',
+        assignee: actors[0]!,
+        assigneeId: actors[0]!.id,
+        startDate: '2026-07-21',
+        dueDate: '2026-08-04',
+        priority: 'P1',
+        status: 'in_progress',
+        progress: 60,
+        milestoneId: 'release',
+        dependencyIds: [],
+      },
+    ])
+    renderApp(<ProjectPage />, { route: '/projects' })
+
+    const atlas = await screen.findByRole('article', { name: 'Atlas 迁移' })
+    const summaryButton = within(atlas).getByRole('button', {
+      name: '查看 Atlas 迁移 摘要',
+    })
+    const detailLink = within(atlas).getByRole('link', {
+      name: '进入 Atlas 迁移 详情',
+    })
+    expect(detailLink).toHaveAttribute('href', '/projects/atlas')
+
+    await user.click(summaryButton)
+
+    expect(window.location.pathname).toBe('/projects')
+    expect(summaryButton).toHaveAttribute('aria-pressed', 'true')
+    const summary = screen.getByRole('region', {
+      name: 'Atlas 迁移项目摘要',
+    })
+    expect(within(summary).getByText('Lin')).toBeVisible()
+    expect(
+      within(within(summary).getByText('当前状态').parentElement!)
+        .getByText('进行中'),
+    ).toBeVisible()
+    expect(within(summary).getByText('62%')).toBeVisible()
+    expect(within(summary).getByText('1 项逾期')).toBeVisible()
+    expect(within(summary).getByText('2026-07-20')).toBeVisible()
+  })
+
   it('renders actual portfolio fields and real grouped task counts', async () => {
     mockPortfolio()
     vi.mocked(projectRepository.listAllTasks).mockResolvedValue([

@@ -12,15 +12,20 @@ import {
   LoadingState,
   RefreshState,
 } from '../../components/data/DataState'
+import { PageHeader } from '../../components/layout/PageHeader'
 import { Button } from '../../components/ui/Button'
+import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Actor } from '../../data/domain'
 import {
   useActors,
   useAllTasks,
+  useCurrentActor,
   useDeactivateActor,
   useProjects,
 } from '../../data/query-hooks'
 import { ActorFormDialog } from './ActorFormDialog'
+import { ActorNetwork } from './ActorNetwork'
+import './actors-glass.css'
 
 const roleLabels: Record<string, string> = {
   owner: '负责人',
@@ -132,6 +137,7 @@ type DialogState =
 
 export function ActorPage() {
   const actorsQuery = useActors()
+  const currentActorQuery = useCurrentActor()
   const projectsQuery = useProjects()
   const tasksQuery = useAllTasks()
   const [dialog, setDialog] = useState<DialogState>(null)
@@ -155,7 +161,12 @@ export function ActorPage() {
     return counts
   }, [tasksQuery.data])
 
-  const queries = [actorsQuery, projectsQuery, tasksQuery]
+  const queries = [
+    actorsQuery,
+    currentActorQuery,
+    projectsQuery,
+    tasksQuery,
+  ]
   const initialErrorQuery = queries.find(
     (query) => query.isError && query.data === undefined,
   )
@@ -163,10 +174,12 @@ export function ActorPage() {
     && queries.some((query) => query.isPending)
   const error = initialErrorQuery?.error
     ?? actorsQuery.error
+    ?? currentActorQuery.error
     ?? projectsQuery.error
     ?? tasksQuery.error
   const retry = () => {
     void actorsQuery.refetch()
+    void currentActorQuery.refetch()
     void projectsQuery.refetch()
     void tasksQuery.refetch()
   }
@@ -194,24 +207,24 @@ export function ActorPage() {
 
   return (
     <section aria-labelledby="actor-page-title" className="actor-page">
-      <header className="project-page__header">
-        <div>
-          <p className="project-page__eyebrow">ACTORS</p>
-          <h1 id="actor-page-title">负责人目录</h1>
-          <p>统一查看人类负责人和 Agent 的工作状态与负载。</p>
-        </div>
-        <Button
-          onClick={(event) => openDialog(event, { mode: 'create' })}
-          variant="primary"
-        >
-          新增负责人
-        </Button>
-      </header>
+      <PageHeader
+        actions={(
+          <Button
+            onClick={(event) => openDialog(event, { mode: 'create' })}
+            variant="primary"
+          >
+            新增负责人
+          </Button>
+        )}
+        eyebrow="ACTOR NETWORK"
+        subtitle="用项目与任务证据观察人类负责人和 Agent 的技能、负载与协作关系。"
+        title={<span id="actor-page-title">负责人目录</span>}
+      />
 
-      <aside className="actor-page__agent-note">
+      <GlassPanel ariaLabel="Agent 注册说明" className="actor-page__agent-note">
         <strong>Agent 通过 MCP 注册。</strong>
         <span>在 Agent 客户端完成注册后，它会自动出现在此目录中。</span>
-      </aside>
+      </GlassPanel>
       {copyStatus ? <p className="actor-page__copy-status" role="status">{copyStatus}</p> : null}
 
       {isPending ? <LoadingState label="正在加载负责人目录" /> : null}
@@ -233,7 +246,22 @@ export function ActorPage() {
           {(actorsQuery.data ?? []).length === 0 ? (
             <EmptyState title="还没有负责人" />
           ) : (
-            <div className="actor-table data-grid">
+            <>
+              <ActorNetwork
+                actors={actorsQuery.data ?? []}
+                currentActorId={currentActorQuery.data?.id}
+                projects={projectsQuery.data ?? []}
+                tasks={tasksQuery.data ?? []}
+              />
+              <GlassPanel as="div" className="actor-directory-panel">
+                <div className="actor-directory-panel__heading">
+                  <div>
+                    <p className="project-page__eyebrow">FULL DIRECTORY</p>
+                    <h2>完整目录</h2>
+                  </div>
+                  <span>{actorsQuery.data?.length ?? 0} 位协作者</span>
+                </div>
+                <div className="actor-table data-grid">
               <table aria-label="负责人目录">
                 <thead>
                   <tr>
@@ -328,7 +356,9 @@ export function ActorPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+                </div>
+              </GlassPanel>
+            </>
           )}
         </>
       ) : null}

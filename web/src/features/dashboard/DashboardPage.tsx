@@ -1,13 +1,14 @@
 import { useState } from 'react'
 
-import { StatusDonut } from '../../components/charts/StatusDonut'
-import { TrendChart } from '../../components/charts/TrendChart'
 import {
   ErrorState,
   LoadingState,
   RefreshState,
 } from '../../components/data/DataState'
+import { PageHeader } from '../../components/layout/PageHeader'
 import { Badge } from '../../components/ui/Badge'
+import { GlassPanel } from '../../components/ui/GlassPanel'
+import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import type { RiskItem } from '../../data/domain'
 import {
   useDashboard,
@@ -15,91 +16,104 @@ import {
   useProjectHandoffs,
   useProjectRepository,
   useProjectSessions,
+  useProjects,
 } from '../../data/query-hooks'
 import { ActivityFeed } from './ActivityFeed'
 import { AgentPresence } from './AgentPresence'
 import { LatestHandoff } from './LatestHandoff'
 import { MetricBand } from './MetricBand'
+import { PortfolioHealthStage } from './PortfolioHealthStage'
 import { RecentDeliverables } from './RecentDeliverables'
 import { RiskBanner } from './RiskBanner'
 import { RiskQueue } from './RiskQueue'
+import './dashboard-glass.css'
 
 type DashboardPeriod = 7 | 30 | 90
 
 const periods: DashboardPeriod[] = [7, 30, 90]
+const periodOptions = periods.map((days) => ({
+  label: `${days} 天`,
+  value: String(days),
+}))
 
 export function DashboardPage() {
   const [period, setPeriod] = useState<DashboardPeriod>(30)
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
   const { projectId } = useProjectRepository()
   const dashboard = useDashboard(period)
+  const projects = useProjects()
   const sessions = useProjectSessions(projectId)
   const handoffs = useProjectHandoffs(projectId)
   const deliverables = useProjectDeliverables(projectId)
   const snapshot = dashboard.data
+  const portfolio = projects.data
   const selectedRisk =
     snapshot?.risks.find((risk) => risk.id === selectedRiskId) ?? null
 
-  if (dashboard.isError && !snapshot) {
+  const initialErrorQuery = [dashboard, projects].find(
+    (query) => query.isError && query.data === undefined,
+  )
+  const initialError = initialErrorQuery?.error
+  const retryOverview = () => {
+    void dashboard.refetch()
+    void projects.refetch()
+  }
+
+  if (initialErrorQuery) {
     return (
       <section className="dashboard-page">
         <ErrorState
-          error={dashboard.error}
-          isRetrying={dashboard.isFetching}
-          onRetry={() => dashboard.refetch()}
+          error={initialError}
+          isRetrying={dashboard.isFetching || projects.isFetching}
+          onRetry={retryOverview}
         />
       </section>
     )
   }
 
-  if (dashboard.isPending && !snapshot) {
+  if ((dashboard.isPending && !snapshot) || (projects.isPending && !portfolio)) {
     return (
       <section className="dashboard-page">
         <LoadingState />
       </section>
     )
   }
-  if (!snapshot) return null
+  if (!snapshot || !portfolio) return null
 
-  const completionRate =
-    snapshot.metrics.totalTasks === 0
-      ? 0
-      : Math.round(
-          (snapshot.metrics.completedTasks / snapshot.metrics.totalTasks) *
-            100,
-        )
-  const latestTrend = snapshot.trend.at(-1)
+  const overviewError = dashboard.error ?? projects.error
 
   return (
     <section className="dashboard-page">
       <RefreshState
-        dataUpdatedAt={dashboard.dataUpdatedAt}
-        error={dashboard.error}
-        isError={dashboard.isError}
-        isFetching={dashboard.isFetching}
+        dataUpdatedAt={Math.min(
+          dashboard.dataUpdatedAt,
+          projects.dataUpdatedAt,
+        )}
+        error={overviewError}
+        isError={dashboard.isError || projects.isError}
+        isFetching={dashboard.isFetching || projects.isFetching}
       />
-      <header className="dashboard-page__header">
-        <div>
-          <p className="dashboard-page__eyebrow">PROJECT HEALTH</p>
-          <h1>仪表盘</h1>
-        </div>
-        <div className="period-control" aria-label="趋势时间范围">
-          {periods.map((days) => (
-            <button
-              aria-pressed={period === days}
-              className="period-control__button"
-              key={days}
-              onClick={() => setPeriod(days)}
-              type="button"
-            >
-              {days} 天
-            </button>
-          ))}
-        </div>
-      </header>
+      <PageHeader
+        actions={(
+          <SegmentedControl
+            ariaLabel="趋势时间范围"
+            onChange={(value) => setPeriod(Number(value) as DashboardPeriod)}
+            options={periodOptions}
+            value={String(period)}
+          />
+        )}
+        eyebrow="PORTFOLIO OVERVIEW"
+        subtitle="跨项目查看组合进度；健康、风险、协作与活动来自当前工作区项目范围。"
+        title="全局驾驶舱"
+      />
 
       <RiskBanner risks={snapshot.risks} />
-      <MetricBand metrics={snapshot.metrics} />
+      <MetricBand
+        metrics={snapshot.metrics}
+        projects={portfolio}
+        risks={snapshot.risks}
+      />
+      <PortfolioHealthStage projects={portfolio} snapshot={snapshot} />
 
       <section aria-label="Agent 现场" className="dashboard-relay">
         <div className="dashboard-relay__header">
@@ -146,37 +160,7 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <div className="dashboard-layout dashboard-layout--charts">
-        <section className="dashboard-card dashboard-main">
-          <div className="dashboard-card__header">
-            <div>
-              <p className="dashboard-card__eyebrow">DELIVERY TREND</p>
-              <h2>完成趋势</h2>
-            </div>
-            {latestTrend ? (
-              <span className="dashboard-card__summary tabular-numerals">
-                {latestTrend.actual} 项已完成
-              </span>
-            ) : null}
-          </div>
-          <TrendChart points={snapshot.trend} />
-        </section>
-
-        <section className="dashboard-card dashboard-status">
-          <div className="dashboard-card__header">
-            <div>
-              <p className="dashboard-card__eyebrow">TASK STATUS</p>
-              <h2>状态分布</h2>
-            </div>
-          </div>
-          <StatusDonut
-            completionRate={completionRate}
-            counts={snapshot.taskStatusCounts}
-          />
-        </section>
-      </div>
-
-      <section className="dashboard-card dashboard-risk-section">
+      <GlassPanel ariaLabel="风险工作区" className="dashboard-risk-section">
         <div className="dashboard-card__header">
           <div>
             <p className="dashboard-card__eyebrow">RISK QUEUE</p>
@@ -225,9 +209,9 @@ export function DashboardPage() {
             </aside>
           ) : null}
         </div>
-      </section>
+      </GlassPanel>
 
-      <section className="dashboard-card">
+      <GlassPanel ariaLabel="当前项目活动" className="dashboard-activity-panel">
         <div className="dashboard-card__header">
           <div>
             <p className="dashboard-card__eyebrow">RECENT ACTIVITY</p>
@@ -235,7 +219,7 @@ export function DashboardPage() {
           </div>
         </div>
         <ActivityFeed activities={snapshot.activities} />
-      </section>
+      </GlassPanel>
     </section>
   )
 }

@@ -13,11 +13,15 @@ const statusLabels: Record<ProjectStatus, string> = {
 
 export function ProjectCard({
   owner,
+  onSelect,
   project,
+  selected,
   taskCount,
 }: {
   owner?: Actor
+  onSelect: () => void
   project: Project
+  selected: boolean
   taskCount: number
 }) {
   const risk = projectRisk(project)
@@ -62,9 +66,24 @@ export function ProjectCard({
           value={project.progress}
         />
       </div>
-      <Link className="project-card__link" to={`/projects/${project.id}`}>
-        查看项目
-      </Link>
+      <div className="project-card__actions">
+        <button
+          aria-label={`查看 ${project.name} 摘要`}
+          aria-pressed={selected}
+          className="project-card__summary-button"
+          onClick={onSelect}
+          type="button"
+        >
+          查看摘要
+        </button>
+        <Link
+          aria-label={`进入 ${project.name} 详情`}
+          className="project-card__link"
+          to={`/projects/${project.id}`}
+        >
+          进入项目
+        </Link>
+      </div>
     </article>
   )
 }

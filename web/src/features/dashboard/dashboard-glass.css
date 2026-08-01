@@ -1,0 +1,125 @@
+.dashboard-page {
+  align-content: start;
+  gap: var(--space-5);
+}
+
+.dashboard-metric {
+  background: var(--glass-surface);
+  border-color: var(--glass-line);
+  box-shadow: var(--glass-shadow);
+}
+
+.portfolio-health-stage {
+  display: grid;
+  gap: var(--space-5);
+  padding: clamp(var(--space-4), 2.5vw, var(--space-6));
+}
+
+.dashboard-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.dashboard-panel-heading h2,
+.dashboard-panel-heading h3 {
+  margin: 0;
+}
+
+.dashboard-panel-heading p,
+.dashboard-panel-heading > span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.dashboard-panel-heading--compact {
+  align-items: center;
+}
+
+.portfolio-health-stage__visuals {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr);
+  gap: var(--space-4);
+}
+
+.health-chart-card {
+  min-width: 0;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--glass-surface-raised) 82%, transparent);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-md);
+}
+
+.health-chart-card h3 {
+  font-size: 0.875rem;
+}
+
+.portfolio-health-stage__projects {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.portfolio-health-lanes {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portfolio-health-lanes li {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) minmax(8rem, 2fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--glass-surface-raised) 76%, transparent);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-sm);
+}
+
+.portfolio-health-lanes li > div {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.portfolio-health-lanes li > div span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.portfolio-health-lanes progress {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.dashboard-risk-section,
+.dashboard-activity-panel {
+  padding: 0;
+}
+
+@media (max-width: 52rem) {
+  .portfolio-health-stage__visuals {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 42rem) {
+  .dashboard-page {
+    padding: var(--space-4);
+  }
+
+  .dashboard-panel-heading {
+    flex-direction: column;
+  }
+
+  .portfolio-health-lanes li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .portfolio-health-lanes progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

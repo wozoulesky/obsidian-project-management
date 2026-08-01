@@ -7,15 +7,20 @@ import {
   LoadingState,
   RefreshState,
 } from '../../components/data/DataState'
+import { PageHeader } from '../../components/layout/PageHeader'
 import { Button } from '../../components/ui/Button'
+import { GlassPanel } from '../../components/ui/GlassPanel'
 import {
   useActors,
   useAllTasks,
   useProjects,
 } from '../../data/query-hooks'
+import type { Task } from '../../data/domain'
 import { CreateProjectDialog } from './CreateProjectDialog'
 import { ProjectCard } from './ProjectCard'
+import { ProjectSummaryPanel } from './ProjectSummaryPanel'
 import { projectRisk } from './project-risk'
+import './projects-glass.css'
 
 export function ProjectPage() {
   const projectsQuery = useProjects()
@@ -23,6 +28,9 @@ export function ProjectPage() {
   const tasksQuery = useAllTasks()
   const [searchParams, setSearchParams] = useSearchParams()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null,
+  )
   const openerRef = useRef<HTMLButtonElement | null>(null)
   const ownerId = searchParams.get('owner') ?? ''
   const search = searchParams.get('q') ?? ''
@@ -47,6 +55,17 @@ export function ProjectPage() {
       counts.set(task.projectId, (counts.get(task.projectId) ?? 0) + 1)
     }
     return counts
+  }, [tasksQuery.data])
+
+  const tasksByProject = useMemo(() => {
+    const grouped = new Map<string, Task[]>()
+    for (const task of tasksQuery.data ?? []) {
+      if (!task.projectId) continue
+      const tasks = grouped.get(task.projectId) ?? []
+      tasks.push(task)
+      grouped.set(task.projectId, tasks)
+    }
+    return grouped
   }, [tasksQuery.data])
 
   const filteredProjects = (projectsQuery.data ?? [])
@@ -93,24 +112,28 @@ export function ProjectPage() {
     setDialogOpen(false)
     openerRef.current?.focus()
   }
+  const selectedProject = filteredProjects.find(
+    ({ id }) => id === selectedProjectId,
+  ) ?? null
 
   return (
     <section aria-labelledby="project-page-title" className="project-page">
-      <header className="project-page__header">
-        <div>
-          <p className="project-page__eyebrow">PROJECTS</p>
-          <h1 id="project-page-title">全部项目</h1>
-        </div>
-        <Button
-          onClick={(event) => {
-            openerRef.current = event.currentTarget
-            setDialogOpen(true)
-          }}
-          variant="primary"
-        >
-          新建项目
-        </Button>
-      </header>
+      <PageHeader
+        actions={(
+          <Button
+            onClick={(event) => {
+              openerRef.current = event.currentTarget
+              setDialogOpen(true)
+            }}
+            variant="primary"
+          >
+            新建项目
+          </Button>
+        )}
+        eyebrow="PROJECT MATRIX"
+        subtitle="按负责人和关键词筛选真实项目，并在不离开矩阵的情况下查看摘要。"
+        title={<span id="project-page-title">全部项目</span>}
+      />
 
       <div className="project-page__filters">
         <div aria-label="按负责人筛选" className="project-page__owners" role="group">
@@ -161,15 +184,42 @@ export function ProjectPage() {
             isFetching={queries.some((query) => query.isFetching)}
           />
           {filteredProjects.length > 0 ? (
-            <div className="project-grid">
-              {filteredProjects.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  owner={actorById.get(project.ownerId)}
-                  project={project}
-                  taskCount={taskCounts.get(project.id) ?? 0}
-                />
-              ))}
+            <div className="project-portfolio-layout">
+              <GlassPanel ariaLabel="玻璃项目矩阵" className="project-matrix-panel">
+                <div className="project-matrix-panel__heading">
+                  <div>
+                    <h2>玻璃项目矩阵</h2>
+                    <span>{filteredProjects.length} / {projectsQuery.data?.length ?? 0} 个项目</span>
+                  </div>
+                </div>
+                <div className="project-matrix-scroll" tabIndex={0}>
+                  <div className="project-grid">
+                    {filteredProjects.map((project) => (
+                      <ProjectCard
+                        key={project.id}
+                        onSelect={() => setSelectedProjectId(project.id)}
+                        owner={actorById.get(project.ownerId)}
+                        project={project}
+                        selected={selectedProjectId === project.id}
+                        taskCount={taskCounts.get(project.id) ?? 0}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </GlassPanel>
+              <ProjectSummaryPanel
+                owner={
+                  selectedProject
+                    ? actorById.get(selectedProject.ownerId)
+                    : undefined
+                }
+                project={selectedProject}
+                tasks={
+                  selectedProject
+                    ? tasksByProject.get(selectedProject.id) ?? []
+                    : []
+                }
+              />
             </div>
           ) : (
             <EmptyState title="没有符合当前筛选条件的项目" />

@@ -79,11 +79,54 @@ const tasks: Task[] = [
 
 function arrangeDirectory() {
   vi.spyOn(projectRepository, 'listActors').mockResolvedValue(actors)
+  vi.spyOn(projectRepository, 'getCurrentActor').mockResolvedValue(actors[1]!)
   vi.spyOn(projectRepository, 'listProjects').mockResolvedValue(projects)
   vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue(tasks)
 }
 
 describe('ActorPage', () => {
+  it('draws only evidence-backed edges and marks the current actor accessibly', async () => {
+    arrangeDirectory()
+    vi.mocked(projectRepository.listProjects).mockResolvedValue([
+      { ...projects[0]!, ownerId: actors[0]!.id },
+    ])
+
+    renderApp(<ActorPage />)
+
+    const network = await screen.findByRole('region', {
+      name: '协作者关系网络',
+    })
+    const currentNode = within(network).getByRole('button', {
+      name: /dev-agent.*当前操作者/,
+    })
+    expect(currentNode).toBeVisible()
+    expect(within(network).getByText('delivery')).toBeVisible()
+    expect(within(currentNode).getByText(/1 项未完成/)).toBeVisible()
+    expect(network.querySelectorAll('line')).toHaveLength(1)
+    const relationships = within(network).getByRole('list', {
+      name: '已确认的协作关系',
+    })
+    expect(relationships).toHaveTextContent(
+      'Lin 与 dev-agent 通过 Atlas 的任务 MCP 权限校验协作',
+    )
+  })
+
+  it('does not invent an edge when projects and tasks share no evidence', async () => {
+    arrangeDirectory()
+    vi.mocked(projectRepository.listProjects).mockResolvedValue([])
+    vi.mocked(projectRepository.listAllTasks).mockResolvedValue([])
+
+    renderApp(<ActorPage />)
+
+    const network = await screen.findByRole('region', {
+      name: '协作者关系网络',
+    })
+    expect(network.querySelectorAll('line')).toHaveLength(0)
+    expect(within(network).getByText(
+      '当前没有可由项目与任务证据确认的协作关系。',
+    )).toBeVisible()
+  })
+
   it('shows humans and agents with operational context', async () => {
     arrangeDirectory()
 

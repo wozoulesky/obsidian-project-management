@@ -1,9 +1,16 @@
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderApp } from '../../app/test-utils'
-import type { Actor, Project, ProjectMember, Task } from '../../data/domain'
+import type {
+  Actor,
+  Deliverable,
+  Handoff,
+  Project,
+  ProjectMember,
+  Task,
+} from '../../data/domain'
 import { projectRepository } from '../../data/query-hooks'
 import { ProjectDetailPage } from './ProjectDetailPage'
 
@@ -33,6 +40,13 @@ const project: Project = {
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-28T04:00:00.000Z',
   version: 1,
+}
+
+const secondProject: Project = {
+  ...project,
+  id: 'borealis',
+  code: 'PRJ-002',
+  name: 'Borealis 发布',
 }
 
 const membership: ProjectMember = {
@@ -75,9 +89,41 @@ const createdTask = {
   version: 1,
 } satisfies Task
 
+const handoff: Handoff = {
+  id: 'handoff-atlas',
+  projectId: project.id,
+  sessionId: null,
+  author: owner,
+  summary: '核心链路已完成，等待发布复核。',
+  done: ['完成权限联调'],
+  blockers: [],
+  nextSteps: ['补齐发布证据'],
+  gotchas: [],
+  refs: [],
+  createdAt: '2026-07-29T02:00:00.000Z',
+}
+
+const deliverable: Deliverable = {
+  id: 'deliverable-atlas',
+  projectId: project.id,
+  requirementId: null,
+  taskId: createdTask.id,
+  title: '权限联调报告',
+  kind: 'file',
+  ref: 'reports/permissions.md',
+  note: '来自真实交付登记',
+  createdBy: owner,
+  sessionId: null,
+  createdAt: '2026-07-29T03:00:00.000Z',
+}
+
 afterEach(cleanup)
 
 function mockDetail() {
+  vi.spyOn(projectRepository, 'listProjects').mockResolvedValue([
+    project,
+    secondProject,
+  ])
   vi.spyOn(projectRepository, 'getProject').mockResolvedValue(project)
   vi.spyOn(projectRepository, 'listActors').mockResolvedValue([
     owner,
@@ -88,9 +134,89 @@ function mockDetail() {
     inactiveMembership,
   ])
   vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([])
+  vi.spyOn(projectRepository, 'listProjectHandoffs').mockResolvedValue([
+    handoff,
+  ])
+  vi.spyOn(projectRepository, 'listProjectDeliverables').mockResolvedValue([
+    deliverable,
+  ])
 }
 
 describe('ProjectDetailPage', () => {
+  it('navigates with the real project selector instead of swapping local data', async () => {
+    const user = userEvent.setup()
+    mockDetail()
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    const selector = await screen.findByRole('combobox', {
+      name: '选择项目',
+    })
+    expect(selector).toHaveValue('atlas')
+    expect(screen.getByRole('option', { name: 'Borealis 发布' })).toBeVisible()
+
+    await user.selectOptions(selector, 'borealis')
+
+    expect(window.location.pathname).toBe('/projects/borealis')
+  })
+
+  it('shows an explicit milestone empty state and real relay evidence', async () => {
+    mockDetail()
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    const track = await screen.findByRole('region', {
+      name: '项目里程碑轨迹',
+    })
+    expect(within(track).getByText('当前任务没有里程碑标识')).toBeVisible()
+    const relay = screen.getByRole('region', { name: '交付与交接' })
+    expect(within(relay).getByText(deliverable.title)).toBeVisible()
+    expect(within(relay).getByText(handoff.summary)).toBeVisible()
+  })
+
+  it('derives milestone date, progress and status only from tagged tasks', async () => {
+    mockDetail()
+    vi.mocked(projectRepository.listTasks).mockResolvedValue([
+      {
+        ...createdTask,
+        id: 'milestone-active',
+        title: '里程碑实现',
+        milestoneId: 'M-Release',
+        dueDate: '2026-08-03',
+        progress: 50,
+        status: 'in_progress',
+      },
+      {
+        ...createdTask,
+        id: 'milestone-done',
+        title: '里程碑验收',
+        milestoneId: 'M-Release',
+        dueDate: '2026-08-05',
+        progress: 100,
+        status: 'done',
+      },
+      {
+        ...createdTask,
+        id: 'untagged',
+        title: '无里程碑任务',
+        milestoneId: '   ',
+        dueDate: '2026-09-01',
+        progress: 0,
+        status: 'overdue',
+      },
+    ])
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    const track = await screen.findByRole('region', {
+      name: '项目里程碑轨迹',
+    })
+    expect(within(track).getByRole('heading', { name: 'M-Release' }))
+      .toBeVisible()
+    expect(within(track).getByText('2 项任务')).toBeVisible()
+    expect(within(track).getByText('75%')).toBeVisible()
+    expect(within(track).getByText('进行中')).toBeVisible()
+    expect(within(track).getByText('2026-08-05')).toBeVisible()
+    expect(within(track).queryByText('无里程碑任务')).not.toBeInTheDocument()
+  })
+
   it('creates a task inside the current project only', async () => {
     const user = userEvent.setup()
     mockDetail()

@@ -17,6 +17,54 @@ afterEach(() => {
 })
 
 describe('DashboardPage', () => {
+  it('uses the shared overview composition with four evidence-based metrics', async () => {
+    renderApp(<DashboardPage />)
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: '全局驾驶舱' }),
+    ).toBeVisible()
+    const metrics = screen.getByRole('group', {
+      name: '全局驾驶舱关键指标',
+    })
+    expect(within(metrics).getAllByRole('article')).toHaveLength(4)
+    expect(within(metrics).getByText('项目总数')).toBeVisible()
+    expect(within(metrics).getByText('当前项目任务完成率')).toBeVisible()
+    const riskMetric = within(metrics)
+      .getByText('当前项目待处理风险')
+      .closest('article')
+    expect(riskMetric).not.toBeNull()
+    expect(within(riskMetric!).getByText('2')).toBeVisible()
+    expect(within(riskMetric!).getByText('1 项严重')).toBeVisible()
+    expect(within(metrics).getByText('当前项目活跃协作者')).toBeVisible()
+    expect(
+      screen.getByRole('region', { name: '项目组合健康签名' }),
+    ).toBeVisible()
+    expect(screen.getByText(/当前工作区项目范围/)).toBeVisible()
+  })
+
+  it('keeps the health signature honest when the portfolio is empty', async () => {
+    vi.spyOn(projectRepository, 'listProjects').mockResolvedValue([])
+
+    renderApp(<DashboardPage />)
+
+    expect(await screen.findByText('暂无项目组合数据')).toBeVisible()
+    expect(screen.getByText('创建项目后，这里会展示真实项目进度。'))
+      .toBeVisible()
+  })
+
+  it('shows the project query error instead of a partial global overview', async () => {
+    vi.spyOn(projectRepository, 'listProjects').mockRejectedValue(
+      new Error('项目组合不可用'),
+    )
+
+    renderApp(<DashboardPage />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('项目组合不可用')
+    expect(
+      screen.queryByRole('heading', { level: 1, name: '全局驾驶舱' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('shows the agent onsite relay context without replacing project health', async () => {
     renderApp(<DashboardPage />)
 
