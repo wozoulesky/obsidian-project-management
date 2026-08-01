@@ -103,9 +103,9 @@ export const defaultSeedDocument = {
   handoffs: [],
   deliverables: [],
   settings: {
-    theme: 'system',
+    theme: 'dark',
     background: 'soft',
-    accent: 'blue',
+    accent: 'teal',
     density: 'comfortable',
     updatedAt: seedTimestamp,
     version: 1,

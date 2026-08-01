@@ -62,9 +62,9 @@ export function createMockProjectRepository(): ProjectRepository {
     version: 1,
   }]
   const settingsState: PersistedAppSettings = {
-    theme: 'system',
+    theme: 'dark',
     background: 'soft',
-    accent: 'blue',
+    accent: 'teal',
     density: 'comfortable',
     updatedAt: '2026-07-28T04:00:00.000Z',
     version: 1,

@@ -19,9 +19,9 @@ export const appearanceSchema = z.object({
 export type Appearance = z.infer<typeof appearanceSchema>
 
 export const defaultAppearance: Appearance = {
-  theme: 'system',
+  theme: 'dark',
   background: 'soft',
-  accent: 'blue',
+  accent: 'teal',
   density: 'comfortable',
 }
 

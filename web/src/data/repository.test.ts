@@ -4,6 +4,18 @@ import { actors, defects, requirements, tasks } from './fixtures'
 import { createMockProjectRepository } from './mock-project-repository'
 
 describe('mock project repository', () => {
+  it('starts a fresh mock workspace with the approved dark glass settings', async () => {
+    const repository = createMockProjectRepository()
+
+    await expect(repository.getSettings()).resolves.toMatchObject({
+      theme: 'dark',
+      background: 'soft',
+      accent: 'teal',
+      density: 'comfortable',
+      version: 1,
+    })
+  })
+
   it('creates and lists a project with the shared nullable-date contract', async () => {
     const repository = createMockProjectRepository()
 

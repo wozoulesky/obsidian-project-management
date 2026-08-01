@@ -194,19 +194,19 @@ describe('settings, tokens, export, backup, and seed', () => {
     const initial = settings.get()
 
     expect(initial).toMatchObject({
-      theme: 'system',
+      theme: 'dark',
       background: 'soft',
-      accent: 'blue',
+      accent: 'teal',
       density: 'comfortable',
       version: 1,
     })
 
     const updated = settings.update(
-      { ...initial, theme: 'dark' },
+      { ...initial, theme: 'light' },
       'actor_owner',
       'web',
     )
-    expect(updated).toMatchObject({ theme: 'dark', version: 2 })
+    expect(updated).toMatchObject({ theme: 'light', version: 2 })
     expect(settings.get()).toEqual(updated)
     expect(new ActivityService(database).list({ entityId: 'app' }))
       .toHaveLength(1)
@@ -246,7 +246,7 @@ describe('settings, tokens, export, backup, and seed', () => {
     expect(database.prepare('SELECT COUNT(*) AS count FROM settings').get())
       .toEqual({ count: 0 })
     const updated = settings.update(
-      { ...initial, theme: 'dark' },
+      { ...initial, theme: 'light' },
       'actor_owner',
       'web',
     )
@@ -259,12 +259,12 @@ describe('settings, tokens, export, backup, and seed', () => {
     insertOwner(database)
     const settings = new SettingsService(database)
     const created = settings.update(
-      { ...settings.get(), theme: 'dark' },
+      { ...settings.get(), theme: 'light' },
       'actor_owner',
       'web',
     )
     const changed = settings.update(
-      { ...created, accent: 'teal' },
+      { ...created, accent: 'purple' },
       'actor_owner',
       'web',
     )
@@ -292,7 +292,7 @@ describe('settings, tokens, export, backup, and seed', () => {
     const initial = settings.get()
 
     expect(() => settings.update(
-      { ...initial, theme: 'dark' },
+      { ...initial, theme: 'light' },
       'missing_actor',
       'web',
     )).toThrowError(expect.objectContaining({ code: 'SETTINGS_UPDATE_FAILED' }))
@@ -1217,6 +1217,13 @@ describe('settings, tokens, export, backup, and seed', () => {
     expect(document.sessions).toEqual([])
     expect(document.handoffs).toEqual([])
     expect(document.deliverables).toEqual([])
+    expect(document.settings).toMatchObject({
+      theme: 'dark',
+      background: 'soft',
+      accent: 'teal',
+      density: 'comfortable',
+      version: 1,
+    })
   })
 
   it('accepts the typed legacy fixture directly at the seed boundary', () => {
