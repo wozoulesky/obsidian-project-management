@@ -22,6 +22,27 @@ import {
   formatUpdatedAt,
   sortDefects,
 } from './DefectPage'
+import defectGlassCss from './defects-glass.css?raw'
+
+function declarationsForRule(css: string, selector: string) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`))
+  if (!match?.[1]) throw new Error(`Missing CSS rule: ${selector}`)
+
+  return new Map(
+    match[1]
+      .split(';')
+      .map((declaration) => declaration.trim())
+      .filter(Boolean)
+      .map((declaration) => {
+        const separator = declaration.indexOf(':')
+        return [
+          declaration.slice(0, separator).trim(),
+          declaration.slice(separator + 1).trim(),
+        ]
+      }),
+  )
+}
 
 function defect(overrides: Partial<Defect>): Defect {
   return {
@@ -136,6 +157,17 @@ describe('sortDefects', () => {
 })
 
 describe('DefectPage workflow', () => {
+  it('preserves the severity border when a defect card is selected', () => {
+    const selectedRule = declarationsForRule(
+      defectGlassCss,
+      '.defect-matrix__card[aria-pressed="true"]',
+    )
+
+    expect(selectedRule.has('border-color')).toBe(false)
+    expect(selectedRule.has('border-left-color')).toBe(false)
+    expect(selectedRule.get('outline')).toBe('2px solid var(--primary)')
+  })
+
   it('renders a semantic severity by status matrix from real defect fields', async () => {
     renderApp(<AppRoutes />, { route: '/defects' })
 
