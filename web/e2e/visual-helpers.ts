@@ -29,6 +29,52 @@ export async function openReadyDashboard(page: Page) {
     await expect(canvases.nth(index)).toBeVisible()
   }
 
+  await expect
+    .poll(async () =>
+      canvases.evaluateAll((elements) => {
+        const devicePixelRatio = window.devicePixelRatio || 1
+        const cssTolerance = 1
+        const bitmapTolerance = Math.max(1, devicePixelRatio)
+
+        return elements.every((element) => {
+          if (!(element instanceof HTMLCanvasElement)) return false
+
+          const container = element.closest('.echart')
+          if (!(container instanceof HTMLElement)) return false
+
+          const canvasRect = element.getBoundingClientRect()
+          const containerRect = container.getBoundingClientRect()
+          const containerStyle = window.getComputedStyle(container)
+          const horizontalInset =
+            Number.parseFloat(containerStyle.borderLeftWidth) +
+            Number.parseFloat(containerStyle.paddingLeft) +
+            Number.parseFloat(containerStyle.paddingRight) +
+            Number.parseFloat(containerStyle.borderRightWidth)
+          const verticalInset =
+            Number.parseFloat(containerStyle.borderTopWidth) +
+            Number.parseFloat(containerStyle.paddingTop) +
+            Number.parseFloat(containerStyle.paddingBottom) +
+            Number.parseFloat(containerStyle.borderBottomWidth)
+          const contentWidth = containerRect.width - horizontalInset
+          const contentHeight = containerRect.height - verticalInset
+
+          return (
+            contentWidth > 0 &&
+            contentHeight > 0 &&
+            canvasRect.width > 0 &&
+            canvasRect.height > 0 &&
+            Math.abs(canvasRect.width - contentWidth) <= cssTolerance &&
+            Math.abs(canvasRect.height - contentHeight) <= cssTolerance &&
+            Math.abs(element.width - contentWidth * devicePixelRatio) <=
+              bitmapTolerance &&
+            Math.abs(element.height - contentHeight * devicePixelRatio) <=
+              bitmapTolerance
+          )
+        })
+      }),
+    )
+    .toBe(true)
+
   let previousSignatures: string[] | undefined
   await expect
     .poll(async () => {
