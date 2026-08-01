@@ -192,6 +192,15 @@ export function ProjectDetailPage() {
   }
   const milestoneCount = deriveMilestones(tasks).length
   const openTaskCount = tasks.filter(({ status }) => status !== 'done').length
+  const deliverableMetric = deliverablesQuery.data === undefined
+    ? [
+        '交付物',
+        '—',
+        deliverablesQuery.isError
+          ? '交付证据读取失败'
+          : '正在确认交付证据',
+      ]
+    : ['交付物', String(deliverablesQuery.data.length), '已登记证据']
 
   return (
     <section
@@ -254,7 +263,7 @@ export function ProjectDetailPage() {
               ['总体进度', `${project.progress}%`, '项目记录进度'],
               ['开放任务', String(openTaskCount), `${tasks.length} 项总计`],
               ['里程碑', String(milestoneCount), '来自任务标签'],
-              ['交付物', String(deliverablesQuery.data?.length ?? 0), '已登记证据'],
+              deliverableMetric,
             ].map(([label, value, detail]) => (
               <article className="metric-card dashboard-metric" key={label}>
                 <span className="metric-card__label">{label}</span>

@@ -142,6 +142,15 @@ function mockDetail() {
   ])
 }
 
+function getDeliverableMetric() {
+  const metrics = screen.getByRole('group', {
+    name: '项目详情关键指标',
+  })
+  const metric = within(metrics).getByText('交付物').closest('article')
+  expect(metric).not.toBeNull()
+  return metric!
+}
+
 describe('ProjectDetailPage', () => {
   it('navigates with the real project selector instead of swapping local data', async () => {
     const user = userEvent.setup()
@@ -170,6 +179,57 @@ describe('ProjectDetailPage', () => {
     const relay = screen.getByRole('region', { name: '交付与交接' })
     expect(within(relay).getByText(deliverable.title)).toBeVisible()
     expect(within(relay).getByText(handoff.summary)).toBeVisible()
+  })
+
+  it('marks deliverable evidence as unknown while the first request is pending', async () => {
+    mockDetail()
+    vi.mocked(projectRepository.listProjectDeliverables).mockImplementation(
+      () => new Promise<Deliverable[]>(() => undefined),
+    )
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    await screen.findByRole('heading', { level: 1, name: project.name })
+    const metric = getDeliverableMetric()
+    expect(within(metric).getByText('—')).toBeVisible()
+    expect(within(metric).getByText('正在确认交付证据')).toBeVisible()
+    expect(within(metric).queryByText('0')).not.toBeInTheDocument()
+  })
+
+  it('marks deliverable evidence as unavailable after an initial request error', async () => {
+    mockDetail()
+    vi.mocked(projectRepository.listProjectDeliverables).mockRejectedValue(
+      new Error('交付物服务不可用'),
+    )
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    await screen.findByRole('heading', { level: 1, name: project.name })
+    const metric = getDeliverableMetric()
+    expect(within(metric).getByText('—')).toBeVisible()
+    expect(within(metric).getByText('交付证据读取失败')).toBeVisible()
+    expect(within(metric).queryByText('0')).not.toBeInTheDocument()
+  })
+
+  it('keeps a known deliverable count when a refresh fails', async () => {
+    const user = userEvent.setup()
+    mockDetail()
+    vi.mocked(projectRepository.listProjectDeliverables)
+      .mockResolvedValueOnce([deliverable])
+      .mockRejectedValueOnce(new Error('交付证据刷新失败'))
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    await screen.findByRole('heading', { level: 1, name: project.name })
+    expect(within(getDeliverableMetric()).getByText('1')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: '刷新项目数据' }))
+
+    expect(
+      await screen.findAllByText(/交付证据刷新失败/),
+    ).not.toHaveLength(0)
+    const metric = getDeliverableMetric()
+    expect(within(metric).getByText('1')).toBeVisible()
+    expect(within(metric).getByText('已登记证据')).toBeVisible()
   })
 
   it('derives milestone date, progress and status only from tagged tasks', async () => {
