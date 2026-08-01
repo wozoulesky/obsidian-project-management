@@ -19,8 +19,6 @@ import { TaskInspector } from './TaskInspector'
 import { TaskTable } from './TaskTable'
 import './tasks-glass.css'
 
-const TASK_REFERENCE_DATE = '2026-07-28'
-
 const metricCopy = {
   today: { label: '今日待办', empty: '今日清零', active: '今日聚焦' },
   active: { label: '进行中', empty: '暂无推进', active: '持续推进' },
@@ -28,11 +26,11 @@ const metricCopy = {
   overdue: { label: '逾期', empty: '风险清零', active: '需立即关注' },
 } as const
 
-function taskMetrics(tasks: readonly Task[]) {
+function taskMetrics(tasks: readonly Task[], today: string) {
   const values = {
     today: tasks.filter(
       (task) =>
-        task.dueDate === TASK_REFERENCE_DATE &&
+        task.dueDate === today &&
         task.status !== 'done' &&
         task.status !== 'overdue',
     ).length,
@@ -56,12 +54,18 @@ export function TaskPage() {
     id: string
     taskId: string
   } | null>(null)
+  const now = new Date()
+  const today = [
+    String(now.getFullYear()).padStart(4, '0'),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
   const tasks = tasksQuery.data ?? []
   const filteredTasks = filterTasks(tasks, searchParams)
   const selectedTaskId = searchParams.get('selected')
   const selectedTask =
     filteredTasks.find((task) => task.id === selectedTaskId) ?? null
-  const metrics = taskMetrics(filteredTasks)
+  const metrics = taskMetrics(filteredTasks, today)
 
   const setSelectedTaskId = (taskId: string | null) => {
     setSearchParams((current) => {
@@ -115,7 +119,7 @@ export function TaskPage() {
           </span>
         )}
         eyebrow="PLAN / TASKS"
-        subtitle={`以 ${TASK_REFERENCE_DATE} 为今日基准，聚合筛选范围内的执行状态与交付风险。`}
+        subtitle={`以 ${today} 为今日基准，聚合筛选范围内的执行状态与交付风险。`}
         title={(
           <span id="task-page-heading" tabIndex={-1}>
             任务控制台

@@ -79,6 +79,7 @@ function renderTaskPage() {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.useRealTimers()
   window.history.pushState({}, '', '/')
 })
 
@@ -131,6 +132,8 @@ describe('filterTasks', () => {
 
 describe('TaskPage workflow', () => {
   it('uses the shared glass header and derives four metrics from task data', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 6, 28, 12))
     vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
       task({
         id: 'today',
@@ -183,6 +186,52 @@ describe('TaskPage workflow', () => {
       逾期: '1',
     })
     expect(metrics.querySelectorAll('.glass-panel')).toHaveLength(4)
+  })
+
+  it('derives today tasks from the current local business date', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 6, 28, 12))
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({
+        id: 'july-28',
+        code: 'TASK-JULY-28',
+        title: '七月二十八日任务',
+        dueDate: '2026-07-28',
+        status: 'not_started',
+        progress: 0,
+      }),
+      task({
+        id: 'july-29-a',
+        code: 'TASK-JULY-29-A',
+        title: '七月二十九日任务一',
+        dueDate: '2026-07-29',
+        status: 'not_started',
+        progress: 0,
+      }),
+      task({
+        id: 'july-29-b',
+        code: 'TASK-JULY-29-B',
+        title: '七月二十九日任务二',
+        dueDate: '2026-07-29',
+        status: 'in_progress',
+      }),
+    ])
+    const { rerender } = renderApp(<TaskPage />)
+
+    await screen.findByRole('heading', { name: '任务控制台' })
+    const todayValue = () => {
+      const metric = screen.getByText('今日待办').closest('[data-metric]')
+      expect(metric).not.toBeNull()
+      return within(metric as HTMLElement).getByTestId('metric-value')
+    }
+    expect(todayValue()).toHaveTextContent('1')
+    expect(screen.getByText(/以 2026-07-28 为今日基准/)).toBeVisible()
+
+    vi.setSystemTime(new Date(2026, 6, 29, 12))
+    rerender(<TaskPage />)
+
+    expect(todayValue()).toHaveTextContent('2')
+    expect(screen.getByText(/以 2026-07-29 为今日基准/)).toBeVisible()
   })
 
   it('keeps the complete filtered table beside the six-card fan', async () => {
