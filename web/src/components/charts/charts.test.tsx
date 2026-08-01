@@ -57,6 +57,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   document.documentElement.removeAttribute('data-accent')
+  document.documentElement.removeAttribute('data-theme')
   vi.clearAllMocks()
   vi.unstubAllGlobals()
 })
@@ -222,7 +223,7 @@ describe('TrendChart', () => {
     stubSemanticColors(colors)
     const points = [{ date: '2026-07-28', actual: 34, planned: 40 }]
 
-    render(<TrendChart points={points} />)
+    const { rerender } = render(<TrendChart points={points} />)
 
     const initialOption = chart.setOption.mock.calls.at(-1)?.[0] as {
       series: Array<{ lineStyle: { color: string } }>
@@ -230,6 +231,10 @@ describe('TrendChart', () => {
     expect(initialOption.series[0]?.lineStyle.color).toBe(
       semanticColors['--chart-primary'],
     )
+
+    const stableCallCount = chart.setOption.mock.calls.length
+    rerender(<TrendChart points={points} />)
+    expect(chart.setOption).toHaveBeenCalledTimes(stableCallCount)
 
     colors['--chart-primary'] = 'rgb(192 132 252)'
     document.documentElement.dataset.accent = 'purple'
@@ -288,5 +293,38 @@ describe('StatusDonut', () => {
     expect(screen.getByText('34')).toBeInTheDocument()
     expect(screen.getByText('已延期')).toBeInTheDocument()
     expect(screen.getByText('1')).toBeInTheDocument()
+  })
+
+  it('keeps options stable until appearance tokens change', async () => {
+    const colors: Record<string, string> = { ...semanticColors }
+    const counts = {
+      not_started: 8,
+      in_progress: 7,
+      done: 34,
+      overdue: 1,
+    } as const
+    stubSemanticColors(colors)
+
+    const { rerender } = render(
+      <StatusDonut completionRate={68} counts={counts} />,
+    )
+    const initialOption = chart.setOption.mock.calls.at(-1)?.[0] as {
+      color: string[]
+    }
+    expect(initialOption.color[2]).toBe(semanticColors['--chart-success'])
+
+    const stableCallCount = chart.setOption.mock.calls.length
+    rerender(<StatusDonut completionRate={68} counts={counts} />)
+    expect(chart.setOption).toHaveBeenCalledTimes(stableCallCount)
+
+    colors['--chart-success'] = 'rgb(74 222 128)'
+    document.documentElement.dataset.theme = 'dark'
+
+    await waitFor(() => {
+      const nextOption = chart.setOption.mock.calls.at(-1)?.[0] as {
+        color: string[]
+      }
+      expect(nextOption.color[2]).toBe('rgb(74 222 128)')
+    })
   })
 })

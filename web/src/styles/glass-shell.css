@@ -21,7 +21,7 @@
   min-width: 0;
   grid-template-rows: var(--header-height) minmax(0, 1fr);
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
-  overflow: hidden;
+  overflow-x: clip;
   background:
     radial-gradient(
       circle at 18% -10%,
@@ -76,7 +76,7 @@
   height: 2.25rem;
   flex: 0 0 2.25rem;
   place-items: center;
-  color: var(--rail);
+  color: var(--on-primary);
   font-size: 0.6875rem;
   font-weight: 900;
   letter-spacing: -0.04em;

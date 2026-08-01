@@ -1,8 +1,9 @@
 import type { EChartsCoreOption } from 'echarts/core'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 
 import type { TrendPoint } from '../../data/domain'
 import { EChart } from './EChart'
+import { useAppearanceTokens } from './useAppearanceTokens'
 
 export type TrendChartProps = {
   points: TrendPoint[]
@@ -12,61 +13,12 @@ type TooltipDatum = {
   value?: Partial<TrendPoint>
 }
 
-const chartColorFallbacks = {
-  grid: '#66716a',
-  primary: '#37f58a',
-  text: '#8d9791',
-  warning: '#eeb66b',
+const chartColorTokens = {
+  grid: { fallback: '#66716a', property: '--chart-grid' },
+  primary: { fallback: '#37f58a', property: '--chart-primary' },
+  text: { fallback: '#8d9791', property: '--chart-text' },
+  warning: { fallback: '#eeb66b', property: '--chart-warning' },
 } as const
-
-type ChartColorName = keyof typeof chartColorFallbacks
-type ChartColors = Record<ChartColorName, string>
-
-function resolveChartColor(token: ChartColorName): string {
-  if (
-    typeof document === 'undefined' ||
-    typeof getComputedStyle === 'undefined'
-  ) {
-    return chartColorFallbacks[token]
-  }
-
-  return (
-    getComputedStyle(document.documentElement)
-      .getPropertyValue(`--chart-${token}`)
-      .trim() || chartColorFallbacks[token]
-  )
-}
-
-function useChartColors(): ChartColors {
-  const [, setAppearanceRevision] = useState(0)
-
-  useEffect(() => {
-    const root = document.documentElement
-    const refresh = () => setAppearanceRevision((revision) => revision + 1)
-    const observer = new MutationObserver(refresh)
-    observer.observe(root, {
-      attributeFilter: ['data-accent', 'data-theme'],
-      attributes: true,
-    })
-
-    const colorScheme = typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-color-scheme: dark)')
-      : null
-    colorScheme?.addEventListener('change', refresh)
-
-    return () => {
-      observer.disconnect()
-      colorScheme?.removeEventListener('change', refresh)
-    }
-  }, [])
-
-  return {
-    grid: resolveChartColor('grid'),
-    primary: resolveChartColor('primary'),
-    text: resolveChartColor('text'),
-    warning: resolveChartColor('warning'),
-  }
-}
 
 function tooltipFormatter(params: unknown): string {
   const first = Array.isArray(params) ? params[0] : params
@@ -85,7 +37,7 @@ function tooltipFormatter(params: unknown): string {
 
 export function TrendChart({ points }: TrendChartProps) {
   const latestPoint = points.at(-1)
-  const colors = useChartColors()
+  const colors = useAppearanceTokens(chartColorTokens)
   const option = useMemo<EChartsCoreOption>(
     () => ({
       animationDuration: 240,

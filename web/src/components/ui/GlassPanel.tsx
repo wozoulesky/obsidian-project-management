@@ -1,26 +1,38 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 
-type GlassPanelElement = 'div' | 'section'
-
-export type GlassPanelProps = Omit<
+type GlassPanelBaseProps = Omit<
   HTMLAttributes<HTMLElement>,
   'aria-label' | 'children'
 > & {
-  ariaLabel: string
-  as?: GlassPanelElement
   children: ReactNode
 }
 
+type SemanticGlassPanelProps = GlassPanelBaseProps & {
+  ariaLabel: string
+  as?: 'section'
+}
+
+type DecorativeGlassPanelProps = GlassPanelBaseProps & {
+  ariaLabel?: never
+  as: 'div'
+}
+
+export type GlassPanelProps =
+  | SemanticGlassPanelProps
+  | DecorativeGlassPanelProps
+
 export function GlassPanel({
   ariaLabel,
-  as: Element = 'div',
+  as: requestedElement = 'section',
   children,
   className = '',
   ...props
 }: GlassPanelProps) {
+  const Element = requestedElement
+
   return (
     <Element
-      aria-label={ariaLabel}
+      aria-label={Element === 'section' ? ariaLabel : undefined}
       className={['glass-panel', className].filter(Boolean).join(' ')}
       {...props}
     >

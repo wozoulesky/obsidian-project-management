@@ -40,9 +40,9 @@ describe('shared layout components', () => {
     ).toHaveTextContent('进行中任务')
   })
 
-  it('supports a labelled semantic section surface', () => {
+  it('uses a labelled region as the default panel surface', () => {
     render(
-      <GlassPanel ariaLabel="项目风险" as="section">
+      <GlassPanel ariaLabel="项目风险">
         风险内容
       </GlassPanel>,
     )
@@ -50,6 +50,17 @@ describe('shared layout components', () => {
     const panel = screen.getByRole('region', { name: '项目风险' })
     expect(panel.tagName).toBe('SECTION')
     expect(panel).toHaveTextContent('风险内容')
+  })
+
+  it('keeps a decorative div unnamed', () => {
+    const { container } = render(
+      <GlassPanel as="div">装饰内容</GlassPanel>,
+    )
+
+    const panel = container.querySelector('.glass-panel')
+    expect(panel?.tagName).toBe('DIV')
+    expect(panel).not.toHaveAttribute('aria-label')
+    expect(screen.queryByRole('region')).not.toBeInTheDocument()
   })
 
   it('exposes segmented choices as pressed buttons and reports selection', async () => {

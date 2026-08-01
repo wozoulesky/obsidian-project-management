@@ -107,9 +107,11 @@ export function AppShell({ children }: AppShellProps) {
               key={group.id}
               role="group"
             >
-              <span aria-hidden="true" className="app-rail__group-label">
-                {group.label}
-              </span>
+              {isRailExpanded ? (
+                <span aria-hidden="true" className="app-rail__group-label">
+                  {group.label}
+                </span>
+              ) : null}
               {navigationItems
                 .filter((item) => item.group === group.id)
                 .map(({ icon: Icon, label, path }) => (
@@ -123,7 +125,9 @@ export function AppShell({ children }: AppShellProps) {
                     to={path}
                   >
                     <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
-                    <span className="app-rail__label">{label}</span>
+                    {isRailExpanded ? (
+                      <span className="app-rail__label">{label}</span>
+                    ) : null}
                   </NavLink>
                 ))}
             </div>
