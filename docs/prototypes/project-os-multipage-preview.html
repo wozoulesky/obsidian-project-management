@@ -2039,6 +2039,165 @@
         min-height: 54px;
       }
 
+      .settings-shell,
+      .settings-layout,
+      .settings-detail {
+        min-width: 0;
+      }
+
+      .settings-layout {
+        display: grid;
+        grid-template-columns: minmax(180px, 0.3fr) minmax(0, 1fr);
+        align-items: start;
+        gap: 14px;
+      }
+
+      .settings-category-panel {
+        padding: 12px;
+      }
+
+      .settings-category-list {
+        display: grid;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .settings-category-list button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        min-height: 42px;
+        padding: 9px 11px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .settings-category-list button::after {
+        color: #68716c;
+        content: "›";
+      }
+
+      .settings-category-list button:hover,
+      .settings-category-list button[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.2);
+        color: var(--text);
+        background: rgba(55, 245, 138, 0.07);
+      }
+
+      .settings-category-list button[aria-pressed="true"]::after {
+        color: var(--green);
+      }
+
+      .settings-detail {
+        min-height: 430px;
+      }
+
+      .settings-form {
+        display: grid;
+        gap: 18px;
+      }
+
+      .settings-form fieldset {
+        display: grid;
+        gap: 14px;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .settings-form legend {
+        margin-bottom: 13px;
+        color: #cbd3ce;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .settings-control {
+        display: grid;
+        grid-template-columns: minmax(130px, 0.4fr) minmax(0, 1fr);
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+        padding: 12px 0;
+        border-top: 1px solid rgba(226, 240, 233, 0.09);
+      }
+
+      .settings-control > label,
+      .settings-checkbox span {
+        color: #cbd3ce;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .settings-control input[type="text"],
+      .settings-control select {
+        width: 100%;
+        min-width: 0;
+        min-height: 40px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.24);
+      }
+
+      .settings-control select option {
+        color: #111713;
+        background: #f3f7f4;
+      }
+
+      .settings-checkbox {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        cursor: pointer;
+      }
+
+      .settings-checkbox input {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 auto;
+        margin: 1px 0 0;
+        accent-color: var(--green-deep);
+      }
+
+      .settings-checkbox small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 9px;
+        font-weight: 400;
+      }
+
+      .settings-checkbox-row {
+        display: grid;
+        gap: 11px;
+        min-width: 0;
+      }
+
+      .settings-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-top: 2px;
+      }
+
+      .settings-preview-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
       @media (max-width: 1180px) {
         .task-workspace {
           grid-template-columns: minmax(210px, 0.44fr) minmax(0, 1fr);
@@ -2195,8 +2354,29 @@
 
         .project-brief-grid,
         .task-workspace,
+        .settings-layout,
         .triage-queue ol {
           grid-template-columns: 1fr;
+        }
+
+        .settings-category-panel {
+          overflow: hidden;
+        }
+
+        .settings-category-list {
+          display: flex;
+          overflow-x: auto;
+          scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+          scrollbar-width: thin;
+        }
+
+        .settings-category-list li {
+          flex: 0 0 auto;
+        }
+
+        .settings-category-list button {
+          min-width: 108px;
+          white-space: nowrap;
         }
 
         .task-context {
@@ -2252,6 +2432,19 @@
 
         .project-card-meta {
           grid-template-columns: 1fr;
+        }
+
+        .settings-control {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+
+        .settings-actions {
+          justify-content: stretch;
+        }
+
+        .settings-actions button {
+          flex: 1 1 148px;
         }
       }
 
@@ -2337,6 +2530,12 @@
         .task-fan-card::after {
           transform: none;
         }
+
+        .network-connectors,
+        .actor-node {
+          animation: none !important;
+          transition: none !important;
+        }
       }
     </style>
   </head>
@@ -2411,8 +2610,7 @@
         <div data-page-root></div>
       </main>
     </div>
-    <div class="toast" aria-hidden="true"></div>
-    <div class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-selection-status></div>
+    <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
     <script>
       const routeOrder = ['dashboard','projects','project-detail','actors','tasks','gantt','requirements','defects','settings']
@@ -2430,12 +2628,9 @@
       }
 
       const pageRoot = document.querySelector('[data-page-root]')
-      const skipLink = document.querySelector('.skip-link')
       const mainContent = document.querySelector('#main-content')
       const toast = document.querySelector('.toast')
-      const selectionStatus = document.querySelector('[data-selection-status]')
       let toastTimer = 0
-      let selectionStatusTimer = 0
 
       const pageRenderers = {
         dashboard: renderDashboard,
@@ -2645,6 +2840,7 @@
         selectedGanttTaskId:'task-001',
         selectedRequirementId:requirements[0]?.id ?? null,
         selectedDefectId:defects[0]?.id ?? null,
+        settingsSection:'appearance',
         completedTaskIds:new Set(),
       }
 
@@ -3806,7 +4002,143 @@
       }
 
       function renderSettings() {
-        return renderPageShell('settings')
+        const settingsSections = [
+          { id: 'appearance', label: '外观' },
+          { id: 'data', label: '数据' },
+          { id: 'mcp', label: 'MCP' },
+          { id: 'skills', label: 'Skills' },
+        ]
+        const activeSection = settingsSections.some((section) => section.id === previewState.settingsSection)
+          ? previewState.settingsSection
+          : 'appearance'
+        previewState.settingsSection = activeSection
+        const activeLabel = settingsSections.find((section) => section.id === activeSection)?.label || '外观'
+        const categoryMarkup = `
+          <li><button type="button" data-settings-section="appearance" data-focus-key="settings-section-appearance" aria-pressed="${activeSection === 'appearance'}" aria-controls="settings-detail-panel">外观</button></li>
+          <li><button type="button" data-settings-section="data" data-focus-key="settings-section-data" aria-pressed="${activeSection === 'data'}" aria-controls="settings-detail-panel">数据</button></li>
+          <li><button type="button" data-settings-section="mcp" data-focus-key="settings-section-mcp" aria-pressed="${activeSection === 'mcp'}" aria-controls="settings-detail-panel">MCP</button></li>
+          <li><button type="button" data-settings-section="skills" data-focus-key="settings-section-skills" aria-pressed="${activeSection === 'skills'}" aria-controls="settings-detail-panel">Skills</button></li>
+        `
+        const formMarkup = {
+          appearance: `
+            <form class="settings-form" data-settings-form aria-labelledby="settings-detail-title">
+              <fieldset>
+                <legend>显示偏好</legend>
+                <div class="settings-control">
+                  <label for="settings-theme">主题偏好</label>
+                  <select id="settings-theme" name="theme">
+                    <option value="system">跟随系统</option>
+                    <option value="dark" selected>深色</option>
+                    <option value="high-contrast">高对比度</option>
+                  </select>
+                </div>
+                <div class="settings-control">
+                  <label for="settings-density">界面密度</label>
+                  <select id="settings-density" name="density">
+                    <option value="comfortable" selected>舒适</option>
+                    <option value="compact">紧凑</option>
+                  </select>
+                </div>
+                <div class="settings-control">
+                  <span id="settings-motion-label">动效偏好</span>
+                  <label class="settings-checkbox" for="settings-reduce-motion">
+                    <input id="settings-reduce-motion" name="reduce-motion" type="checkbox" aria-describedby="settings-motion-label settings-motion-help" />
+                    <span>减少界面动效<small id="settings-motion-help">仅改变当前预览控件，不覆盖系统设置。</small></span>
+                  </label>
+                </div>
+              </fieldset>
+              <div class="settings-actions"><button class="primary-action" type="button" data-prototype-action="记录外观偏好">记录当前偏好</button></div>
+            </form>
+          `,
+          data: `
+            <form class="settings-form" data-settings-form aria-labelledby="settings-detail-title">
+              <fieldset>
+                <legend>数据视图与导出范围</legend>
+                <div class="settings-control">
+                  <label for="settings-default-view">默认视图</label>
+                  <select id="settings-default-view" name="default-view">
+                    <option value="dashboard" selected>全局驾驶舱</option>
+                    <option value="projects">项目矩阵</option>
+                    <option value="tasks">任务控制台</option>
+                  </select>
+                </div>
+                <div class="settings-control">
+                  <label for="settings-export-scope">导出范围</label>
+                  <select id="settings-export-scope" name="export-scope">
+                    <option value="current" selected>当前项目</option>
+                    <option value="workspace">整个工作区</option>
+                  </select>
+                </div>
+                <div class="settings-control">
+                  <span id="settings-archive-label">历史数据</span>
+                  <label class="settings-checkbox" for="settings-include-archive">
+                    <input id="settings-include-archive" name="include-archive" type="checkbox" aria-describedby="settings-archive-label settings-archive-help" />
+                    <span>包含已归档记录<small id="settings-archive-help">此选择只保留在当前页面 DOM。</small></span>
+                  </label>
+                </div>
+              </fieldset>
+              <div class="settings-actions"><button class="primary-action" type="button" data-prototype-action="记录数据偏好">记录当前偏好</button></div>
+            </form>
+          `,
+          mcp: `
+            <form class="settings-form" data-settings-form aria-labelledby="settings-detail-title">
+              <fieldset>
+                <legend>MCP 本地连接预览</legend>
+                <div class="settings-control">
+                  <label for="settings-mcp-endpoint">Endpoint</label>
+                  <input id="settings-mcp-endpoint" name="endpoint" type="text" value="http://127.0.0.1:3100/mcp" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="settings-control">
+                  <label for="settings-mcp-policy">连接策略</label>
+                  <select id="settings-mcp-policy" name="connection-policy">
+                    <option value="manual" selected>仅手动测试</option>
+                    <option value="workspace">进入工作区时检查</option>
+                  </select>
+                </div>
+              </fieldset>
+              <p class="settings-preview-note">测试按钮仅提供界面反馈，不会发起网络请求。</p>
+              <div class="settings-actions"><button class="secondary-action" type="button" data-prototype-action="测试 MCP 连接">测试连接</button><button class="primary-action" type="button" data-prototype-action="记录 MCP 配置">记录配置</button></div>
+            </form>
+          `,
+          skills: `
+            <form class="settings-form" data-settings-form aria-labelledby="settings-detail-title">
+              <fieldset>
+                <legend>可启用的 Skills</legend>
+                <div class="settings-checkbox-row">
+                  <label class="settings-checkbox" for="settings-skill-planning"><input id="settings-skill-planning" name="skills" type="checkbox" value="planning" checked /><span>项目规划<small>生成阶段拆解与交付检查点。</small></span></label>
+                  <label class="settings-checkbox" for="settings-skill-review"><input id="settings-skill-review" name="skills" type="checkbox" value="review" checked /><span>质量复核<small>提供需求、缺陷与验收的检查视角。</small></span></label>
+                  <label class="settings-checkbox" for="settings-skill-handoff"><input id="settings-skill-handoff" name="skills" type="checkbox" value="handoff" /><span>交接摘要<small>整理当前上下文中的交接要点。</small></span></label>
+                </div>
+              </fieldset>
+              <div class="settings-actions"><button class="secondary-action" type="button" data-prototype-action="导出 Skills 配置">导出配置</button><button class="primary-action" type="button" data-prototype-action="记录 Skills 偏好">记录技能偏好</button></div>
+            </form>
+          `,
+        }[activeSection]
+
+        return elementFromHTML(`
+          <section class="page-view settings-shell" data-page="settings" aria-labelledby="settings-title">
+            <header class="page-header">
+              <div>
+                <p class="page-kicker">Project OS / settings</p>
+                <h1 id="settings-title" tabindex="-1">设置中心</h1>
+                <p class="page-description">集中调整界面、数据、MCP 与 Skills 的预览偏好；所有变化只停留在当前页面。</p>
+              </div>
+              <div class="header-actions">
+                <button class="secondary-action" type="button" data-prototype-action="导出设置快照">导出快照</button>
+                <button class="primary-action" type="button" data-prototype-action="记录设置快照">记录设置快照</button>
+              </div>
+            </header>
+            <div class="settings-layout">
+              <nav class="glass-panel settings-category-panel" aria-label="设置分类">
+                <ul class="settings-category-list">${categoryMarkup}</ul>
+              </nav>
+              <section class="glass-panel settings-detail" id="settings-detail-panel" aria-labelledby="settings-detail-title">
+                <div class="panel-heading"><div><h2 id="settings-detail-title">${escapeHtml(activeLabel)}</h2><p>预览模式 · 不会持久化</p></div><span class="status-badge">本页内</span></div>
+                ${formMarkup}
+              </section>
+            </div>
+          </section>
+        `)
       }
 
       function assertRouteRegistry() {
@@ -3860,28 +4192,14 @@
 
       function showToast(message) {
         clearTimeout(toastTimer)
-        clearTimeout(selectionStatusTimer)
-        selectionStatus.textContent = ''
-        selectionStatusTimer = window.setTimeout(() => {
-          selectionStatus.textContent = message
-          selectionStatusTimer = 0
-        }, 0)
         toast.textContent = message
         toast.classList.add('is-visible')
-        toastTimer = window.setTimeout(() => {
-          toast.classList.remove('is-visible')
-          toastTimer = 0
-        }, 1900)
+        toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 2200)
       }
 
       function announceSelection(message) {
         showToast(message)
       }
-
-      skipLink.addEventListener('click', (event) => {
-        event.preventDefault()
-        mainContent.focus()
-      })
 
       function rerenderCurrentPageAndRestoreFocus(attribute, value, focusKey) {
         renderCurrentPage()
@@ -3894,10 +4212,20 @@
       }
 
       document.addEventListener('click', (event) => {
-        const disabledControl = event.target instanceof Element ? event.target.closest('[aria-disabled="true"]') : null
+        const target = event.target instanceof Element ? event.target : null
+        if (!target) return
+
+        const skipTarget = target.closest('.skip-link')
+        if (skipTarget) {
+          event.preventDefault()
+          mainContent.focus()
+          return
+        }
+
+        const disabledControl = target.closest('[aria-disabled="true"]')
         if (disabledControl) return
 
-        const dashboardSelection = event.target.closest('[data-dashboard-select]')
+        const dashboardSelection = target.closest('[data-dashboard-select]')
         if (dashboardSelection) {
           const selection = dashboardSelection.dataset.dashboardSelect
           const isKnownRisk = riskQueue.some((risk) => risk.id === selection)
@@ -3914,7 +4242,7 @@
           return
         }
 
-        const projectFilter = event.target.closest('[data-project-filter]')
+        const projectFilter = target.closest('[data-project-filter]')
         if (projectFilter) {
           const filter = projectFilter.dataset.projectFilter
           if (projectFilterValues.has(filter)) {
@@ -3929,7 +4257,7 @@
           return
         }
 
-        const projectSelection = event.target.closest('[data-project-id]')
+        const projectSelection = target.closest('[data-project-id]')
         if (projectSelection) {
           const projectId = projectSelection.dataset.projectId
           const project = projects.find((item) => item.id === projectId)
@@ -3941,7 +4269,7 @@
           return
         }
 
-        const actorFilter = event.target.closest('[data-actor-filter]')
+        const actorFilter = target.closest('[data-actor-filter]')
         if (actorFilter) {
           const filter = actorFilter.dataset.actorFilter
           if (actorFilterValues.has(filter)) {
@@ -3956,7 +4284,7 @@
           return
         }
 
-        const actorSelection = event.target.closest('[data-actor-id]')
+        const actorSelection = target.closest('[data-actor-id]')
         if (actorSelection) {
           const actorId = actorSelection.dataset.actorId
           const actor = actors.find((item) => item.id === actorId)
@@ -3968,7 +4296,7 @@
           return
         }
 
-        const milestoneSelection = event.target.closest('[data-milestone-id]')
+        const milestoneSelection = target.closest('[data-milestone-id]')
         if (milestoneSelection) {
           const milestoneId = milestoneSelection.dataset.milestoneId
           const milestone = safeRecords(milestones).find((item) => item.id === milestoneId)
@@ -3980,7 +4308,7 @@
           return
         }
 
-        const taskScope = event.target.closest('[data-task-scope]')
+        const taskScope = target.closest('[data-task-scope]')
         if (taskScope) {
           const scope = taskScope.dataset.taskScope
           if (taskScopeValues.has(scope)) {
@@ -3995,7 +4323,7 @@
           return
         }
 
-        const taskRange = event.target.closest('[data-task-range]')
+        const taskRange = target.closest('[data-task-range]')
         if (taskRange) {
           const range = taskRange.dataset.taskRange
           if (rangeValues.has(range)) {
@@ -4006,7 +4334,7 @@
           return
         }
 
-        const taskSelection = event.target.closest('[data-task-id]')
+        const taskSelection = target.closest('[data-task-id]')
         if (taskSelection) {
           const taskId = taskSelection.dataset.taskId
           const task = safeRecords(tasks).find((item) => item.id === taskId)
@@ -4018,7 +4346,7 @@
           return
         }
 
-        const taskDetail = event.target.closest('[data-task-detail]')
+        const taskDetail = target.closest('[data-task-detail]')
         if (taskDetail) {
           const taskId = taskDetail.dataset.taskDetail
           const task = safeRecords(tasks).find((item) => item.id === taskId)
@@ -4030,7 +4358,7 @@
           return
         }
 
-        const taskComplete = event.target.closest('[data-task-complete]')
+        const taskComplete = target.closest('[data-task-complete]')
         if (taskComplete) {
           const taskId = taskComplete.dataset.taskComplete
           const task = safeRecords(tasks).find((item) => item.id === taskId)
@@ -4045,7 +4373,7 @@
           return
         }
 
-        const ganttRange = event.target.closest('[data-gantt-range]')
+        const ganttRange = target.closest('[data-gantt-range]')
         if (ganttRange) {
           const range = ganttRange.dataset.ganttRange
           if (rangeValues.has(range)) {
@@ -4056,7 +4384,7 @@
           return
         }
 
-        const ganttTask = event.target.closest('[data-gantt-task-id]')
+        const ganttTask = target.closest('[data-gantt-task-id]')
         if (ganttTask) {
           const taskId = ganttTask.dataset.ganttTaskId
           const task = safeRecords(tasks).find((item) => item.id === taskId)
@@ -4068,7 +4396,7 @@
           return
         }
 
-        const requirementSelection = event.target.closest('[data-requirement-id]')
+        const requirementSelection = target.closest('[data-requirement-id]')
         if (requirementSelection) {
           const requirementId = requirementSelection.dataset.requirementId
           const requirement = safeRecords(requirements).find((item) => item.id === requirementId)
@@ -4080,7 +4408,7 @@
           return
         }
 
-        const defectSelection = event.target.closest('[data-defect-id]')
+        const defectSelection = target.closest('[data-defect-id]')
         if (defectSelection) {
           const defectId = defectSelection.dataset.defectId
           const defect = safeRecords(defects).find((item) => item.id === defectId)
@@ -4092,8 +4420,34 @@
           return
         }
 
-        const action = event.target.closest('[data-prototype-action]')
-        if (action) showToast(`${action.dataset.prototypeAction}：预览模式，未写入数据`)
+        const settingsSection = target.closest('[data-settings-section]')
+        if (settingsSection) {
+          const section = settingsSection.dataset.settingsSection
+          const settingsLabels = new Map([['appearance', '外观'], ['data', '数据'], ['mcp', 'MCP'], ['skills', 'Skills']])
+          if (settingsLabels.has(section)) {
+            previewState.settingsSection = section
+            rerenderCurrentPageAndRestoreFocus('data-settings-section', section, settingsSection.dataset.focusKey)
+            announceSelection(`已切换设置分类：${settingsLabels.get(section)}`)
+          }
+          return
+        }
+
+        const action = target.closest('[data-prototype-action]')
+        if (action) showToast(`已记录原型操作：${action.dataset.prototypeAction}。预览模式，未保存、未连接、未导出。`)
+      })
+
+      document.addEventListener('submit', (event) => {
+        if (!event.target.matches('[data-settings-form]')) return
+        event.preventDefault()
+        showToast('已记录原型操作。预览模式，未提交或持久化设置。')
+      })
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return
+        document.querySelectorAll('[data-compact-nav].is-open').forEach((nav) => {
+          nav.classList.remove('is-open')
+          nav.setAttribute('aria-expanded', 'false')
+        })
       })
 
       window.addEventListener('hashchange', () => renderCurrentPage({ focusHeading: true }))
