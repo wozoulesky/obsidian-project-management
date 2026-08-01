@@ -1758,6 +1758,11 @@
         white-space: nowrap;
       }
 
+      .gantt-bar.is-compact {
+        padding-inline: 4px;
+        font-size: 11px;
+      }
+
       .gantt-bar.is-in-progress {
         border-color: rgba(55, 245, 138, 0.44);
         color: #031108;
@@ -3828,7 +3833,9 @@
           const startColumn = Math.max(1, dayDifference(config.start, clippedStart) + 1)
           const span = Math.max(1, dayDifference(clippedStart, clippedEnd) + 1)
           const statusMeta = ganttStatusMeta(effectiveTaskStatus(task))
-          return `<div class="gantt-row"><button class="gantt-bar ${statusMeta.className}" type="button" data-gantt-task-id="${escapeHtml(task.id)}" data-focus-key="gantt-bar-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--bar-start:${startColumn};--bar-span:${span}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}，${escapeHtml(statusMeta.label)}">${escapeHtml(task.code)} · ${escapeHtml(task.title)}</button></div>`
+          const compactLabel = previewState.ganttRange === 'quarter'
+          const barLabel = compactLabel ? task.title : `${task.code} · ${task.title}`
+          return `<div class="gantt-row"><button class="gantt-bar ${statusMeta.className}${compactLabel ? ' is-compact' : ''}" type="button" data-gantt-task-id="${escapeHtml(task.id)}" data-focus-key="gantt-bar-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--bar-start:${startColumn};--bar-span:${span}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}，${escapeHtml(statusMeta.label)}">${escapeHtml(barLabel)}</button></div>`
         }).join('')
         const chartHeight = 46 + ganttTasks.length * 54
         const connectorPaths = validDependencies.map(({ from, to }) => {
