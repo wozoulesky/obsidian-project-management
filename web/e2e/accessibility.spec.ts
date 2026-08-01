@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test'
 const routes = [
   '/dashboard',
   '/projects',
+  '/projects/atlas',
   '/actors',
   '/settings',
   '/tasks',
@@ -23,7 +24,10 @@ async function expectNoSeriousOrCriticalViolations(
     .map(({ id, impact, nodes }) => ({
       id,
       impact,
-      targets: nodes.map(({ target }) => target.join(' ')),
+      nodes: nodes.map(({ any, target }) => ({
+        target: target.join(' '),
+        details: any.map(({ data }) => data).filter(Boolean),
+      })),
     }))
 
   expect(violations).toEqual([])

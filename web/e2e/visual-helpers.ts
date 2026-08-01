@@ -22,7 +22,7 @@ export async function openReadyPage(page: Page, path: string) {
 export async function openReadyDashboard(page: Page) {
   await openReadyPage(page, '/dashboard')
   await expect(
-    page.getByRole('heading', { level: 1, name: '仪表盘' }),
+    page.getByRole('heading', { level: 1, name: '全局驾驶舱' }),
   ).toBeVisible()
 
   const canvases = page.locator('.echart canvas')

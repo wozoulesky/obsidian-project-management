@@ -24,7 +24,7 @@ test('defect conversion opens the generated repair task inspector', async ({
 }) => {
   await page.goto('/defects')
   await expect(
-    page.getByRole('heading', { level: 1, name: '缺陷风险队列' }),
+    page.getByRole('heading', { level: 1, name: '缺陷矩阵' }),
   ).toBeVisible()
 
   await page.getByRole('button', { name: '查看 离线恢复失败' }).click()

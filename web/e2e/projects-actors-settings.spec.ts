@@ -1,5 +1,83 @@
 import { test, expect } from './real-runtime'
 
+test('project detail selector owns the canonical URL across refresh and history', async ({
+  page,
+  runtime,
+}) => {
+  await page.goto(
+    new URL(`/projects/${runtime.seed.defaultProjectId}`, runtime.baseURL).href,
+  )
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Default Project' }),
+  ).toBeVisible()
+
+  const selector = page.getByRole('combobox', { name: '选择项目' })
+  await selector.selectOption(runtime.seed.portfolioId)
+  await expect(page).toHaveURL(
+    new RegExp(`/projects/${runtime.seed.portfolioId}$`),
+  )
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Lin Portfolio' }),
+  ).toBeVisible()
+
+  await page.reload()
+  await expect(selector).toHaveValue(runtime.seed.portfolioId)
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Lin Portfolio' }),
+  ).toBeVisible()
+
+  await page.goBack()
+  await expect(page).toHaveURL(
+    new RegExp(`/projects/${runtime.seed.defaultProjectId}$`),
+  )
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Default Project' }),
+  ).toBeVisible()
+})
+
+test('current actor endpoint drives the local actor identity without a client id', async ({
+  page,
+  request,
+  runtime,
+}) => {
+  const response = await request.get(`${runtime.apiURL}/api/v1/actors/current`)
+  expect(response.ok()).toBe(true)
+  const envelope = await response.json() as {
+    data: { id: string; name: string }
+  }
+  expect(envelope.data).toMatchObject({
+    id: runtime.seed.localActorId,
+    name: runtime.seed.localActorName,
+  })
+
+  const currentActorRequests: Array<{ method: string; url: string }> = []
+  page.on('request', (browserRequest) => {
+    if (browserRequest.url().includes('/api/v1/actors/current')) {
+      currentActorRequests.push({
+        method: browserRequest.method(),
+        url: browserRequest.url(),
+      })
+    }
+  })
+  await page.goto(new URL('/actors', runtime.baseURL).href)
+  await expect(
+    page.getByRole('button', {
+      name: new RegExp(`${runtime.seed.localActorName}.*当前操作者`),
+    }),
+  ).toBeVisible()
+  expect(currentActorRequests).toHaveLength(1)
+  const currentActorRequest = new URL(currentActorRequests[0]!.url)
+  expect(currentActorRequests[0]!.method).toBe('GET')
+  expect(currentActorRequest.pathname).toBe('/api/v1/actors/current')
+  expect(currentActorRequest.search).toBe('')
+
+  await page.getByRole('link', { name: '仪表盘' }).click()
+  await expect(
+    page.getByRole('heading', { level: 1, name: '全局驾驶舱' }),
+  ).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Agent 现场' })).toBeVisible()
+})
+
 test('shows all projects, filters by owner, and creates a task inside its project', async ({
   page,
   runtime,
@@ -46,7 +124,9 @@ test('shows all projects, filters by owner, and creates a task inside its projec
   await expect(createdProject).toBeVisible()
   await expect(createdProject.getByText(runtime.seed.ownerName, { exact: true }))
     .toBeVisible()
-  await createdProject.getByRole('link', { name: '查看项目' }).click()
+  await createdProject
+    .getByRole('link', { name: '进入 Agent Skill 安装体验 详情' })
+    .click()
   await expect(
     page.getByRole('heading', { level: 1, name: 'Agent Skill 安装体验' }),
   ).toBeVisible()
@@ -137,11 +217,15 @@ test('keeps settings populated and persists saved appearance after reload', asyn
   }
 
   await page.goto(new URL('/settings', runtime.baseURL).href)
-  await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible()
-  for (const heading of ['外观', '常规', '数据', 'MCP', 'Agent Skills']) {
-    await expect(page.getByRole('heading', { name: heading, exact: true }))
-      .toBeVisible()
-  }
+  await expect(
+    page.getByRole('heading', { level: 1, name: '设置中心' }),
+  ).toBeVisible()
+  const categories = page.getByRole('tablist', { name: '设置分类' })
+  await expect(categories.getByRole('tab')).toHaveCount(4)
+  await expect(categories.getByRole('tab', { name: '外观' }))
+    .toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { name: '外观', exact: true }))
+    .toBeVisible()
 
   await page.getByLabel('深色').check()
   await page.getByLabel('渐变').check()
@@ -187,9 +271,18 @@ test('keeps settings populated and persists saved appearance after reload', asyn
   await expect(page.getByLabel('紧凑')).toBeChecked()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 
+  await categories.getByRole('tab', { name: '数据' }).click()
+  await expect(page.getByRole('heading', { name: '常规', exact: true }))
+    .toBeVisible()
+  await expect(page.getByRole('heading', { name: '数据', exact: true }))
+    .toBeVisible()
   await expect(page.getByRole('button', { name: '创建备份' })).toBeVisible()
   await expect(page.getByRole('button', { name: '导出 JSON' })).toBeVisible()
   await expect(page.getByLabel('选择要导入的 JSON 文件')).toBeAttached()
+
+  await categories.getByRole('tab', { name: 'Skills' }).click()
+  await expect(page.getByRole('heading', { name: 'Agent Skills' }))
+    .toBeVisible()
   await expect(
     page.getByRole('button', { name: '下载 Project OS Skill' }),
   ).toBeVisible()
