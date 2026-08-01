@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { renderApp } from '../../app/test-utils'
 import baseCss from '../../styles/base.css?raw'
+import responsiveCss from '../../styles/glass-responsive.css?raw'
 import shellCss from '../../styles/glass-shell.css?raw'
 import tokensCss from '../../styles/tokens.css?raw'
 import { AppShell } from './AppShell'
@@ -96,6 +97,17 @@ describe('AppShell', () => {
     expect(appShellRule).not.toMatch(/overflow(?:-y)?:\s*(?:auto|hidden|scroll)/)
     expect(htmlRule).toContain('overflow-x: clip')
     expect(bodyRule).toContain('overflow-x: clip')
+  })
+
+  it('reserves compact rail width for locally scrollable navigation', () => {
+    const navigationRule = cssRule(responsiveCss, '.app-rail__nav')
+
+    expect(responsiveCss).toMatch(
+      /\.app-rail__brand,\s*\.app-rail__toggle\s*\{[^}]*display:\s*none/,
+    )
+    expect(navigationRule).toContain('flex: 1 1 auto')
+    expect(navigationRule).toContain('min-width: 0')
+    expect(navigationRule).toContain('overflow-x: auto')
   })
 
   it('uses the semantic on-primary foreground for the brand glyph', () => {

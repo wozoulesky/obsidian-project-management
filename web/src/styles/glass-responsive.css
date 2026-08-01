@@ -15,8 +15,15 @@
     border-right: 0;
   }
 
+  .app-rail__brand,
+  .app-rail__toggle {
+    display: none;
+  }
+
   .app-rail__nav {
     width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
     flex-direction: row;
     align-items: center;
     gap: var(--space-1);
@@ -58,6 +65,11 @@
 
   .app-header {
     gap: var(--space-2);
+  }
+
+  .app-header__project {
+    min-width: 0;
+    flex: 0 1 auto;
   }
 
   .app-header__project-name {
