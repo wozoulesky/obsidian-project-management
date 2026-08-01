@@ -73,6 +73,17 @@
         outline-offset: 3px;
       }
 
+      .sr-only {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+
       .skip-link {
         position: fixed;
         z-index: 100;
@@ -1028,17 +1039,22 @@
         margin: 0;
       }
 
-      .project-card-meta div {
+      .project-card-meta > span {
         min-width: 0;
       }
 
-      .project-card-meta dt {
+      .project-meta-label,
+      .project-meta-value {
+        display: block;
+      }
+
+      .project-meta-label {
         color: var(--muted);
         font-size: 9px;
       }
 
-      .project-card-meta dd {
-        margin: 2px 0 0;
+      .project-meta-value {
+        margin-top: 2px;
         overflow: hidden;
         font-size: 10px;
         text-overflow: ellipsis;
@@ -1153,6 +1169,17 @@
         color: var(--muted);
         font-size: 10px;
         overflow-wrap: anywhere;
+      }
+
+      .project-matrix > .empty-state,
+      .actor-network-canvas > .empty-state {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+
+      .actor-network-canvas > .empty-state {
+        position: absolute;
+        inset: 62px 20px auto;
       }
 
       .toast {
@@ -1432,7 +1459,8 @@
         <div data-page-root></div>
       </main>
     </div>
-    <div class="toast" role="status" aria-live="polite"></div>
+    <div class="toast" aria-hidden="true"></div>
+    <div class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-selection-status></div>
 
     <script>
       const routeOrder = ['dashboard','projects','project-detail','actors','tasks','gantt','requirements','defects','settings']
@@ -1453,7 +1481,9 @@
       const skipLink = document.querySelector('.skip-link')
       const mainContent = document.querySelector('#main-content')
       const toast = document.querySelector('.toast')
+      const selectionStatus = document.querySelector('[data-selection-status]')
       let toastTimer = 0
+      let selectionStatusTimer = 0
 
       const pageRenderers = {
         dashboard: renderDashboard,
@@ -1619,6 +1649,8 @@
 
       const projectFilterValues = new Set(['all', 'healthy', 'attention', 'risk'])
       const actorFilterValues = new Set(['all', 'human', 'agent'])
+      const projectFilterLabels = new Map([['all', '全部'], ['healthy', '正常'], ['attention', '关注'], ['risk', '高风险']])
+      const actorFilterLabels = new Map([['all', '全部'], ['human', '人类'], ['agent', 'Agent']])
 
       const htmlEscapes = Object.freeze({
         '&': '&amp;',
@@ -1758,6 +1790,34 @@
           : 0
       }
 
+      function safeAverage(values) {
+        const finiteValues = values.map(Number).filter(Number.isFinite)
+        if (!finiteValues.length) return 0
+        return Math.round(finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length)
+      }
+
+      function resolveActorPosition(actorId, index = 0) {
+        const configuredPosition = actorNodePositions[actorId]
+        const hasValidCoordinates = Number.isFinite(Number(configuredPosition?.x))
+          && Number.isFinite(Number(configuredPosition?.y))
+        if (hasValidCoordinates) {
+          return {
+            x: clampPercent(configuredPosition.x),
+            y: clampPercent(configuredPosition.y),
+          }
+        }
+
+        const fallbackPositions = [
+          { x: 18, y: 20 },
+          { x: 50, y: 20 },
+          { x: 82, y: 20 },
+          { x: 26, y: 76 },
+          { x: 58, y: 76 },
+          { x: 86, y: 76 },
+        ]
+        return fallbackPositions[index % fallbackPositions.length]
+      }
+
       function projectToneClass(project) {
         if (project.health === '高风险') return 'is-critical'
         if (project.health === '关注') return 'is-attention'
@@ -1798,12 +1858,19 @@
       }
 
       function renderDashboardContext() {
-        const selectedRisk = riskQueue.find((risk) => risk.id === previewState.dashboardSelection)
-        const selectedActor = actors.find((actor) => actor.id === previewState.dashboardSelection)
+        let selectedRisk = riskQueue.find((risk) => risk.id === previewState.dashboardSelection)
+        let selectedActor = actors.find((actor) => actor.id === previewState.dashboardSelection)
+
+        if (!selectedRisk && !selectedActor) {
+          selectedRisk = riskQueue[0] || null
+          selectedActor = selectedRisk ? null : actors[0] || null
+          previewState.dashboardSelection = selectedRisk?.id ?? selectedActor?.id ?? null
+        }
 
         if (selectedActor) {
           const ownedProjects = projects.filter((project) => project.owner === selectedActor.name)
           const recentActivity = activityRecords.find((activity) => activity.actorId === selectedActor.id)
+          const skills = Array.isArray(selectedActor.skills) ? selectedActor.skills : []
           return {
             title: selectedActor.name,
             badge: selectedActor.status,
@@ -1811,26 +1878,27 @@
             rows: [
               ['类型', selectedActor.type === 'human' ? '人类协作者' : 'Agent'],
               ['当前负载', `${clampPercent(selectedActor.load)}%`],
-              ['技能', selectedActor.skills.join(' · ')],
+              ['技能', skills.join(' · ') || '暂无'],
               ['负责项目', ownedProjects.map((project) => project.name).join('、') || '暂无'],
             ],
             note: recentActivity?.text || '暂无最近活动',
           }
         }
 
-        const risk = selectedRisk || riskQueue[0]
-        const project = projects.find((item) => item.id === risk.projectId)
+        if (!selectedRisk) return null
+
+        const project = projects.find((item) => item.id === selectedRisk.projectId)
         return {
-          title: risk.title,
-          badge: risk.severity,
-          badgeClass: statusBadgeTone(risk.severity),
+          title: selectedRisk.title,
+          badge: selectedRisk.severity,
+          badgeClass: statusBadgeTone(selectedRisk.severity),
           rows: [
             ['项目', project?.name || '未知项目'],
-            ['负责人', risk.owner],
-            ['要求日期', risk.due],
-            ['风险级别', risk.severity],
+            ['负责人', selectedRisk.owner],
+            ['要求日期', selectedRisk.due],
+            ['风险级别', selectedRisk.severity],
           ],
-          note: risk.detail,
+          note: selectedRisk.detail,
         }
       }
 
@@ -1842,9 +1910,9 @@
           ['活跃协作者', String(actors.filter((actor) => actor.status !== '待命').length).padStart(2, '0'), `${actors.length} 位已接入`],
         ]
         const context = renderDashboardContext()
-        const averageHealth = Math.round(healthTrend.reduce((sum, item) => sum + item.value, 0) / healthTrend.length)
-        const previousHealth = healthTrend.at(-2)?.value || averageHealth
-        const latestHealth = healthTrend.at(-1)?.value || averageHealth
+        const averageHealth = safeAverage(healthTrend.map((item) => item.value))
+        const previousHealth = healthTrend.at(-2)?.value ?? averageHealth
+        const latestHealth = healthTrend.at(-1)?.value ?? averageHealth
 
         const trendMarkup = healthTrend.map((point) => {
           const safeValue = clampPercent(point.value)
@@ -1915,6 +1983,19 @@
           </li>
         `).join('')
 
+        const dashboardContextMarkup = context ? `
+          <aside class="context-panel dashboard-context" data-dashboard-context aria-labelledby="dashboard-context-title">
+            <div class="panel-heading"><h2 id="dashboard-context-title">${escapeHtml(context.title)}</h2><span class="status-badge ${context.badgeClass}">${escapeHtml(context.badge)}</span></div>
+            <dl class="context-list">${renderContextRows(context.rows)}</dl>
+            <p class="summary-note">${escapeHtml(context.note)}</p>
+          </aside>
+        ` : `
+          <aside class="context-panel dashboard-context" data-dashboard-context aria-labelledby="dashboard-context-title">
+            <h2 id="dashboard-context-title">上下文摘要</h2>
+            <div class="empty-state" data-dashboard-empty><div><strong>暂无风险或协作者</strong>接入数据后可在这里查看选择上下文。</div></div>
+          </aside>
+        `
+
         return elementFromHTML(`
           <section class="page-view overview-shell" data-page="dashboard" aria-labelledby="dashboard-title">
             ${renderOverviewHeader('dashboard', '项目健康、协作状态与交付风险', '创建项目')}
@@ -1928,33 +2009,29 @@
               <div class="health-trend-layout">
                 <div class="trend-summary" aria-label="七日健康趋势柱状图">
                   <div class="trend-summary-head"><strong>组合健康指数 ${averageHealth}</strong><span>${latestHealth >= previousHealth ? '向好' : '回落'} ${Math.abs(latestHealth - previousHealth)} 点</span></div>
-                  <div class="trend-bars">${trendMarkup}</div>
+                  ${trendMarkup ? `<div class="trend-bars">${trendMarkup}</div>` : '<div class="empty-state" data-dashboard-empty><div><strong>暂无健康趋势</strong>尚未收到趋势快照。</div></div>'}
                 </div>
-                <div class="health-lanes" aria-label="项目健康轨道">${healthLanes}</div>
+                <div class="health-lanes" aria-label="项目健康轨道">${healthLanes || '<div class="empty-state" data-dashboard-empty><div><strong>暂无项目健康数据</strong>创建项目后显示健康轨道。</div></div>'}</div>
               </div>
             </section>
 
             <div class="dashboard-detail-grid">
               <div class="dashboard-ops-grid">
                 <section class="glass-panel" aria-labelledby="risk-queue-title">
-                  <div class="panel-heading"><div><h2 id="risk-queue-title">风险队列</h2><p>选择风险查看上下文</p></div><span class="status-badge is-risk">${riskQueue.length} 项</span></div>
-                  <ul class="select-list">${riskMarkup}</ul>
+                  <div class="panel-heading"><div><h2 id="risk-queue-title">风险队列</h2><p>选择风险查看上下文</p></div><span class="status-badge ${riskQueue.length ? 'is-risk' : ''}">${riskQueue.length ? `${riskQueue.length} 项` : '暂无风险'}</span></div>
+                  <ul class="select-list">${riskMarkup || '<li class="empty-state" data-dashboard-empty><div><strong>风险队列为空</strong>当前没有待处理风险。</div></li>'}</ul>
                 </section>
                 <section class="glass-panel" aria-labelledby="actor-presence-title">
-                  <div class="panel-heading"><div><h2 id="actor-presence-title">协作者在线状态</h2><p>人类与 Agent 当前负载</p></div><span class="status-badge is-live">已同步</span></div>
-                  <ul class="select-list">${actorMarkup}</ul>
+                  <div class="panel-heading"><div><h2 id="actor-presence-title">协作者在线状态</h2><p>人类与 Agent 当前负载</p></div><span class="status-badge ${actors.length ? 'is-live' : ''}">${actors.length ? '已同步' : '未接入'}</span></div>
+                  <ul class="select-list">${actorMarkup || '<li class="empty-state" data-dashboard-empty><div><strong>暂无协作者</strong>邀请成员或 Agent 后显示状态。</div></li>'}</ul>
                 </section>
               </div>
-              <aside class="context-panel dashboard-context" data-dashboard-context aria-live="polite" aria-labelledby="dashboard-context-title">
-                <div class="panel-heading"><h2 id="dashboard-context-title">${escapeHtml(context.title)}</h2><span class="status-badge ${context.badgeClass}">${escapeHtml(context.badge)}</span></div>
-                <dl class="context-list">${renderContextRows(context.rows)}</dl>
-                <p class="summary-note">${escapeHtml(context.note)}</p>
-              </aside>
+              ${dashboardContextMarkup}
             </div>
 
             <div class="dashboard-feed-grid">
-              <section class="glass-panel" aria-labelledby="deliverables-title"><div class="panel-heading"><div><h2 id="deliverables-title">最近交付物</h2><p>验收与评审状态</p></div></div><ul class="compact-list">${deliverableMarkup}</ul></section>
-              <section class="glass-panel" aria-labelledby="activity-title"><div class="panel-heading"><div><h2 id="activity-title">活动流</h2><p>跨项目协作记录</p></div></div><ul class="compact-list">${activityMarkup}</ul></section>
+              <section class="glass-panel" aria-labelledby="deliverables-title"><div class="panel-heading"><div><h2 id="deliverables-title">最近交付物</h2><p>验收与评审状态</p></div></div><ul class="compact-list">${deliverableMarkup || '<li class="empty-state"><div><strong>暂无交付物</strong>交付记录将在这里出现。</div></li>'}</ul></section>
+              <section class="glass-panel" aria-labelledby="activity-title"><div class="panel-heading"><div><h2 id="activity-title">活动流</h2><p>跨项目协作记录</p></div></div><ul class="compact-list">${activityMarkup || '<li class="empty-state"><div><strong>暂无活动</strong>协作记录将在这里出现。</div></li>'}</ul></section>
             </div>
           </section>
         `)
@@ -1968,8 +2045,11 @@
           ['risk', '高风险'],
         ]
         const visibleProjects = projects.filter((project) => projectMatchesFilter(project, previewState.projectFilter))
-        const selectedProject = projects.find((project) => project.id === previewState.selectedProjectId) || projects[0]
-        const averageProgress = Math.round(projects.reduce((sum, project) => sum + project.progress, 0) / projects.length)
+        if (!visibleProjects.some((project) => project.id === previewState.selectedProjectId)) {
+          previewState.selectedProjectId = visibleProjects[0]?.id ?? null
+        }
+        const selectedProject = visibleProjects.find((project) => project.id === previewState.selectedProjectId) ?? null
+        const averageProgress = safeAverage(projects.map((project) => project.progress))
         const metrics = [
           ['项目总数', String(projects.length).padStart(2, '0'), '组合范围'],
           ['正常', String(projects.filter((project) => project.health === '正常').length).padStart(2, '0'), '节奏稳定'],
@@ -1986,32 +2066,48 @@
           const toneClass = projectToneClass(project)
           return `
             <button class="project-card ${toneClass}" type="button" data-project-id="${escapeHtml(project.id)}"
-              aria-pressed="${selectedProject.id === project.id}" aria-label="查看 ${escapeHtml(project.name)} 摘要">
+              aria-pressed="${selectedProject?.id === project.id}" aria-label="查看 ${escapeHtml(project.name)} 摘要">
               <span class="project-card-head"><strong title="${escapeHtml(project.name)}">${escapeHtml(project.name)}</strong><span class="status-badge ${statusBadgeTone(project.health)}">${escapeHtml(project.health)}</span></span>
               <span>
                 <span class="progress-copy"><span>交付进度</span><strong>${safeProgress}%</strong></span>
                 <span class="progress-rail" aria-hidden="true"><span style="--progress: ${safeProgress}%"></span></span>
               </span>
-              <dl class="project-card-meta">
-                <div><dt>负责人</dt><dd>${escapeHtml(project.owner)}</dd></div>
-                <div><dt>开放风险</dt><dd>${escapeHtml(project.risk)} 项</dd></div>
-                <div><dt>目标日期</dt><dd>${escapeHtml(project.due)}</dd></div>
-                <div><dt>组合差异</dt><dd>${safeProgress - averageProgress >= 0 ? '+' : ''}${safeProgress - averageProgress}%</dd></div>
-              </dl>
+              <span class="project-card-meta">
+                <span><span class="project-meta-label">负责人</span><span class="project-meta-value">${escapeHtml(project.owner)}</span></span>
+                <span><span class="project-meta-label">开放风险</span><span class="project-meta-value">${escapeHtml(project.risk)} 项</span></span>
+                <span><span class="project-meta-label">目标日期</span><span class="project-meta-value">${escapeHtml(project.due)}</span></span>
+                <span><span class="project-meta-label">组合差异</span><span class="project-meta-value">${safeProgress - averageProgress >= 0 ? '+' : ''}${safeProgress - averageProgress}%</span></span>
+              </span>
             </button>
           `
         }).join('')
 
-        const selectedActivity = activityRecords.find((activity) => activity.projectId === selectedProject.id)
-        const selectedDeliverable = deliverables.find((deliverable) => deliverable.projectId === selectedProject.id)
-        const projectSummaryRows = [
+        const selectedActivity = selectedProject
+          ? activityRecords.find((activity) => activity.projectId === selectedProject.id)
+          : null
+        const selectedDeliverable = selectedProject
+          ? deliverables.find((deliverable) => deliverable.projectId === selectedProject.id)
+          : null
+        const projectSummaryRows = selectedProject ? [
           ['负责人', selectedProject.owner],
           ['进度', `${clampPercent(selectedProject.progress)}%`],
           ['健康状态', selectedProject.health],
           ['开放风险', `${selectedProject.risk} 项`],
           ['目标日期', selectedProject.due],
           ['最近交付物', selectedDeliverable?.name || '暂无'],
-        ]
+        ] : []
+        const projectSummaryMarkup = selectedProject ? `
+          <aside class="context-panel project-summary" aria-labelledby="project-summary-title">
+            <div class="panel-heading"><h2 id="project-summary-title">${escapeHtml(selectedProject.name)}</h2><span class="status-badge ${statusBadgeTone(selectedProject.health)}">${escapeHtml(selectedProject.health)}</span></div>
+            <dl class="context-list">${renderContextRows(projectSummaryRows)}</dl>
+            <p class="summary-note">${escapeHtml(selectedActivity?.text || '暂无最近活动')}</p>
+          </aside>
+        ` : `
+          <aside class="context-panel project-summary" aria-labelledby="project-summary-title">
+            <h2 id="project-summary-title">项目摘要</h2>
+            <div class="empty-state" data-project-summary-empty><div><strong>暂无可选项目</strong>调整筛选或创建项目后查看摘要。</div></div>
+          </aside>
+        `
 
         return elementFromHTML(`
           <section class="page-view overview-shell" data-page="projects" aria-labelledby="projects-title">
@@ -2021,17 +2117,13 @@
               <section class="signature-stage portfolio-stage" aria-labelledby="projects-signature-title">
                 <div class="signature-heading">
                   <div><h2 id="projects-signature-title">玻璃项目矩阵</h2><span>${visibleProjects.length} / ${projects.length} 个项目</span></div>
-                  <div class="segmented" aria-label="项目健康筛选">${filters}</div>
+                  <div class="segmented" role="group" aria-label="项目健康筛选">${filters}</div>
                 </div>
                 <div class="project-matrix-scroll" tabindex="0" aria-label="项目矩阵，可在窄屏横向滚动">
-                  <div class="project-matrix">${cards || '<div class="empty-state"><div><strong>没有匹配项目</strong>请切换健康筛选。</div></div>'}</div>
+                  <div class="project-matrix">${cards || '<div class="empty-state" data-project-empty><div><strong>没有匹配项目</strong>请切换健康筛选。</div></div>'}</div>
                 </div>
               </section>
-              <aside class="context-panel project-summary" aria-live="polite" aria-labelledby="project-summary-title">
-                <div class="panel-heading"><h2 id="project-summary-title">${escapeHtml(selectedProject.name)}</h2><span class="status-badge ${statusBadgeTone(selectedProject.health)}">${escapeHtml(selectedProject.health)}</span></div>
-                <dl class="context-list">${renderContextRows(projectSummaryRows)}</dl>
-                <p class="summary-note">${escapeHtml(selectedActivity?.text || '暂无最近活动')}</p>
-              </aside>
+              ${projectSummaryMarkup}
             </div>
           </section>
         `)
@@ -2048,10 +2140,13 @@
           ['agent', 'Agent'],
         ]
         const visibleActors = actors.filter((actor) => previewState.actorFilter === 'all' || actor.type === previewState.actorFilter)
+        if (!visibleActors.some((actor) => actor.id === previewState.selectedActorId)) {
+          previewState.selectedActorId = visibleActors[0]?.id ?? null
+        }
         const visibleActorIds = new Set(visibleActors.map((actor) => actor.id))
-        const selectedActor = actors.find((actor) => actor.id === previewState.selectedActorId) || actors[0]
+        const selectedActor = visibleActors.find((actor) => actor.id === previewState.selectedActorId) ?? null
         const activeActors = actors.filter((actor) => actor.status !== '待命')
-        const averageLoad = Math.round(actors.reduce((sum, actor) => sum + actor.load, 0) / actors.length)
+        const averageLoad = safeAverage(actors.map((actor) => actor.load))
         const metrics = [
           ['协作者', String(actors.length).padStart(2, '0'), `${actors.filter((actor) => actor.type === 'human').length} 人 / ${actors.filter((actor) => actor.type === 'agent').length} Agent`],
           ['活跃中', String(activeActors.length).padStart(2, '0'), '实时状态'],
@@ -2063,17 +2158,28 @@
           <button type="button" data-actor-filter="${escapeHtml(value)}" aria-pressed="${previewState.actorFilter === value}">${escapeHtml(label)}</button>
         `).join('')
 
-        const connectors = actorConnections.filter((connection) => visibleActorIds.has(connection.from) && visibleActorIds.has(connection.to)).map((connection) => {
-          const from = actorNodePositions[connection.from]
-          const to = actorNodePositions[connection.to]
+        const positionByActorId = new Map(visibleActors.map((actor, index) => [
+          actor.id,
+          resolveActorPosition(actor.id, index),
+        ]))
+        const validConnections = actorConnections.filter((connection) => {
+          if (!connection || typeof connection.from !== 'string' || typeof connection.to !== 'string') return false
+          return visibleActorIds.has(connection.from)
+            && visibleActorIds.has(connection.to)
+            && positionByActorId.has(connection.from)
+            && positionByActorId.has(connection.to)
+        })
+        const connectors = validConnections.map((connection) => {
+          const from = positionByActorId.get(connection.from)
+          const to = positionByActorId.get(connection.to)
           return `<line class="${connection.primary ? 'is-primary' : ''}" x1="${clampPercent(from.x)}" y1="${clampPercent(from.y)}" x2="${clampPercent(to.x)}" y2="${clampPercent(to.y)}"></line>`
         }).join('')
 
         const nodes = visibleActors.map((actor) => {
-          const position = actorNodePositions[actor.id] || { x: 50, y: 50 }
+          const position = positionByActorId.get(actor.id)
           const safeLoad = clampPercent(actor.load)
           return `
-            <button class="actor-node" type="button" data-actor-id="${escapeHtml(actor.id)}" aria-pressed="${selectedActor.id === actor.id}"
+            <button class="actor-node" type="button" data-actor-id="${escapeHtml(actor.id)}" aria-pressed="${selectedActor?.id === actor.id}"
               style="--node-x: ${clampPercent(position.x)}%; --node-y: ${clampPercent(position.y)}%" aria-label="查看 ${escapeHtml(actor.name)} 协作摘要">
               <span class="actor-node-head"><strong title="${escapeHtml(actor.name)}">${escapeHtml(actor.name)}</strong><span class="status-badge ${actor.status === '待命' ? '' : 'is-live'}">${escapeHtml(actor.status)}</span></span>
               <small>${actor.type === 'human' ? '人类' : 'Agent'} · ${safeLoad}% 负载</small>
@@ -2082,15 +2188,38 @@
           `
         }).join('')
 
-        const actorProjects = projects.filter((project) => project.owner === selectedActor.name)
-        const recentActivity = activityRecords.find((activity) => activity.actorId === selectedActor.id)
-        const actorSummaryRows = [
+        const connectionDescriptions = validConnections.map((connection) => {
+          const fromActor = visibleActors.find((actor) => actor.id === connection.from)
+          const toActor = visibleActors.find((actor) => actor.id === connection.to)
+          return `<li>${escapeHtml(fromActor?.name || connection.from)} 到 ${escapeHtml(toActor?.name || connection.to)}：${connection.primary ? '主要协作' : '辅助协作'}</li>`
+        }).join('')
+        const actorProjects = selectedActor
+          ? projects.filter((project) => project.owner === selectedActor.name)
+          : []
+        const recentActivity = selectedActor
+          ? activityRecords.find((activity) => activity.actorId === selectedActor.id)
+          : null
+        const actorSummaryRows = selectedActor ? [
           ['身份', selectedActor.type === 'human' ? '人类' : 'Agent'],
           ['当前状态', selectedActor.status],
           ['工作负载', `${clampPercent(selectedActor.load)}%`],
           ['参与项目', actorProjects.map((project) => project.name).join('、') || '暂无'],
-        ]
-        const skillMarkup = selectedActor.skills.map((skill) => `<span class="skill-chip">${escapeHtml(skill)}</span>`).join('')
+        ] : []
+        const selectedSkills = Array.isArray(selectedActor?.skills) ? selectedActor.skills : []
+        const skillMarkup = selectedSkills.map((skill) => `<span class="skill-chip">${escapeHtml(skill)}</span>`).join('')
+        const actorSummaryMarkup = selectedActor ? `
+          <aside class="context-panel actor-summary" aria-labelledby="actor-summary-title">
+            <div class="panel-heading"><h2 id="actor-summary-title">${escapeHtml(selectedActor.name)}</h2><span class="status-badge ${selectedActor.status === '待命' ? '' : 'is-live'}">${escapeHtml(selectedActor.status)}</span></div>
+            <dl class="context-list">${renderContextRows(actorSummaryRows)}</dl>
+            <div class="skill-chips" aria-label="技能">${skillMarkup || '<span class="skill-chip">暂无技能</span>'}</div>
+            <p class="summary-note">最近活动：${escapeHtml(recentActivity?.text || '暂无')}</p>
+          </aside>
+        ` : `
+          <aside class="context-panel actor-summary" aria-labelledby="actor-summary-title">
+            <h2 id="actor-summary-title">协作者摘要</h2>
+            <div class="empty-state" data-actor-summary-empty><div><strong>暂无可选协作者</strong>调整筛选或邀请协作者后查看摘要。</div></div>
+          </aside>
+        `
 
         return elementFromHTML(`
           <section class="page-view overview-shell" data-page="actors" aria-labelledby="actors-title">
@@ -2099,22 +2228,21 @@
             <div class="actor-layout">
               <section class="signature-stage actor-network-stage" aria-labelledby="actors-signature-title">
                 <div class="signature-heading">
-                  <div><h2 id="actors-signature-title">协作网络</h2><span>${visibleActors.length} 个节点 · ${actorConnections.filter((connection) => visibleActorIds.has(connection.from) && visibleActorIds.has(connection.to)).length} 条连接</span></div>
-                  <div class="segmented" aria-label="协作者类型筛选">${filters}</div>
+                  <div><h2 id="actors-signature-title">协作网络</h2><span>${visibleActors.length} 个节点 · ${validConnections.length} 条连接</span></div>
+                  <div class="segmented" role="group" aria-label="协作者类型筛选">${filters}</div>
                 </div>
-                <div class="network-scroll" tabindex="0" aria-label="协作者关系图，可在窄屏横向滚动">
+                <div class="network-scroll" tabindex="0" aria-label="协作者关系图，可在窄屏横向滚动" aria-describedby="actor-connections-description">
                   <div class="actor-network-canvas">
                     <svg class="network-connectors" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${connectors}</svg>
-                    ${nodes}
+                    ${nodes || '<div class="empty-state" data-actor-empty><div><strong>没有匹配协作者</strong>请切换类型筛选。</div></div>'}
                   </div>
                 </div>
+                <div class="sr-only" id="actor-connections-description">
+                  <p>当前协作连接关系：</p>
+                  ${connectionDescriptions ? `<ul>${connectionDescriptions}</ul>` : '<p>当前筛选下无协作连接。</p>'}
+                </div>
               </section>
-              <aside class="context-panel actor-summary" aria-live="polite" aria-labelledby="actor-summary-title">
-                <div class="panel-heading"><h2 id="actor-summary-title">${escapeHtml(selectedActor.name)}</h2><span class="status-badge ${selectedActor.status === '待命' ? '' : 'is-live'}">${escapeHtml(selectedActor.status)}</span></div>
-                <dl class="context-list">${renderContextRows(actorSummaryRows)}</dl>
-                <div class="skill-chips" aria-label="技能">${skillMarkup}</div>
-                <p class="summary-note">最近活动：${escapeHtml(recentActivity?.text || '暂无')}</p>
-              </aside>
+              ${actorSummaryMarkup}
             </div>
           </section>
         `)
@@ -2191,12 +2319,22 @@
 
       function showToast(message) {
         clearTimeout(toastTimer)
+        clearTimeout(selectionStatusTimer)
+        selectionStatus.textContent = ''
+        selectionStatusTimer = window.setTimeout(() => {
+          selectionStatus.textContent = message
+          selectionStatusTimer = 0
+        }, 0)
         toast.textContent = message
         toast.classList.add('is-visible')
         toastTimer = window.setTimeout(() => {
           toast.classList.remove('is-visible')
           toastTimer = 0
         }, 1900)
+      }
+
+      function announceSelection(message) {
+        showToast(message)
       }
 
       skipLink.addEventListener('click', (event) => {
@@ -2220,6 +2358,11 @@
           if (isKnownRisk || isKnownActor) {
             previewState.dashboardSelection = selection
             rerenderCurrentPageAndRestoreFocus('data-dashboard-select', selection)
+            const selectedRisk = riskQueue.find((risk) => risk.id === selection)
+            const selectedActor = actors.find((actor) => actor.id === selection)
+            announceSelection(selectedRisk
+              ? `已选择风险：${selectedRisk.title}`
+              : `已选择协作者：${selectedActor.name}`)
           }
           return
         }
@@ -2231,9 +2374,10 @@
             previewState.projectFilter = filter
             const visibleProjects = projects.filter((project) => projectMatchesFilter(project, filter))
             if (!visibleProjects.some((project) => project.id === previewState.selectedProjectId)) {
-              previewState.selectedProjectId = visibleProjects[0]?.id || previewState.selectedProjectId
+              previewState.selectedProjectId = visibleProjects[0]?.id ?? null
             }
             rerenderCurrentPageAndRestoreFocus('data-project-filter', filter)
+            announceSelection(`项目筛选：${projectFilterLabels.get(filter)}，${visibleProjects.length ? `${visibleProjects.length} 个项目` : '无匹配项目'}`)
           }
           return
         }
@@ -2241,9 +2385,11 @@
         const projectSelection = event.target.closest('[data-project-id]')
         if (projectSelection) {
           const projectId = projectSelection.dataset.projectId
-          if (projects.some((project) => project.id === projectId)) {
+          const project = projects.find((item) => item.id === projectId)
+          if (project && projectMatchesFilter(project, previewState.projectFilter)) {
             previewState.selectedProjectId = projectId
             rerenderCurrentPageAndRestoreFocus('data-project-id', projectId)
+            announceSelection(`已选择项目：${project.name}`)
           }
           return
         }
@@ -2255,9 +2401,10 @@
             previewState.actorFilter = filter
             const visibleActors = actors.filter((actor) => filter === 'all' || actor.type === filter)
             if (!visibleActors.some((actor) => actor.id === previewState.selectedActorId)) {
-              previewState.selectedActorId = visibleActors[0]?.id || previewState.selectedActorId
+              previewState.selectedActorId = visibleActors[0]?.id ?? null
             }
             rerenderCurrentPageAndRestoreFocus('data-actor-filter', filter)
+            announceSelection(`协作者筛选：${actorFilterLabels.get(filter)}，${visibleActors.length ? `${visibleActors.length} 位协作者` : '无匹配协作者'}`)
           }
           return
         }
@@ -2265,9 +2412,11 @@
         const actorSelection = event.target.closest('[data-actor-id]')
         if (actorSelection) {
           const actorId = actorSelection.dataset.actorId
-          if (actors.some((actor) => actor.id === actorId)) {
+          const actor = actors.find((item) => item.id === actorId)
+          if (actor && (previewState.actorFilter === 'all' || actor.type === previewState.actorFilter)) {
             previewState.selectedActorId = actorId
             rerenderCurrentPageAndRestoreFocus('data-actor-id', actorId)
+            announceSelection(`已选择协作者：${actor.name}`)
           }
           return
         }
