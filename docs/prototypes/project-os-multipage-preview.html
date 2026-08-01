@@ -2170,12 +2170,16 @@
         accent-color: var(--green-deep);
       }
 
-      .settings-checkbox small {
-        display: block;
-        margin-top: 3px;
+      .settings-checkbox-detail {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+      }
+
+      .settings-checkbox-detail > small {
+        margin-left: 27px;
         color: var(--muted);
         font-size: 9px;
-        font-weight: 400;
       }
 
       .settings-checkbox-row {
@@ -2631,6 +2635,7 @@
       const mainContent = document.querySelector('#main-content')
       const toast = document.querySelector('.toast')
       let toastTimer = 0
+      let toastClearTimer = 0
 
       const pageRenderers = {
         dashboard: renderDashboard,
@@ -4040,11 +4045,14 @@
                   </select>
                 </div>
                 <div class="settings-control">
-                  <span id="settings-motion-label">动效偏好</span>
-                  <label class="settings-checkbox" for="settings-reduce-motion">
-                    <input id="settings-reduce-motion" name="reduce-motion" type="checkbox" aria-describedby="settings-motion-label settings-motion-help" />
-                    <span>减少界面动效<small id="settings-motion-help">仅改变当前预览控件，不覆盖系统设置。</small></span>
-                  </label>
+                  <span>动效偏好</span>
+                  <div class="settings-checkbox-detail">
+                    <label class="settings-checkbox" for="settings-reduce-motion">
+                      <input id="settings-reduce-motion" name="reduce-motion" type="checkbox" aria-describedby="settings-motion-help" />
+                      <span>减少界面动效</span>
+                    </label>
+                    <small id="settings-motion-help">仅改变当前预览控件，不覆盖系统设置。</small>
+                  </div>
                 </div>
               </fieldset>
               <div class="settings-actions"><button class="primary-action" type="button" data-prototype-action="记录外观偏好">记录当前偏好</button></div>
@@ -4070,11 +4078,14 @@
                   </select>
                 </div>
                 <div class="settings-control">
-                  <span id="settings-archive-label">历史数据</span>
-                  <label class="settings-checkbox" for="settings-include-archive">
-                    <input id="settings-include-archive" name="include-archive" type="checkbox" aria-describedby="settings-archive-label settings-archive-help" />
-                    <span>包含已归档记录<small id="settings-archive-help">此选择只保留在当前页面 DOM。</small></span>
-                  </label>
+                  <span>历史数据</span>
+                  <div class="settings-checkbox-detail">
+                    <label class="settings-checkbox" for="settings-include-archive">
+                      <input id="settings-include-archive" name="include-archive" type="checkbox" aria-describedby="settings-archive-help" />
+                      <span>包含已归档记录</span>
+                    </label>
+                    <small id="settings-archive-help">此选择只保留在当前页面 DOM。</small>
+                  </div>
                 </div>
               </fieldset>
               <div class="settings-actions"><button class="primary-action" type="button" data-prototype-action="记录数据偏好">记录当前偏好</button></div>
@@ -4192,9 +4203,20 @@
 
       function showToast(message) {
         clearTimeout(toastTimer)
+        clearTimeout(toastClearTimer)
+        toastTimer = 0
+        toastClearTimer = 0
         toast.textContent = message
         toast.classList.add('is-visible')
-        toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 2200)
+        toastTimer = window.setTimeout(() => {
+          toast.classList.remove('is-visible')
+          const clearDelay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180
+          toastClearTimer = window.setTimeout(() => {
+            toast.textContent = ''
+            toastClearTimer = 0
+          }, clearDelay)
+          toastTimer = 0
+        }, 2200)
       }
 
       function announceSelection(message) {
