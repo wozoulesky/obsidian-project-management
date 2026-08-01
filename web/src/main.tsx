@@ -8,6 +8,9 @@ import './styles/tokens.css'
 import './styles/base.css'
 import './styles/components.css'
 import './styles/responsive.css'
+import './styles/glass-foundation.css'
+import './styles/glass-shell.css'
+import './styles/glass-responsive.css'
 
 const queryClient = new QueryClient()
 

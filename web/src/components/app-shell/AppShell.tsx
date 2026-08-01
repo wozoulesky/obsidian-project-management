@@ -15,24 +15,35 @@ import {
 import { type ReactNode, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 
+import { QuickSubmitDialog } from '../../features/tasks/QuickSubmitDialog'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { VisuallyHidden } from '../ui/VisuallyHidden'
-import { QuickSubmitDialog } from '../../features/tasks/QuickSubmitDialog'
 
 type AppShellProps = {
   children?: ReactNode
 }
 
 const navigationItems = [
-  { label: '仪表盘', path: '/dashboard', icon: LayoutDashboard },
-  { label: '项目', path: '/projects', icon: FolderKanban },
-  { label: '负责人', path: '/actors', icon: Users },
-  { label: '计划 / 任务', path: '/tasks', icon: ListTodo },
-  { label: '甘特图', path: '/gantt', icon: ChartNoAxesGantt },
-  { label: '需求', path: '/requirements', icon: Lightbulb },
-  { label: '缺陷', path: '/defects', icon: Bug },
-  { label: '设置', path: '/settings', icon: Settings },
+  {
+    group: 'overview',
+    label: '仪表盘',
+    path: '/dashboard',
+    icon: LayoutDashboard,
+  },
+  { group: 'overview', label: '项目', path: '/projects', icon: FolderKanban },
+  { group: 'overview', label: '负责人', path: '/actors', icon: Users },
+  { group: 'delivery', label: '计划 / 任务', path: '/tasks', icon: ListTodo },
+  { group: 'delivery', label: '甘特图', path: '/gantt', icon: ChartNoAxesGantt },
+  { group: 'quality', label: '需求', path: '/requirements', icon: Lightbulb },
+  { group: 'quality', label: '缺陷', path: '/defects', icon: Bug },
+  { group: 'system', label: '设置', path: '/settings', icon: Settings },
+] as const
+
+const navigationGroups = [
+  { id: 'overview', label: '概览' },
+  { id: 'delivery', label: '交付' },
+  { id: 'quality', label: '质量' },
+  { id: 'system', label: '系统' },
 ] as const
 
 export function AppShell({ children }: AppShellProps) {
@@ -51,6 +62,13 @@ export function AppShell({ children }: AppShellProps) {
     <div
       className={`app-shell${isRailExpanded ? ' app-shell--rail-expanded' : ''}`}
     >
+      <a
+        aria-hidden={isQuickSubmitOpen || undefined}
+        className="skip-link"
+        href="#main-content"
+      >
+        跳到主要内容
+      </a>
       <aside
         aria-hidden={isQuickSubmitOpen || undefined}
         className={`app-rail${isRailExpanded ? ' app-rail--expanded' : ''}`}
@@ -61,7 +79,11 @@ export function AppShell({ children }: AppShellProps) {
           title="Project OS"
           to="/dashboard"
         >
-          P
+          <span aria-hidden="true" className="app-rail__brand-mark">OS</span>
+          <span className="app-rail__brand-copy">
+            <strong className="app-rail__brand-name">Project OS</strong>
+            <small className="app-rail__brand-meta">TASK CONSOLE</small>
+          </span>
         </NavLink>
         <button
           aria-expanded={isRailExpanded}
@@ -78,23 +100,33 @@ export function AppShell({ children }: AppShellProps) {
           )}
         </button>
         <nav aria-label="主导航" className="app-rail__nav">
-          {navigationItems.map(({ icon: Icon, label, path }) => (
-            <NavLink
-              aria-label={isQuickSubmitOpen ? undefined : label}
-              className={({ isActive }) =>
-                `app-rail__link${isActive ? ' app-rail__link--active' : ''}`
-              }
-              key={path}
-              title={isRailExpanded ? undefined : label}
-              to={path}
+          {navigationGroups.map((group) => (
+            <div
+              aria-label={group.label}
+              className={`app-rail__group app-rail__group--${group.id}`}
+              key={group.id}
+              role="group"
             >
-              <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
-              {isRailExpanded ? (
-                <span className="app-rail__label">{label}</span>
-              ) : (
-                <VisuallyHidden>{label}</VisuallyHidden>
-              )}
-            </NavLink>
+              <span aria-hidden="true" className="app-rail__group-label">
+                {group.label}
+              </span>
+              {navigationItems
+                .filter((item) => item.group === group.id)
+                .map(({ icon: Icon, label, path }) => (
+                  <NavLink
+                    aria-label={isQuickSubmitOpen ? undefined : label}
+                    className={({ isActive }) =>
+                      `app-rail__link${isActive ? ' app-rail__link--active' : ''}`
+                    }
+                    key={path}
+                    title={isRailExpanded ? undefined : label}
+                    to={path}
+                  >
+                    <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
+                    <span className="app-rail__label">{label}</span>
+                  </NavLink>
+                ))}
+            </div>
           ))}
         </nav>
       </aside>
@@ -104,7 +136,7 @@ export function AppShell({ children }: AppShellProps) {
         className="app-header"
       >
         <div className="app-header__project">
-          <Badge tone="primary">PROJECT / LOCAL</Badge>
+          <Badge tone="primary">OFFLINE / LOCAL</Badge>
           <span className="app-header__project-name">Atlas 研发平台</span>
         </div>
         <div className="app-header__actions">
@@ -136,6 +168,7 @@ export function AppShell({ children }: AppShellProps) {
         aria-hidden={isQuickSubmitOpen || undefined}
         className="app-main"
         id="main-content"
+        tabIndex={-1}
       >
         {children}
       </main>

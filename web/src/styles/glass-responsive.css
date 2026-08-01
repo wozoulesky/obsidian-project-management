@@ -1,0 +1,94 @@
+@media (width < 48rem) {
+  .app-shell,
+  .app-shell--rail-expanded {
+    grid-template-rows: var(--header-height) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-rail,
+  .app-rail--expanded {
+    width: 100%;
+    max-width: 100vw;
+    padding: var(--space-2) var(--space-3);
+    overflow: hidden;
+    border-top: 1px solid var(--glass-line);
+    border-right: 0;
+  }
+
+  .app-rail__nav {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-1);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .app-rail__group,
+  .app-rail--expanded .app-rail__group {
+    width: auto;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .app-rail__group--system {
+    margin-top: 0;
+  }
+
+  .app-rail--expanded .app-rail__group-label,
+  .app-rail--expanded .app-rail__label,
+  .app-rail__group-label,
+  .app-rail__label {
+    display: none;
+  }
+
+  .app-rail__link,
+  .app-rail--expanded .app-rail__link {
+    display: grid;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    padding-inline: 0;
+    place-items: center;
+  }
+
+  .app-rail__link--active::before {
+    inset: auto auto -0.5rem;
+  }
+
+  .app-header {
+    gap: var(--space-2);
+  }
+
+  .app-header__project-name {
+    display: none;
+  }
+
+  .page-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .page-header__actions {
+    justify-content: flex-start;
+  }
+
+  .glass-panel {
+    padding: var(--space-4);
+    border-radius: var(--glass-card-radius);
+  }
+}
+
+@media (width < 30rem) {
+  .app-header .badge--primary {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link,
+  .segmented-control__option {
+    transition: none;
+  }
+}

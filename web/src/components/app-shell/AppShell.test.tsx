@@ -26,6 +26,32 @@ describe('AppShell', () => {
       screen.getByRole('button', { name: '收起侧边栏' }),
     ).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('仪表盘')).toBeVisible()
+    expect(screen.getByText('Project OS')).toBeVisible()
+    expect(screen.getByText('概览')).toBeVisible()
+    expect(screen.getByText('交付')).toBeVisible()
+    expect(screen.getByText('质量')).toBeVisible()
+    expect(screen.getByText('系统')).toBeVisible()
+  })
+
+  it('uses a full accessible brand and groups navigation by workspace area', () => {
+    renderApp(<AppShell />)
+
+    expect(screen.getByRole('link', { name: 'Project OS' })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    )
+    expect(
+      screen.getByRole('group', { name: '概览' }),
+    ).toContainElement(screen.getByRole('link', { name: '项目' }))
+    expect(
+      screen.getByRole('group', { name: '交付' }),
+    ).toContainElement(screen.getByRole('link', { name: '计划 / 任务' }))
+    expect(
+      screen.getByRole('group', { name: '质量' }),
+    ).toContainElement(screen.getByRole('link', { name: '缺陷' }))
+    expect(
+      screen.getByRole('group', { name: '系统' }),
+    ).toContainElement(screen.getByRole('link', { name: '设置' }))
   })
 
   it('exposes the primary project navigation', () => {
@@ -73,24 +99,35 @@ describe('AppShell', () => {
     )
   })
 
-  it('offers the quick submit action', () => {
+  it('offers quick submit and restores its trigger after Escape', async () => {
+    const user = userEvent.setup()
     renderApp(<AppShell />)
 
-    expect(
-      screen.getByRole('button', { name: '快速提交' }),
-    ).toBeInTheDocument()
+    const trigger = screen.getByRole('button', { name: '快速提交' })
+    await user.click(trigger)
+
+    expect(screen.getByRole('dialog', { name: '快速提交' })).toBeVisible()
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
   })
 
-  it('reports that project data is stored locally', () => {
+  it('reports that the workspace is offline and project data is local', () => {
     renderApp(<AppShell />)
 
+    expect(screen.getByText('OFFLINE / LOCAL')).toBeInTheDocument()
     expect(screen.getByText('数据已保存到本地')).toBeInTheDocument()
     expect(screen.getByText('最后更新 10:42')).toBeInTheDocument()
   })
 
-  it('provides a stable main content target', () => {
+  it('provides a skip link and stable main content target', () => {
     renderApp(<AppShell />)
 
+    expect(screen.getByRole('link', { name: '跳到主要内容' })).toHaveAttribute(
+      'href',
+      '#main-content',
+    )
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
   })
 })

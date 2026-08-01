@@ -1,5 +1,5 @@
 import type { EChartsCoreOption } from 'echarts/core'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { TrendPoint } from '../../data/domain'
 import { EChart } from './EChart'
@@ -10,6 +10,62 @@ export type TrendChartProps = {
 
 type TooltipDatum = {
   value?: Partial<TrendPoint>
+}
+
+const chartColorFallbacks = {
+  grid: '#66716a',
+  primary: '#37f58a',
+  text: '#8d9791',
+  warning: '#eeb66b',
+} as const
+
+type ChartColorName = keyof typeof chartColorFallbacks
+type ChartColors = Record<ChartColorName, string>
+
+function resolveChartColor(token: ChartColorName): string {
+  if (
+    typeof document === 'undefined' ||
+    typeof getComputedStyle === 'undefined'
+  ) {
+    return chartColorFallbacks[token]
+  }
+
+  return (
+    getComputedStyle(document.documentElement)
+      .getPropertyValue(`--chart-${token}`)
+      .trim() || chartColorFallbacks[token]
+  )
+}
+
+function useChartColors(): ChartColors {
+  const [, setAppearanceRevision] = useState(0)
+
+  useEffect(() => {
+    const root = document.documentElement
+    const refresh = () => setAppearanceRevision((revision) => revision + 1)
+    const observer = new MutationObserver(refresh)
+    observer.observe(root, {
+      attributeFilter: ['data-accent', 'data-theme'],
+      attributes: true,
+    })
+
+    const colorScheme = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-color-scheme: dark)')
+      : null
+    colorScheme?.addEventListener('change', refresh)
+
+    return () => {
+      observer.disconnect()
+      colorScheme?.removeEventListener('change', refresh)
+    }
+  }, [])
+
+  return {
+    grid: resolveChartColor('grid'),
+    primary: resolveChartColor('primary'),
+    text: resolveChartColor('text'),
+    warning: resolveChartColor('warning'),
+  }
 }
 
 function tooltipFormatter(params: unknown): string {
@@ -29,6 +85,7 @@ function tooltipFormatter(params: unknown): string {
 
 export function TrendChart({ points }: TrendChartProps) {
   const latestPoint = points.at(-1)
+  const colors = useChartColors()
   const option = useMemo<EChartsCoreOption>(
     () => ({
       animationDuration: 240,
@@ -48,7 +105,7 @@ export function TrendChart({ points }: TrendChartProps) {
       },
       legend: {
         bottom: 0,
-        textStyle: { color: '#6b7280' },
+        textStyle: { color: colors.text },
       },
       tooltip: {
         trigger: 'axis',
@@ -57,14 +114,14 @@ export function TrendChart({ points }: TrendChartProps) {
       },
       xAxis: {
         type: 'category',
-        axisLine: { lineStyle: { color: '#e1e5ea' } },
-        axisLabel: { color: '#6b7280' },
+        axisLine: { lineStyle: { color: colors.grid } },
+        axisLabel: { color: colors.text },
       },
       yAxis: {
         type: 'value',
         axisLine: { show: false },
-        axisLabel: { color: '#6b7280' },
-        splitLine: { lineStyle: { color: '#e1e5ea' } },
+        axisLabel: { color: colors.text },
+        splitLine: { lineStyle: { color: colors.grid } },
       },
       series: [
         {
@@ -72,21 +129,21 @@ export function TrendChart({ points }: TrendChartProps) {
           type: 'line',
           encode: { x: 'date', y: 'actual' },
           showSymbol: false,
-          lineStyle: { color: '#2f91f7', type: 'solid', width: 2 },
-          itemStyle: { color: '#2f91f7' },
-          areaStyle: { color: '#2f91f7', opacity: 0.12 },
+          lineStyle: { color: colors.primary, type: 'solid', width: 2 },
+          itemStyle: { color: colors.primary },
+          areaStyle: { color: colors.primary, opacity: 0.12 },
         },
         {
           name: '计划完成',
           type: 'line',
           encode: { x: 'date', y: 'planned' },
           showSymbol: false,
-          lineStyle: { color: '#6b7280', type: 'dashed', width: 2 },
-          itemStyle: { color: '#6b7280' },
+          lineStyle: { color: colors.warning, type: 'dashed', width: 2 },
+          itemStyle: { color: colors.warning },
         },
       ],
     }),
-    [points],
+    [colors, points],
   )
 
   return (

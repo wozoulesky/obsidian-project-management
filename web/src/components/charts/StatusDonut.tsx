@@ -1,5 +1,5 @@
 import type { EChartsCoreOption } from 'echarts/core'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { TaskStatus } from '../../data/domain'
 import { EChart } from './EChart'
@@ -12,10 +12,12 @@ export type StatusDonutProps = {
 }
 
 const tokenColorFallbacks = {
-  border: '#e1e5ea',
-  critical: '#d9533f',
-  primary: '#2f91f7',
-  success: '#43be76',
+  critical: '#ff7868',
+  grid: '#66716a',
+  primary: '#37f58a',
+  success: '#72dfa0',
+  text: '#8d9791',
+  textPrimary: '#f3f7f4',
 } as const
 
 const statusPresentation: ReadonlyArray<{
@@ -23,7 +25,7 @@ const statusPresentation: ReadonlyArray<{
   label: string
   token: keyof typeof tokenColorFallbacks
 }> = [
-  { key: 'not_started', label: '未开始', token: 'border' },
+  { key: 'not_started', label: '未开始', token: 'grid' },
   { key: 'in_progress', label: '进行中', token: 'primary' },
   { key: 'done', label: '已完成', token: 'success' },
   { key: 'overdue', label: '已延期', token: 'critical' },
@@ -41,9 +43,44 @@ function resolveTokenColor(
 
   return (
     getComputedStyle(document.documentElement)
-      .getPropertyValue(`--${token}`)
+      .getPropertyValue(
+        token === 'textPrimary' ? '--text-primary' : `--chart-${token}`,
+      )
       .trim() || tokenColorFallbacks[token]
   )
+}
+
+function useTokenColors() {
+  const [, setAppearanceRevision] = useState(0)
+
+  useEffect(() => {
+    const root = document.documentElement
+    const refresh = () => setAppearanceRevision((revision) => revision + 1)
+    const observer = new MutationObserver(refresh)
+    observer.observe(root, {
+      attributeFilter: ['data-accent', 'data-theme'],
+      attributes: true,
+    })
+
+    const colorScheme = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-color-scheme: dark)')
+      : null
+    colorScheme?.addEventListener('change', refresh)
+
+    return () => {
+      observer.disconnect()
+      colorScheme?.removeEventListener('change', refresh)
+    }
+  }, [])
+
+  return {
+    critical: resolveTokenColor('critical'),
+    grid: resolveTokenColor('grid'),
+    primary: resolveTokenColor('primary'),
+    success: resolveTokenColor('success'),
+    text: resolveTokenColor('text'),
+    textPrimary: resolveTokenColor('textPrimary'),
+  }
 }
 
 export function StatusDonut({
@@ -53,11 +90,8 @@ export function StatusDonut({
   const normalizedRate = Number.isFinite(completionRate)
     ? Math.min(100, Math.max(0, Math.round(completionRate)))
     : 0
-  const colors = useMemo(
-    () =>
-      statusPresentation.map(({ token }) => resolveTokenColor(token)),
-    [],
-  )
+  const tokenColors = useTokenColors()
+  const colors = statusPresentation.map(({ token }) => tokenColors[token])
   const option = useMemo<EChartsCoreOption>(
     () => ({
       color: colors,
@@ -67,12 +101,12 @@ export function StatusDonut({
         left: 'center',
         top: '34%',
         textStyle: {
-          color: '#171b20',
+          color: tokenColors.textPrimary,
           fontSize: 22,
           fontWeight: 750,
         },
         subtextStyle: {
-          color: '#6b7280',
+          color: tokenColors.text,
           fontSize: 12,
         },
       },
@@ -95,7 +129,7 @@ export function StatusDonut({
         },
       ],
     }),
-    [colors, counts, normalizedRate],
+    [colors, counts, normalizedRate, tokenColors.text, tokenColors.textPrimary],
   )
 
   return (
