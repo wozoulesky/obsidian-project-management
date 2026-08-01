@@ -1434,10 +1434,15 @@
       }
 
       .task-fan-canvas {
-        --fan-gap: 56px;
+        display: grid;
+        grid-auto-columns: 160px;
+        grid-auto-flow: column;
+        align-items: center;
+        gap: 12px;
         position: relative;
-        min-width: 450px;
+        min-width: max-content;
         min-height: 292px;
+        padding: 22px 12px 38px;
         perspective: 1050px;
         perspective-origin: 50% 45%;
         transform-style: preserve-3d;
@@ -1453,40 +1458,17 @@
         background: rgba(0, 0, 0, 0.62);
         content: "";
         filter: blur(14px);
+        pointer-events: none;
         transform: rotateX(66deg);
       }
 
       .task-fan-card {
-        --fan-span: calc(var(--count) - 1);
-        --fan-position: calc(var(--index) - (var(--fan-span) / 2));
-        position: absolute;
-        top: 51%;
-        left: 50%;
-        z-index: calc(var(--count) - var(--index) + 2);
-        width: 44px;
-        min-height: 205px;
-        padding: 0;
-        overflow: visible;
-        border: 0;
-        color: inherit;
-        background: transparent;
-        cursor: pointer;
-        text-align: left;
-        transform: translate(-50%, -50%) translate3d(calc(var(--fan-position) * var(--fan-gap)), calc(var(--index) * -2px), calc((var(--count) - var(--index)) * 8px)) rotateY(calc(var(--fan-position) * -6deg)) rotateZ(calc(var(--fan-position) * 2deg));
-        transform-style: preserve-3d;
-        transition: transform 220ms ease;
-      }
-
-      .task-fan-card[aria-pressed="true"] {
-        z-index: calc(var(--count) + 3);
-        transform: translate(-50%, -50%) translate3d(calc(var(--fan-position) * var(--fan-gap)), -10px, 40px) rotateY(calc(var(--fan-position) * -6deg)) rotateZ(calc(var(--fan-position) * 2deg));
-      }
-
-      .task-fan-card-visual {
-        display: block;
-        position: absolute;
-        top: 0;
-        left: 50%;
+        --fan-lift: 0px;
+        --fan-tilt: 0deg;
+        --fan-roll: 0deg;
+        --fan-scale: 1;
+        position: relative;
+        z-index: 1;
         width: 160px;
         min-height: 205px;
         padding: 42px 14px 14px;
@@ -1494,31 +1476,75 @@
         border: 1px solid var(--line-bright);
         border-radius: 14px;
         clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+        color: inherit;
         background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(25, 31, 27, 0.95));
         box-shadow: inset 0 1px rgba(255, 255, 255, 0.16), 0 20px 34px rgba(0, 0, 0, 0.5);
-        pointer-events: none;
-        transform: translateX(-50%);
-        transition: border-color 180ms ease, box-shadow 180ms ease;
+        cursor: pointer;
+        text-align: left;
+        transform: translateY(var(--fan-lift)) scale(var(--fan-scale));
+        transform-origin: 50% 88%;
+        transition: transform 220ms ease, border-color 180ms ease, box-shadow 180ms ease;
       }
 
-      .task-fan-card[aria-pressed="true"] .task-fan-card-visual {
+      .task-fan-card:nth-child(1),
+      .task-fan-card:nth-child(6) {
+        --fan-lift: 12px;
+        --fan-scale: 0.97;
+      }
+
+      .task-fan-card:nth-child(2),
+      .task-fan-card:nth-child(5) {
+        --fan-lift: 5px;
+        --fan-scale: 0.985;
+      }
+
+      .task-fan-card:nth-child(1) {
+        --fan-tilt: 6deg;
+        --fan-roll: -1.2deg;
+      }
+
+      .task-fan-card:nth-child(2) {
+        --fan-tilt: 3.5deg;
+        --fan-roll: -0.7deg;
+      }
+
+      .task-fan-card:nth-child(3) {
+        --fan-tilt: 1.2deg;
+        --fan-roll: -0.2deg;
+      }
+
+      .task-fan-card:nth-child(4) {
+        --fan-tilt: -1.2deg;
+        --fan-roll: 0.2deg;
+      }
+
+      .task-fan-card:nth-child(5) {
+        --fan-tilt: -3.5deg;
+        --fan-roll: 0.7deg;
+      }
+
+      .task-fan-card:nth-child(6) {
+        --fan-tilt: -6deg;
+        --fan-roll: 1.2deg;
+      }
+
+      .task-fan-card[aria-pressed="true"] {
+        z-index: 2;
         border-color: rgba(55, 245, 138, 0.86);
         box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(55, 245, 138, 0.24), 0 0 36px rgba(55, 245, 138, 0.32), 0 24px 38px rgba(0, 0, 0, 0.58);
+        transform: translateY(calc(var(--fan-lift) - 10px)) scale(1.02);
       }
 
       .task-fan-card:focus-visible {
-        outline: none;
-      }
-
-      .task-fan-card:focus-visible .task-fan-card-visual {
         outline: 2px solid var(--green);
-        outline-offset: 3px;
+        outline-offset: -3px;
       }
 
-      .task-fan-card-visual::before {
+      .task-fan-card::before {
         position: absolute;
         top: 0;
         right: 0;
+        z-index: 2;
         width: 18px;
         height: 18px;
         border-bottom: 1px solid var(--line-bright);
@@ -1527,27 +1553,38 @@
         content: "";
       }
 
-      .task-fan-card-visual > small,
-      .task-fan-card-visual > strong,
-      .task-fan-card-visual > span {
+      .task-fan-card::after {
+        position: absolute;
+        z-index: 0;
+        inset: -8%;
+        background: linear-gradient(105deg, rgba(255, 255, 255, 0.13), transparent 36%, rgba(0, 0, 0, 0.18));
+        content: "";
+        pointer-events: none;
+        transform: perspective(420px) rotateY(var(--fan-tilt)) rotateZ(var(--fan-roll));
+        transform-origin: 50% 80%;
+      }
+
+      .task-fan-card > small,
+      .task-fan-card > strong,
+      .task-fan-card > span {
         position: relative;
         z-index: 1;
         display: block;
         overflow-wrap: anywhere;
       }
 
-      .task-fan-card-visual > small {
+      .task-fan-card > small {
         color: var(--muted);
         font-size: 8px;
         letter-spacing: 0.05em;
       }
 
-      .task-fan-card-visual > strong {
+      .task-fan-card > strong {
         margin: 8px 0 13px;
         font-size: 11px;
       }
 
-      .task-fan-card-visual > span {
+      .task-fan-card > span {
         margin-top: 4px;
         color: #b9c2bc;
         font-size: 9px;
@@ -2247,15 +2284,6 @@
           scroll-snap-align: center;
         }
 
-        .task-fan-card-visual {
-          position: relative;
-          top: auto;
-          left: auto;
-          width: auto;
-          min-height: 204px;
-          transform: none;
-        }
-
         .task-fan-scroll {
           scroll-snap-type: x mandatory;
         }
@@ -2302,17 +2330,11 @@
           z-index: auto;
           width: auto;
           min-height: 165px;
-          padding: 0;
+          padding: 36px 11px 11px;
           transform: none;
         }
 
-        .task-fan-card-visual {
-          position: relative;
-          top: auto;
-          left: auto;
-          width: auto;
-          min-height: 165px;
-          padding: 36px 11px 11px;
+        .task-fan-card::after {
           transform: none;
         }
       }
@@ -3501,7 +3523,7 @@
         const fanCards = visibleTasks.length ? visibleTasks.map((task, index) => {
           const status = effectiveTaskStatus(task)
           return `<button class="task-fan-card" type="button" data-task-id="${escapeHtml(task.id)}" data-focus-key="tasks-fan-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--index:${index};--count:${visibleTasks.length}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}">
-            <span class="task-fan-card-visual"><small>${escapeHtml(task.priority)}优先 · ${escapeHtml(task.code)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(status)}</span><span>截止 ${escapeHtml(task.due)}</span><span>进度 ${clampPercent(task.progress)}%</span></span>
+            <small>${escapeHtml(task.priority)}优先 · ${escapeHtml(task.code)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(status)}</span><span>截止 ${escapeHtml(task.due)}</span><span>进度 ${clampPercent(task.progress)}%</span>
           </button>`
         }).join('') : '<div class="empty-state"><div><strong>没有可展示任务卡</strong>当前范围不会生成空的三维卡片。</div></div>'
         const taskRows = selectedTask ? [
