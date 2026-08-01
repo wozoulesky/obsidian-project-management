@@ -92,6 +92,14 @@ describe('EChart', () => {
   })
 
   it('initializes, updates, resizes and disposes one chart instance safely', () => {
+    const initMock = vi.mocked(echarts.init)
+    let containerWidth = 640
+    let containerHeight = 320
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(() => containerWidth)
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockImplementation(() => containerHeight)
+
     const { rerender, unmount } = render(
       <EChart ariaLabel="项目趋势" option={{ title: { text: 'first' } }} />,
     )
@@ -103,7 +111,19 @@ describe('EChart', () => {
       { notMerge: true },
     )
     expect(observe).toHaveBeenCalledWith(container)
+    expect(chart.resize).toHaveBeenCalledWith({
+      height: 320,
+      width: 640,
+    })
+    expect(initMock.mock.invocationCallOrder[0]).toBeLessThan(
+      chart.setOption.mock.invocationCallOrder[0]!,
+    )
+    expect(chart.setOption.mock.invocationCallOrder[0]).toBeLessThan(
+      chart.resize.mock.invocationCallOrder[0]!,
+    )
 
+    containerWidth = 768
+    containerHeight = 384
     rerender(
       <EChart ariaLabel="项目趋势" option={{ title: { text: 'second' } }} />,
     )
@@ -112,9 +132,17 @@ describe('EChart', () => {
       { title: { text: 'second' } },
       { notMerge: true },
     )
+    expect(chart.resize).toHaveBeenLastCalledWith({
+      height: 384,
+      width: 768,
+    })
+    expect(chart.setOption.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      chart.resize.mock.invocationCallOrder.at(-1)!,
+    )
 
     resizeCallback([], {} as ResizeObserver)
-    expect(chart.resize).toHaveBeenCalledOnce()
+    expect(chart.resize).toHaveBeenCalledTimes(3)
+    expect(chart.resize).toHaveBeenLastCalledWith()
 
     unmount()
     expect(disconnect).toHaveBeenCalledOnce()
