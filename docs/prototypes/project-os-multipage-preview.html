@@ -1682,15 +1682,29 @@
         min-height: 32px;
         padding: 7px 9px;
         overflow: hidden;
-        border: 1px solid rgba(55, 245, 138, 0.44);
+        border: 1px solid rgba(226, 240, 233, 0.34);
         border-radius: 9px;
-        color: #031108;
-        background: linear-gradient(90deg, var(--green-deep), var(--green));
-        box-shadow: 0 0 16px rgba(55, 245, 138, 0.16);
+        color: #101512;
+        background: linear-gradient(90deg, #707b74, #b9c3bd);
+        box-shadow: none;
         cursor: pointer;
         text-align: left;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      .gantt-bar.is-in-progress {
+        border-color: rgba(55, 245, 138, 0.44);
+        color: #031108;
+        background: linear-gradient(90deg, var(--green-deep), var(--green));
+        box-shadow: 0 0 16px rgba(55, 245, 138, 0.16);
+      }
+
+      .gantt-bar.is-neutral {
+        border-color: rgba(226, 240, 233, 0.34);
+        color: #101512;
+        background: linear-gradient(90deg, #707b74, #b9c3bd);
+        box-shadow: none;
       }
 
       .gantt-bar.is-complete {
@@ -2864,7 +2878,7 @@
         const riskMarkup = riskQueue.map((risk) => `
           <li>
             <button class="select-item ${risk.severity === '危急' ? 'is-critical' : 'is-attention'}" type="button"
-              data-dashboard-select="${escapeHtml(risk.id)}" aria-pressed="${previewState.dashboardSelection === risk.id}">
+              data-dashboard-select="${escapeHtml(risk.id)}" data-focus-key="dashboard-risk-${escapeHtml(risk.id)}" aria-pressed="${previewState.dashboardSelection === risk.id}">
               <span class="select-item-head">
                 <strong>${escapeHtml(risk.title)}</strong>
                 <span class="status-badge ${statusBadgeTone(risk.severity)}">${escapeHtml(risk.severity)}</span>
@@ -2878,7 +2892,7 @@
           const actorProjects = projects.filter((project) => project.owner === actor.name)
           return `
             <li>
-              <button class="select-item" type="button" data-dashboard-select="${escapeHtml(actor.id)}"
+              <button class="select-item" type="button" data-dashboard-select="${escapeHtml(actor.id)}" data-focus-key="dashboard-actor-${escapeHtml(actor.id)}"
                 aria-pressed="${previewState.dashboardSelection === actor.id}">
                 <span class="select-item-head">
                   <strong>${escapeHtml(actor.name)}</strong>
@@ -2981,14 +2995,14 @@
         ]
 
         const filters = filterOptions.map(([value, label]) => `
-          <button type="button" data-project-filter="${escapeHtml(value)}" aria-pressed="${previewState.projectFilter === value}">${escapeHtml(label)}</button>
+          <button type="button" data-project-filter="${escapeHtml(value)}" data-focus-key="projects-filter-${escapeHtml(value)}" aria-pressed="${previewState.projectFilter === value}">${escapeHtml(label)}</button>
         `).join('')
 
         const cards = visibleProjects.map((project) => {
           const safeProgress = clampPercent(project.progress)
           const toneClass = projectToneClass(project)
           return `
-            <button class="project-card ${toneClass}" type="button" data-project-id="${escapeHtml(project.id)}"
+            <button class="project-card ${toneClass}" type="button" data-project-id="${escapeHtml(project.id)}" data-focus-key="projects-card-${escapeHtml(project.id)}"
               aria-pressed="${selectedProject?.id === project.id}" aria-label="查看 ${escapeHtml(project.name)} 摘要">
               <span class="project-card-head"><strong title="${escapeHtml(project.name)}">${escapeHtml(project.name)}</strong><span class="status-badge ${statusBadgeTone(project.health)}">${escapeHtml(project.health)}</span></span>
               <span>
@@ -3157,7 +3171,7 @@
           ['交付物', String(projectDeliverables.length).padStart(2, '0'), `${projectDeliverables.filter((item) => item.status === '制作中').length} 项制作中`],
         ]
         const trackMarkup = milestoneItems.length ? milestoneItems.map((milestone) => `
-          <button class="milestone-button" type="button" data-milestone-id="${escapeHtml(milestone.id)}" aria-pressed="${selectedMilestone?.id === milestone.id}" aria-label="查看里程碑 ${escapeHtml(milestone.name)}">
+          <button class="milestone-button" type="button" data-milestone-id="${escapeHtml(milestone.id)}" data-focus-key="project-detail-milestone-${escapeHtml(milestone.id)}" aria-pressed="${selectedMilestone?.id === milestone.id}" aria-label="查看里程碑 ${escapeHtml(milestone.name)}">
             <span>${escapeHtml(milestone.phase)}</span>
             <strong>${escapeHtml(milestone.name)}</strong>
             <time datetime="${escapeHtml(milestone.date)}">${escapeHtml(milestone.date)}</time>
@@ -3231,7 +3245,7 @@
         ]
 
         const filters = filterOptions.map(([value, label]) => `
-          <button type="button" data-actor-filter="${escapeHtml(value)}" aria-pressed="${previewState.actorFilter === value}">${escapeHtml(label)}</button>
+          <button type="button" data-actor-filter="${escapeHtml(value)}" data-focus-key="actors-filter-${escapeHtml(value)}" aria-pressed="${previewState.actorFilter === value}">${escapeHtml(label)}</button>
         `).join('')
 
         const positionByActorId = new Map(visibleActors.map((actor, index) => [
@@ -3255,7 +3269,7 @@
           const position = positionByActorId.get(actor.id)
           const safeLoad = clampPercent(actor.load)
           return `
-            <button class="actor-node" type="button" data-actor-id="${escapeHtml(actor.id)}" aria-pressed="${selectedActor?.id === actor.id}"
+            <button class="actor-node" type="button" data-actor-id="${escapeHtml(actor.id)}" data-focus-key="actors-node-${escapeHtml(actor.id)}" aria-pressed="${selectedActor?.id === actor.id}"
               style="--node-x: ${clampPercent(position.x)}%; --node-y: ${clampPercent(position.y)}%" aria-label="查看 ${escapeHtml(actor.name)} 协作摘要">
               <span class="actor-node-head"><strong title="${escapeHtml(actor.name)}">${escapeHtml(actor.name)}</strong><span class="status-badge ${actor.status === '待命' ? '' : 'is-live'}">${escapeHtml(actor.status)}</span></span>
               <small>${actor.type === 'human' ? '人类' : 'Agent'} · ${safeLoad}% 负载</small>
@@ -3338,20 +3352,20 @@
           ['逾期', String(visibleTasks.filter((task) => effectiveTaskStatus(task) === '逾期').length).padStart(2, '0'), '需要关注'],
         ]
         const scopeButtons = [['all','全部'],['mine','我的'],['involved','我参与的']].map(([value, label]) => `
-          <button type="button" data-task-scope="${value}" aria-pressed="${previewState.taskScope === value}">${label}</button>
+          <button type="button" data-task-scope="${value}" data-focus-key="tasks-scope-${value}" aria-pressed="${previewState.taskScope === value}">${label}</button>
         `).join('')
         const taskList = visibleTasks.length ? visibleTasks.map((task) => {
           const status = effectiveTaskStatus(task)
           return `<li class="task-list-item">
-            <button class="task-row-button" type="button" data-task-detail="${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" aria-label="查看 ${escapeHtml(task.code)} ${escapeHtml(task.title)} 详情">
+            <button class="task-row-button" type="button" data-task-detail="${escapeHtml(task.id)}" data-focus-key="tasks-list-row-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" aria-label="查看 ${escapeHtml(task.code)} ${escapeHtml(task.title)} 详情">
               <span class="task-row-code">${escapeHtml(task.code)} · ${escapeHtml(status)}</span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.owner)} · 截止 ${escapeHtml(task.due)}</small>
             </button>
-            <button class="task-detail-button" type="button" data-task-detail="${escapeHtml(task.id)}" aria-label="打开 ${escapeHtml(task.title)} 智能上下文">详情</button>
+            <button class="task-detail-button" type="button" data-task-detail="${escapeHtml(task.id)}" data-focus-key="tasks-list-detail-${escapeHtml(task.id)}" aria-label="打开 ${escapeHtml(task.title)} 智能上下文">详情</button>
           </li>`
         }).join('') : '<li><div class="empty-state"><div><strong>当前范围暂无任务</strong>切换任务范围后继续查看。</div></div></li>'
         const fanCards = visibleTasks.length ? visibleTasks.map((task, index) => {
           const status = effectiveTaskStatus(task)
-          return `<button class="task-fan-card" type="button" data-task-id="${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--index:${index};--count:${visibleTasks.length}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}">
+          return `<button class="task-fan-card" type="button" data-task-id="${escapeHtml(task.id)}" data-focus-key="tasks-fan-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--index:${index};--count:${visibleTasks.length}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}">
             <small>${escapeHtml(task.priority)}优先 · ${escapeHtml(task.code)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(status)}</span><span>截止 ${escapeHtml(task.due)}</span><span>进度 ${clampPercent(task.progress)}%</span>
           </button>`
         }).join('') : '<div class="empty-state"><div><strong>没有可展示任务卡</strong>当前范围不会生成空的三维卡片。</div></div>'
@@ -3373,10 +3387,10 @@
           return due && due >= rangeConfig.start && due <= rangeConfig.end
         }).sort((a, b) => String(a.due).localeCompare(String(b.due)))
         const rangeButtons = [['week','周'],['month','月'],['quarter','季度']].map(([value, label]) => `
-          <button type="button" data-task-range="${value}" aria-pressed="${previewState.taskRange === value}">${label}</button>
+          <button type="button" data-task-range="${value}" data-focus-key="tasks-range-${value}" aria-pressed="${previewState.taskRange === value}">${label}</button>
         `).join('')
         const timelineMarkup = timelineTasks.length ? timelineTasks.map((task) => `
-          <li><button class="timeline-task-button" type="button" data-task-detail="${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}"><strong>${escapeHtml(task.title)}</strong><time datetime="${escapeHtml(task.due)}">${escapeHtml(task.due)}</time></button></li>
+          <li><button class="timeline-task-button" type="button" data-task-detail="${escapeHtml(task.id)}" data-focus-key="tasks-timeline-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}"><strong>${escapeHtml(task.title)}</strong><time datetime="${escapeHtml(task.due)}">${escapeHtml(task.due)}</time></button></li>
         `).join('') : '<li><div class="empty-state"><div><strong>当前范围暂无交付节点</strong>时间线范围独立于任务范围。</div></div></li>'
 
         return elementFromHTML(`
@@ -3395,7 +3409,7 @@
               </section>
               <section class="context-panel task-context" aria-labelledby="task-context-title">
                 <div class="panel-heading"><h2 id="task-context-title">${escapeHtml(selectedTask?.title || '智能任务上下文')}</h2><span class="status-badge ${executionStatusTone(selectedTask ? effectiveTaskStatus(selectedTask) : '')}">${escapeHtml(selectedTask ? effectiveTaskStatus(selectedTask) : '无选择')}</span></div>
-                ${selectedTask ? `<dl class="context-list">${renderContextRows(taskRows)}</dl><p class="task-context-description">${escapeHtml(selectedTask.description)}</p><p class="task-advice"><strong>建议</strong><br>${escapeHtml(advice)}</p><div class="skill-chips" aria-label="任务标签">${safeStringList(selectedTask.tags).map((tag) => `<span class="skill-chip">${escapeHtml(tag)}</span>`).join('') || '<span class="skill-chip">暂无标签</span>'}</div><div class="task-context-actions"><button class="secondary-action" type="button" data-prototype-action="编辑任务">编辑</button><button class="primary-action" type="button" data-task-complete="${escapeHtml(selectedTask.id)}" aria-disabled="${effectiveTaskStatus(selectedTask) === '已完成'}">${effectiveTaskStatus(selectedTask) === '已完成' ? '预览中已完成' : '标记完成'}</button></div>` : '<div class="empty-state"><div><strong>暂无任务上下文</strong>当前范围没有可选择任务。</div></div>'}
+                ${selectedTask ? `<dl class="context-list">${renderContextRows(taskRows)}</dl><p class="task-context-description">${escapeHtml(selectedTask.description)}</p><p class="task-advice"><strong>建议</strong><br>${escapeHtml(advice)}</p><div class="skill-chips" aria-label="任务标签">${safeStringList(selectedTask.tags).map((tag) => `<span class="skill-chip">${escapeHtml(tag)}</span>`).join('') || '<span class="skill-chip">暂无标签</span>'}</div><div class="task-context-actions"><button class="secondary-action" type="button" data-prototype-action="编辑任务">编辑</button><button class="primary-action" type="button" data-task-complete="${escapeHtml(selectedTask.id)}" data-focus-key="tasks-complete-${escapeHtml(selectedTask.id)}" aria-disabled="${effectiveTaskStatus(selectedTask) === '已完成'}">${effectiveTaskStatus(selectedTask) === '已完成' ? '预览中已完成' : '标记完成'}</button></div>` : '<div class="empty-state"><div><strong>暂无任务上下文</strong>当前范围没有可选择任务。</div></div>'}
               </section>
             </div>
             <section class="glass-panel delivery-timeline-panel" aria-labelledby="delivery-timeline-title">
@@ -3427,6 +3441,13 @@
         return points.map((point) => `<span style="--scale-left:${Math.max(0, Math.min(100, point.left)).toFixed(3)}%">${escapeHtml(point.label)}</span>`).join('')
       }
 
+      function ganttStatusMeta(status) {
+        if (status === '进行中') return { className:'is-in-progress', label:'进行中' }
+        if (status === '逾期') return { className:'is-overdue', label:'逾期' }
+        if (status === '已完成' || status === '完成') return { className:'is-complete', label:'完成' }
+        return { className:'is-neutral', label:String(status || '待处理') }
+      }
+
       function renderGantt() {
         if (!rangeValues.has(previewState.ganttRange)) previewState.ganttRange = 'month'
         const config = executionRange(previewState.ganttRange)
@@ -3448,10 +3469,8 @@
           const clippedEnd = taskDue > config.end ? config.end : taskDue
           const startColumn = Math.max(1, dayDifference(config.start, clippedStart) + 1)
           const span = Math.max(1, dayDifference(clippedStart, clippedEnd) + 1)
-          const status = effectiveTaskStatus(task)
-          const className = status === '已完成' ? 'is-complete' : status === '逾期' ? 'is-overdue' : ''
-          const statusLabel = status === '已完成' ? '完成' : status
-          return `<div class="gantt-row"><button class="gantt-bar ${className}" type="button" data-gantt-task-id="${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--bar-start:${startColumn};--bar-span:${span}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}，${escapeHtml(statusLabel)}">${escapeHtml(task.code)} · ${escapeHtml(task.title)}</button></div>`
+          const statusMeta = ganttStatusMeta(effectiveTaskStatus(task))
+          return `<div class="gantt-row"><button class="gantt-bar ${statusMeta.className}" type="button" data-gantt-task-id="${escapeHtml(task.id)}" data-focus-key="gantt-bar-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--bar-start:${startColumn};--bar-span:${span}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}，${escapeHtml(statusMeta.label)}">${escapeHtml(task.code)} · ${escapeHtml(task.title)}</button></div>`
         }).join('')
         const chartHeight = 46 + ganttTasks.length * 54
         const connectorPaths = validDependencies.map(({ from, to }) => {
@@ -3465,7 +3484,7 @@
           return `<path d="M ${fromX.toFixed(2)} ${fromY} H ${elbow.toFixed(2)} V ${toY} H ${toX.toFixed(2)}"></path>`
         }).join('')
         const dependencyText = validDependencies.map(({ from, to }) => `<li>${escapeHtml(from.code)} ${escapeHtml(from.title)} → ${escapeHtml(to.code)} ${escapeHtml(to.title)}</li>`).join('')
-        const rangeButtons = [['week','周'],['month','月'],['quarter','季度']].map(([value, label]) => `<button type="button" data-gantt-range="${value}" aria-pressed="${previewState.ganttRange === value}">${label}</button>`).join('')
+        const rangeButtons = [['week','周'],['month','月'],['quarter','季度']].map(([value, label]) => `<button type="button" data-gantt-range="${value}" data-focus-key="gantt-range-${value}" aria-pressed="${previewState.ganttRange === value}">${label}</button>`).join('')
         const widthByRange = { week:760, month:1040, quarter:1280 }
         const reference = parseDemoDate(DEMO_REFERENCE_DATE)
         const showToday = reference && reference >= config.start && reference <= config.end
@@ -3493,7 +3512,7 @@
             <div class="gantt-layout">
               <section class="signature-stage gantt-stage" aria-labelledby="gantt-stage-title">
                 <div class="signature-heading"><div><h2 id="gantt-stage-title">横向任务排程</h2><span>${formatDemoDate(config.start)} — ${formatDemoDate(config.end)}</span></div><div class="segmented" role="group" aria-label="甘特时间范围">${rangeButtons}</div></div>
-                <div class="gantt-scroll" tabindex="0" aria-label="甘特时间线，可横向滚动" aria-describedby="gantt-dependencies">
+                <div class="gantt-scroll" tabindex="0" aria-label="甘特时间线，可横向滚动" aria-describedby="${showToday ? 'gantt-today-description ' : ''}gantt-dependencies">
                   <div class="gantt-canvas" style="min-width:${widthByRange[previewState.ganttRange]}px;--gantt-columns:${config.days};--gantt-height:${Math.max(chartHeight, 180)}px">
                     <div class="gantt-scale">${ganttScaleMarkup(config)}</div>
                     ${ganttTasks.length ? rows : '<div class="empty-state"><div><strong>当前范围暂无任务</strong>调整甘特时间范围后继续查看。</div></div>'}
@@ -3501,6 +3520,7 @@
                     ${showToday ? `<div class="gantt-today" style="--today-left:${todayLeft.toFixed(3)}%" aria-hidden="true"><span>今日 ${escapeHtml(DEMO_REFERENCE_DATE.slice(5))}</span></div>` : ''}
                   </div>
                 </div>
+                ${showToday ? `<p class="sr-only" id="gantt-today-description">今日：${escapeHtml(DEMO_REFERENCE_DATE)}</p>` : ''}
                 <div id="gantt-dependencies"><p class="summary-note">依赖关系文字等价：</p>${dependencyText ? `<ul class="dependency-summary">${dependencyText}</ul>` : '<p class="summary-note">当前范围没有有效依赖；坏引用已安全跳过。</p>'}</div>
               </section>
               <section class="context-panel gantt-inspector" aria-labelledby="gantt-inspector-title">
@@ -3520,7 +3540,7 @@
         const defectItems = safeRecords(defects)
         const columns = stages.map((stage) => {
           const stageItems = requirementItems.filter((item) => item.status === stage)
-          const cards = stageItems.length ? stageItems.map((item) => `<li><button class="requirement-card" type="button" data-requirement-id="${escapeHtml(item.id)}" aria-pressed="${selectedRequirement?.id === item.id}"><small>${escapeHtml(item.code)} · ${escapeHtml(item.priority)}优先</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.owner)} · ${safeStringList(item.taskIds).length} 个关联任务</span></button></li>`).join('') : '<li class="requirement-column-empty">当前列暂无需求</li>'
+          const cards = stageItems.length ? stageItems.map((item) => `<li><button class="requirement-card" type="button" data-requirement-id="${escapeHtml(item.id)}" data-focus-key="requirements-card-${escapeHtml(item.id)}" aria-pressed="${selectedRequirement?.id === item.id}"><small>${escapeHtml(item.code)} · ${escapeHtml(item.priority)}优先</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.owner)} · ${safeStringList(item.taskIds).length} 个关联任务</span></button></li>`).join('') : '<li class="requirement-column-empty">当前列暂无需求</li>'
           return `<section class="requirement-column" aria-labelledby="requirement-stage-${escapeHtml(stage)}"><h3 id="requirement-stage-${escapeHtml(stage)}">${escapeHtml(stage)} · ${stageItems.length}</h3><ol>${cards}</ol></section>`
         }).join('')
         const linkedTasks = selectedRequirement ? safeStringList(selectedRequirement.taskIds).map((id) => taskItems.find((task) => task.id === id)?.title || `未找到任务（${id}）`) : []
@@ -3576,14 +3596,14 @@
         const matrixRows = severityLevels.map((severity) => {
           const cells = impactLevels.map((impact) => {
             const matches = defectItems.filter((defect) => defect.severity === severity && defect.impact === impact)
-            const content = matches.length ? `<ul class="defect-cell-list">${matches.map((defect) => `<li><button class="defect-button ${defectSeverityClass(defect.severity)}" type="button" data-defect-id="${escapeHtml(defect.id)}" aria-pressed="${selectedDefect?.id === defect.id}">${escapeHtml(defect.code)}<br>${escapeHtml(defect.title)}</button></li>`).join('')}</ul>` : '<span class="defect-cell-empty">无缺陷</span>'
+            const content = matches.length ? `<ul class="defect-cell-list">${matches.map((defect) => `<li><button class="defect-button ${defectSeverityClass(defect.severity)}" type="button" data-defect-id="${escapeHtml(defect.id)}" data-focus-key="defects-matrix-${escapeHtml(defect.id)}" aria-pressed="${selectedDefect?.id === defect.id}">${escapeHtml(defect.code)}<br>${escapeHtml(defect.title)}</button></li>`).join('')}</ul>` : '<span class="defect-cell-empty">无缺陷</span>'
             return `<td>${content}</td>`
           }).join('')
           return `<tr><th scope="row">${escapeHtml(severity)}</th>${cells}</tr>`
         }).join('')
         const severityRank = new Map(severityLevels.map((value, index) => [value, index]))
         const triageItems = defectItems.slice().sort((a, b) => (severityRank.get(a.severity) ?? 99) - (severityRank.get(b.severity) ?? 99)).slice(0, 3)
-        const triageMarkup = triageItems.length ? triageItems.map((defect) => `<li><button class="defect-button ${defectSeverityClass(defect.severity)}" type="button" data-defect-id="${escapeHtml(defect.id)}" aria-pressed="${selectedDefect?.id === defect.id}">${escapeHtml(defect.code)} · ${escapeHtml(defect.severity)}<br>${escapeHtml(defect.owner)} · ${escapeHtml(defect.status)}</button></li>`).join('') : '<li class="requirement-column-empty">当前没有待分诊缺陷</li>'
+        const triageMarkup = triageItems.length ? triageItems.map((defect) => `<li><button class="defect-button ${defectSeverityClass(defect.severity)}" type="button" data-defect-id="${escapeHtml(defect.id)}" data-focus-key="defects-triage-${escapeHtml(defect.id)}" aria-pressed="${selectedDefect?.id === defect.id}">${escapeHtml(defect.code)} · ${escapeHtml(defect.severity)}<br>${escapeHtml(defect.owner)} · ${escapeHtml(defect.status)}</button></li>`).join('') : '<li class="requirement-column-empty">当前没有待分诊缺陷</li>'
         let relatedRecord = '无'
         if (selectedDefect?.requirementId) {
           const requirement = requirementItems.find((item) => item.id === selectedDefect.requirementId)
@@ -3706,10 +3726,13 @@
         mainContent.focus()
       })
 
-      function rerenderCurrentPageAndRestoreFocus(attribute, value) {
+      function rerenderCurrentPageAndRestoreFocus(attribute, value, focusKey) {
         renderCurrentPage()
-        const target = Array.from(pageRoot.querySelectorAll(`[${attribute}]`))
-          .find((element) => element.getAttribute(attribute) === value)
+        const target = focusKey
+          ? Array.from(pageRoot.querySelectorAll('[data-focus-key]'))
+            .find((element) => element.dataset.focusKey === focusKey)
+          : Array.from(pageRoot.querySelectorAll(`[${attribute}]`))
+            .find((element) => element.getAttribute(attribute) === value)
         target?.focus()
       }
 
@@ -3721,7 +3744,7 @@
           const isKnownActor = actors.some((actor) => actor.id === selection)
           if (isKnownRisk || isKnownActor) {
             previewState.dashboardSelection = selection
-            rerenderCurrentPageAndRestoreFocus('data-dashboard-select', selection)
+            rerenderCurrentPageAndRestoreFocus('data-dashboard-select', selection, dashboardSelection.dataset.focusKey)
             const selectedRisk = riskQueue.find((risk) => risk.id === selection)
             const selectedActor = actors.find((actor) => actor.id === selection)
             announceSelection(selectedRisk
@@ -3740,7 +3763,7 @@
             if (!visibleProjects.some((project) => project.id === previewState.selectedProjectId)) {
               previewState.selectedProjectId = visibleProjects[0]?.id ?? null
             }
-            rerenderCurrentPageAndRestoreFocus('data-project-filter', filter)
+            rerenderCurrentPageAndRestoreFocus('data-project-filter', filter, projectFilter.dataset.focusKey)
             announceSelection(`项目筛选：${projectFilterLabels.get(filter)}，${visibleProjects.length ? `${visibleProjects.length} 个项目` : '无匹配项目'}`)
           }
           return
@@ -3752,7 +3775,7 @@
           const project = projects.find((item) => item.id === projectId)
           if (project && projectMatchesFilter(project, previewState.projectFilter)) {
             previewState.selectedProjectId = projectId
-            rerenderCurrentPageAndRestoreFocus('data-project-id', projectId)
+            rerenderCurrentPageAndRestoreFocus('data-project-id', projectId, projectSelection.dataset.focusKey)
             announceSelection(`已选择项目：${project.name}`)
           }
           return
@@ -3767,7 +3790,7 @@
             if (!visibleActors.some((actor) => actor.id === previewState.selectedActorId)) {
               previewState.selectedActorId = visibleActors[0]?.id ?? null
             }
-            rerenderCurrentPageAndRestoreFocus('data-actor-filter', filter)
+            rerenderCurrentPageAndRestoreFocus('data-actor-filter', filter, actorFilter.dataset.focusKey)
             announceSelection(`协作者筛选：${actorFilterLabels.get(filter)}，${visibleActors.length ? `${visibleActors.length} 位协作者` : '无匹配协作者'}`)
           }
           return
@@ -3779,7 +3802,7 @@
           const actor = actors.find((item) => item.id === actorId)
           if (actor && (previewState.actorFilter === 'all' || actor.type === previewState.actorFilter)) {
             previewState.selectedActorId = actorId
-            rerenderCurrentPageAndRestoreFocus('data-actor-id', actorId)
+            rerenderCurrentPageAndRestoreFocus('data-actor-id', actorId, actorSelection.dataset.focusKey)
             announceSelection(`已选择协作者：${actor.name}`)
           }
           return
@@ -3791,7 +3814,7 @@
           const milestone = safeRecords(milestones).find((item) => item.id === milestoneId)
           if (milestone) {
             previewState.selectedMilestoneId = milestoneId
-            rerenderCurrentPageAndRestoreFocus('data-milestone-id', milestoneId)
+            rerenderCurrentPageAndRestoreFocus('data-milestone-id', milestoneId, milestoneSelection.dataset.focusKey)
             announceSelection(`里程碑：${milestone.name}，仅更新项目上下文`)
           }
           return
@@ -3806,7 +3829,7 @@
             if (!visibleTasks.some((task) => task.id === previewState.selectedTaskId)) {
               previewState.selectedTaskId = visibleTasks[0]?.id ?? null
             }
-            rerenderCurrentPageAndRestoreFocus('data-task-scope', scope)
+            rerenderCurrentPageAndRestoreFocus('data-task-scope', scope, taskScope.dataset.focusKey)
             announceSelection(`任务范围：${taskScopeLabels.get(scope)}，${visibleTasks.length ? `${visibleTasks.length} 项任务` : '暂无任务'}`)
           }
           return
@@ -3817,7 +3840,7 @@
           const range = taskRange.dataset.taskRange
           if (rangeValues.has(range)) {
             previewState.taskRange = range
-            rerenderCurrentPageAndRestoreFocus('data-task-range', range)
+            rerenderCurrentPageAndRestoreFocus('data-task-range', range, taskRange.dataset.focusKey)
             announceSelection(`交付时间线：${rangeLabels.get(range)}，只更新预览范围`)
           }
           return
@@ -3829,7 +3852,7 @@
           const task = safeRecords(tasks).find((item) => item.id === taskId)
           if (task && taskMatchesScope(task, previewState.taskScope)) {
             previewState.selectedTaskId = taskId
-            rerenderCurrentPageAndRestoreFocus('data-task-id', taskId)
+            rerenderCurrentPageAndRestoreFocus('data-task-id', taskId, taskSelection.dataset.focusKey)
             announceSelection(`任务：${task.code} ${task.title}`)
           }
           return
@@ -3841,7 +3864,7 @@
           const task = safeRecords(tasks).find((item) => item.id === taskId)
           if (task && taskMatchesScope(task, previewState.taskScope)) {
             previewState.selectedTaskId = taskId
-            rerenderCurrentPageAndRestoreFocus('data-task-detail', taskId)
+            rerenderCurrentPageAndRestoreFocus('data-task-detail', taskId, taskDetail.dataset.focusKey)
             announceSelection(`任务详情：${task.code} ${task.title}`)
           }
           return
@@ -3856,7 +3879,7 @@
             const wasComplete = effectiveTaskStatus(task) === '已完成'
             previewState.completedTaskIds.add(taskId)
             previewState.selectedTaskId = taskId
-            rerenderCurrentPageAndRestoreFocus('data-task-complete', taskId)
+            rerenderCurrentPageAndRestoreFocus('data-task-complete', taskId, taskComplete.dataset.focusKey)
             announceSelection(wasComplete
               ? `${task.code} 已是预览完成态；仍未写入系统`
               : `${task.code} 已标记为预览完成态；仅保存在本页内存，未写入系统`)
@@ -3869,7 +3892,7 @@
           const range = ganttRange.dataset.ganttRange
           if (rangeValues.has(range)) {
             previewState.ganttRange = range
-            rerenderCurrentPageAndRestoreFocus('data-gantt-range', range)
+            rerenderCurrentPageAndRestoreFocus('data-gantt-range', range, ganttRange.dataset.focusKey)
             announceSelection(`甘特范围：${rangeLabels.get(range)}，只更新当前排程视图`)
           }
           return
@@ -3881,7 +3904,7 @@
           const task = safeRecords(tasks).find((item) => item.id === taskId)
           if (task) {
             previewState.selectedGanttTaskId = taskId
-            rerenderCurrentPageAndRestoreFocus('data-gantt-task-id', taskId)
+            rerenderCurrentPageAndRestoreFocus('data-gantt-task-id', taskId, ganttTask.dataset.focusKey)
             announceSelection(`甘特任务：${task.code} ${task.title}`)
           }
           return
@@ -3893,7 +3916,7 @@
           const requirement = safeRecords(requirements).find((item) => item.id === requirementId)
           if (requirement) {
             previewState.selectedRequirementId = requirementId
-            rerenderCurrentPageAndRestoreFocus('data-requirement-id', requirementId)
+            rerenderCurrentPageAndRestoreFocus('data-requirement-id', requirementId, requirementSelection.dataset.focusKey)
             announceSelection(`需求：${requirement.code} ${requirement.title}`)
           }
           return
@@ -3905,7 +3928,7 @@
           const defect = safeRecords(defects).find((item) => item.id === defectId)
           if (defect) {
             previewState.selectedDefectId = defectId
-            rerenderCurrentPageAndRestoreFocus('data-defect-id', defectId)
+            rerenderCurrentPageAndRestoreFocus('data-defect-id', defectId, defectSelection.dataset.focusKey)
             announceSelection(`缺陷：${defect.code} ${defect.title}`)
           }
           return
