@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 
 test('dashboard exposes project health and the selected 90-day delivery total', async ({
   page,
-}, testInfo) => {
+}) => {
   await openReadyDashboard(page)
 
   await expect(
@@ -24,17 +24,11 @@ test('dashboard exposes project health and the selected 90-day delivery total', 
 
   await page.getByRole('button', { name: '90 天' }).click()
   await expect(page.getByText('118 项已完成', { exact: true })).toBeVisible()
-  // Windows Chromium produces a stable 179px text-antialiasing diff here;
-  // visual review confirmed no layout or color-block changes.
+  // Windows Chromium produces a stable 179px text-antialiasing diff in both
+  // desktop and compact; visual review confirmed no layout or color-block changes.
   await expect(page).toHaveScreenshot(
     'dashboard-90-day.png',
-    {
-      ...screenshotOptions,
-      maxDiffPixels:
-        testInfo.project.name === 'desktop'
-          ? 200
-          : screenshotOptions.maxDiffPixels,
-    },
+    { ...screenshotOptions, maxDiffPixels: 200 },
   )
 })
 
