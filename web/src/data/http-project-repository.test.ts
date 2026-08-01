@@ -1,5 +1,6 @@
 import {
   apiSuccessEnvelopeSchema,
+  persistedActorSchema,
   persistedAppSettingsSchema,
   persistedTaskSchema,
 } from '@project-os/contracts'
@@ -133,6 +134,46 @@ describe('ApiClient', () => {
 })
 
 describe('HTTP project repository', () => {
+  it('loads and strictly parses the current actor endpoint', async () => {
+    const currentActor = persistedActorSchema.parse({
+      ...task.assignee,
+      lastBriefingActivityId: null,
+    })
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(success(currentActor)),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.getCurrentActor()).resolves.toEqual(currentActor)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/actors/current',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Accept: 'application/json' }),
+      }),
+    )
+  })
+
+  it('rejects a malformed current actor response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(success({
+          ...task.assignee,
+          lastBriefingActivityId: null,
+          version: 0,
+        })),
+      ),
+    )
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.getCurrentActor()).rejects.toMatchObject({
+      code: 'API_RESPONSE_INVALID',
+    })
+  })
+
   it('loads relay sessions, handoffs, and deliverables from project-scoped endpoints', async () => {
     const agent = {
       ...task.assignee,

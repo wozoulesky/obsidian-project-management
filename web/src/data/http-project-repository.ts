@@ -166,6 +166,8 @@ export function createHttpProjectRepository(
 
   return {
     listActors: () => allPages(client, '/actors', persistedActorSchema),
+    getCurrentActor: () =>
+      client.request('/actors/current', persistedActorSchema),
     createHuman(input) {
       const body = createHumanActorInputSchema.parse(input)
       return client.request('/actors', persistedActorSchema, {

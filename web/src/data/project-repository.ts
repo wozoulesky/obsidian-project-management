@@ -148,6 +148,7 @@ export type SkillConfigSnippet = {
 
 export interface ProjectRepository {
   listActors(): Promise<Actor[]>
+  getCurrentActor(): Promise<Actor>
   createHuman(input: CreateHumanActorInput): Promise<Actor>
   updateActor(actorId: string, input: UpdateActorInput): Promise<Actor>
   deactivateActor(actorId: string, version: number): Promise<Actor>

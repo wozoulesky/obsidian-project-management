@@ -122,6 +122,10 @@ export function createMockProjectRepository(): ProjectRepository {
       return clone(actorState)
     },
 
+    async getCurrentActor() {
+      return clone(getActor(projectState[0]!.ownerId))
+    },
+
     async createHuman(input) {
       const validated = createHumanActorInputSchema.parse(input)
       const now = new Date().toISOString()

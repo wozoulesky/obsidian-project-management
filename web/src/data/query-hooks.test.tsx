@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -13,6 +13,7 @@ import {
   useCreateProject,
   useCreateTask,
   useCreateTaskFromDefect,
+  useCurrentActor,
   useUpdateRequirementStatus,
   useUpdateTaskDates,
   useUpdateTaskProgress,
@@ -224,6 +225,26 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.defects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+  })
+})
+
+describe('current actor query', () => {
+  it('uses a stable key and returns the configured mock owner', async () => {
+    const { queryClient, wrapper } = createHarness()
+    const owner = await projectRepository.getCurrentActor()
+
+    const { result } = renderHook(() => useCurrentActor(), { wrapper })
+
+    await waitFor(() => expect(result.current.data).toEqual(owner))
+
+    expect(projectQueryKeys.currentActor).toEqual(['actors', 'current'])
+    expect(owner).toMatchObject({
+      id: 'human-lin',
+      name: 'Lin',
+      kind: 'human',
+    })
+    expect(queryClient.getQueryData(projectQueryKeys.currentActor))
+      .toEqual(result.current.data)
   })
 })
 

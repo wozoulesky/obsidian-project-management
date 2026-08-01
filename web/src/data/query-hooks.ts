@@ -68,6 +68,7 @@ export function useProjectRepository() {
 
 export const projectQueryKeys = {
   actors: ['actors'] as const,
+  currentActor: ['actors', 'current'] as const,
   activities: ['activities'] as const,
   allTasks: ['tasks', 'all'] as const,
   projects: ['projects'] as const,
@@ -256,6 +257,14 @@ export function useActors() {
   return useQuery({
     queryKey: projectQueryKeys.actors,
     queryFn: () => context.repository.listActors(),
+  })
+}
+
+export function useCurrentActor() {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.currentActor,
+    queryFn: () => context.repository.getCurrentActor(),
   })
 }
 
