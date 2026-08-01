@@ -74,13 +74,13 @@
 }
 
 .badge--warning {
-  color: color-mix(in srgb, var(--warning) 60%, var(--rail));
+  color: color-mix(in srgb, var(--warning) 60%, var(--text-primary));
   background: color-mix(in srgb, var(--warning) 12%, var(--surface));
   border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
 }
 
 .badge--critical {
-  color: color-mix(in srgb, var(--critical) 70%, var(--rail));
+  color: color-mix(in srgb, var(--critical) 70%, var(--text-primary));
   background: color-mix(in srgb, var(--critical) 10%, var(--surface));
   border-color: color-mix(in srgb, var(--critical) 32%, var(--border));
 }
@@ -860,7 +860,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  color: color-mix(in srgb, var(--critical) 72%, var(--rail));
+  color: color-mix(in srgb, var(--critical) 72%, var(--text-primary));
   background: color-mix(in srgb, var(--critical) 7%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--critical) 28%, var(--border));
   border-radius: var(--radius-md);
@@ -1672,7 +1672,7 @@
 .task-filters__overdue {
   min-height: 2.5rem;
   padding-inline: var(--space-3);
-  color: color-mix(in srgb, var(--critical) 72%, var(--rail));
+  color: color-mix(in srgb, var(--critical) 72%, var(--text-primary));
   font-weight: 700;
   cursor: pointer;
   background: color-mix(in srgb, var(--critical) 7%, var(--surface));
