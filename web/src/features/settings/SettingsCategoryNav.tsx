@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import {
   settingsCategories,
   type SettingsCategoryId,
@@ -9,10 +9,37 @@ export type SettingsCategoryNavProps = {
   onChange: (category: SettingsCategoryId) => void
 }
 
+const mobileSettingsQuery = '(max-width: 48rem)'
+
+function useSettingsNavOrientation() {
+  const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>(
+    'vertical',
+  )
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+
+    const query = window.matchMedia(mobileSettingsQuery)
+    const updateOrientation = (matches: boolean) => {
+      setOrientation(matches ? 'horizontal' : 'vertical')
+    }
+    const handleChange = (event: MediaQueryListEvent) => {
+      updateOrientation(event.matches)
+    }
+
+    updateOrientation(query.matches)
+    query.addEventListener('change', handleChange)
+    return () => query.removeEventListener('change', handleChange)
+  }, [])
+
+  return orientation
+}
+
 export function SettingsCategoryNav({
   activeCategory,
   onChange,
 }: SettingsCategoryNavProps) {
+  const orientation = useSettingsNavOrientation()
   const buttonRefs = useRef<Partial<
     Record<SettingsCategoryId, HTMLButtonElement | null>
   >>({})
@@ -25,9 +52,11 @@ export function SettingsCategoryNav({
       (category) => category.id === current,
     )
     let nextIndex: number | null = null
-    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+    const forwardKey = orientation === 'vertical' ? 'ArrowDown' : 'ArrowRight'
+    const backwardKey = orientation === 'vertical' ? 'ArrowUp' : 'ArrowLeft'
+    if (event.key === forwardKey) {
       nextIndex = (currentIndex + 1) % settingsCategories.length
-    } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+    } else if (event.key === backwardKey) {
       nextIndex = (
         currentIndex - 1 + settingsCategories.length
       ) % settingsCategories.length
@@ -47,7 +76,7 @@ export function SettingsCategoryNav({
   return (
     <nav
       aria-label="设置分类"
-      aria-orientation="vertical"
+      aria-orientation={orientation}
       className="settings-category-nav"
       role="tablist"
     >

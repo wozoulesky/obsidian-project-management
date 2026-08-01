@@ -181,12 +181,13 @@ describe('DefectPage workflow', () => {
       name: '查看 待处理缺陷 2',
     })
     expect(fatal).toHaveClass('defect-matrix__card--critical')
-    expect(serious).toHaveClass('defect-matrix__card--critical')
-    expect(normal).toHaveClass('defect-matrix__card--warning')
+    expect(serious).toHaveClass('defect-matrix__card--warning')
+    expect(normal).toHaveClass('defect-matrix__card--neutral')
     expect(suggestion).toHaveClass('defect-matrix__card--silver')
 
     await user.click(fatal)
     expect(fatal).toHaveAttribute('aria-pressed', 'true')
+    expect(fatal).toHaveClass('defect-matrix__card--critical')
     expect(screen.getByRole('dialog', { name: '离线恢复失败' })).toBeVisible()
   })
 

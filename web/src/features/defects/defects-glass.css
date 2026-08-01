@@ -103,12 +103,17 @@
   border-left-color: var(--warning);
 }
 
+.defect-matrix__card--neutral {
+  border-left-color: color-mix(in srgb, var(--text-secondary) 38%, var(--border));
+}
+
 .defect-matrix__card--silver {
   border-left-color: color-mix(in srgb, var(--text-secondary) 58%, var(--border));
 }
 
 .defect-matrix__card[aria-pressed="true"] {
-  border-color: var(--primary);
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
   box-shadow: var(--focus-ring);
 }
 

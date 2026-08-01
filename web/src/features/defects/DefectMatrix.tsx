@@ -7,8 +7,9 @@ import {
 } from './defect-matrix-config'
 
 function toneForSeverity(severity: Severity) {
-  if (severity === 'fatal' || severity === 'serious') return 'critical'
-  if (severity === 'normal') return 'warning'
+  if (severity === 'fatal') return 'critical'
+  if (severity === 'serious') return 'warning'
+  if (severity === 'normal') return 'neutral'
   return 'silver'
 }
 

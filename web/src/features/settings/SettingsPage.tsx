@@ -36,9 +36,6 @@ export function SettingsPage() {
   const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>(
     'appearance',
   )
-  const activeLabel = settingsCategories.find(
-    (category) => category.id === activeCategory,
-  )?.label ?? '外观'
 
   return (
     <section aria-labelledby="settings-page-title" className="settings-page">
@@ -53,16 +50,23 @@ export function SettingsPage() {
           activeCategory={activeCategory}
           onChange={setActiveCategory}
         />
-        <GlassPanel
-          ariaLabel={`${activeLabel}设置`}
-          aria-labelledby={`settings-tab-${activeCategory}`}
-          className="settings-page__panel"
-          id={`settings-panel-${activeCategory}`}
-          role="tabpanel"
-          tabIndex={0}
-        >
-          <SettingsCategoryContent category={activeCategory} />
-        </GlassPanel>
+        {settingsCategories.map((category) => {
+          const active = category.id === activeCategory
+          return (
+            <GlassPanel
+              ariaLabel={`${category.label}设置`}
+              aria-labelledby={`settings-tab-${category.id}`}
+              className="settings-page__panel"
+              hidden={!active}
+              id={`settings-panel-${category.id}`}
+              key={category.id}
+              role="tabpanel"
+              tabIndex={active ? 0 : -1}
+            >
+              <SettingsCategoryContent category={category.id} />
+            </GlassPanel>
+          )
+        })}
       </div>
     </section>
   )
