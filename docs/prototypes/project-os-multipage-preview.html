@@ -1984,16 +1984,16 @@
         `).join('')
 
         const dashboardContextMarkup = context ? `
-          <aside class="context-panel dashboard-context" data-dashboard-context aria-labelledby="dashboard-context-title">
+          <section class="context-panel dashboard-context" data-dashboard-context aria-labelledby="dashboard-context-title">
             <div class="panel-heading"><h2 id="dashboard-context-title">${escapeHtml(context.title)}</h2><span class="status-badge ${context.badgeClass}">${escapeHtml(context.badge)}</span></div>
             <dl class="context-list">${renderContextRows(context.rows)}</dl>
             <p class="summary-note">${escapeHtml(context.note)}</p>
-          </aside>
+          </section>
         ` : `
-          <aside class="context-panel dashboard-context" data-dashboard-context aria-labelledby="dashboard-context-title">
+          <section class="context-panel dashboard-context" data-dashboard-context aria-labelledby="dashboard-context-title">
             <h2 id="dashboard-context-title">上下文摘要</h2>
             <div class="empty-state" data-dashboard-empty><div><strong>暂无风险或协作者</strong>接入数据后可在这里查看选择上下文。</div></div>
-          </aside>
+          </section>
         `
 
         return elementFromHTML(`
@@ -2097,16 +2097,16 @@
           ['最近交付物', selectedDeliverable?.name || '暂无'],
         ] : []
         const projectSummaryMarkup = selectedProject ? `
-          <aside class="context-panel project-summary" aria-labelledby="project-summary-title">
+          <section class="context-panel project-summary" aria-labelledby="project-summary-title">
             <div class="panel-heading"><h2 id="project-summary-title">${escapeHtml(selectedProject.name)}</h2><span class="status-badge ${statusBadgeTone(selectedProject.health)}">${escapeHtml(selectedProject.health)}</span></div>
             <dl class="context-list">${renderContextRows(projectSummaryRows)}</dl>
             <p class="summary-note">${escapeHtml(selectedActivity?.text || '暂无最近活动')}</p>
-          </aside>
+          </section>
         ` : `
-          <aside class="context-panel project-summary" aria-labelledby="project-summary-title">
+          <section class="context-panel project-summary" aria-labelledby="project-summary-title">
             <h2 id="project-summary-title">项目摘要</h2>
             <div class="empty-state" data-project-summary-empty><div><strong>暂无可选项目</strong>调整筛选或创建项目后查看摘要。</div></div>
-          </aside>
+          </section>
         `
 
         return elementFromHTML(`
@@ -2208,17 +2208,17 @@
         const selectedSkills = Array.isArray(selectedActor?.skills) ? selectedActor.skills : []
         const skillMarkup = selectedSkills.map((skill) => `<span class="skill-chip">${escapeHtml(skill)}</span>`).join('')
         const actorSummaryMarkup = selectedActor ? `
-          <aside class="context-panel actor-summary" aria-labelledby="actor-summary-title">
+          <section class="context-panel actor-summary" aria-labelledby="actor-summary-title">
             <div class="panel-heading"><h2 id="actor-summary-title">${escapeHtml(selectedActor.name)}</h2><span class="status-badge ${selectedActor.status === '待命' ? '' : 'is-live'}">${escapeHtml(selectedActor.status)}</span></div>
             <dl class="context-list">${renderContextRows(actorSummaryRows)}</dl>
             <div class="skill-chips" aria-label="技能">${skillMarkup || '<span class="skill-chip">暂无技能</span>'}</div>
             <p class="summary-note">最近活动：${escapeHtml(recentActivity?.text || '暂无')}</p>
-          </aside>
+          </section>
         ` : `
-          <aside class="context-panel actor-summary" aria-labelledby="actor-summary-title">
+          <section class="context-panel actor-summary" aria-labelledby="actor-summary-title">
             <h2 id="actor-summary-title">协作者摘要</h2>
             <div class="empty-state" data-actor-summary-empty><div><strong>暂无可选协作者</strong>调整筛选或邀请协作者后查看摘要。</div></div>
-          </aside>
+          </section>
         `
 
         return elementFromHTML(`
