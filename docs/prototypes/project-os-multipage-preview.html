@@ -754,13 +754,19 @@
           overflow-y: hidden;
         }
 
-        .rail-scroll,
+        .rail-scroll > nav,
         .nav-list {
           display: flex;
         }
 
+        .rail-scroll > nav {
+          width: max-content;
+          min-width: 100%;
+        }
+
         .nav-group,
         .nav-group + .nav-group {
+          flex: 0 0 auto;
           margin: 0 12px 0 0;
         }
 
@@ -835,8 +841,7 @@
         }
 
         .page-view,
-        .toast,
-        .skip-link {
+        .toast {
           transform: none;
         }
       }
@@ -934,6 +939,7 @@
       const skipLink = document.querySelector('.skip-link')
       const mainContent = document.querySelector('#main-content')
       const toast = document.querySelector('.toast')
+      let toastTimer = 0
 
       const pageRenderers = {
         dashboard: renderDashboard,
@@ -1031,6 +1037,30 @@
         },
       }
 
+      const htmlEscapes = Object.freeze({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })
+      const visualToneClasses = new Set(['', 'is-amber', 'is-red'])
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (character) => htmlEscapes[character])
+      }
+
+      function safeVisualTone(tone) {
+        return visualToneClasses.has(tone) ? tone : ''
+      }
+
+      function clampVisualLevel(level) {
+        const numericLevel = Number(level)
+        return Number.isFinite(numericLevel)
+          ? Math.min(5, Math.max(1, Math.round(numericLevel)))
+          : 1
+      }
+
       function elementFromHTML(markup) {
         const template = document.createElement('template')
         template.innerHTML = markup.trim()
@@ -1040,41 +1070,53 @@
       function renderMetricCards(metrics) {
         return metrics.map(([label, value, trend]) => `
           <article class="metric-card">
-            <div class="metric-label">${label}</div>
+            <div class="metric-label">${escapeHtml(label)}</div>
             <div class="metric-row">
-              <strong class="metric-value">${value}</strong>
-              <span class="metric-trend">${trend}</span>
+              <strong class="metric-value">${escapeHtml(value)}</strong>
+              <span class="metric-trend">${escapeHtml(trend)}</span>
             </div>
           </article>
         `).join('')
       }
 
       function renderVisualItems(items) {
-        return items.map(([name, detail, level, tone]) => `
-          <div class="visual-item ${tone}" style="--level: ${level}">
-            <strong>${name}</strong>
-            <span>${detail}</span>
-          </div>
-        `).join('')
+        return items.map(([name, detail, level, tone]) => {
+          const safeTone = safeVisualTone(tone)
+          const safeLevel = clampVisualLevel(level)
+          return `
+            <div class="visual-item ${safeTone}" style="--level: ${safeLevel}">
+              <strong>${escapeHtml(name)}</strong>
+              <span>${escapeHtml(detail)}</span>
+            </div>
+          `
+        }).join('')
       }
 
       function renderContextRows(rows) {
-        return rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')
+        return rows.map(([label, value]) => `
+          <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
+        `).join('')
       }
 
       function renderPageShell(route) {
         const data = pageShells[route]
+        const safeRoute = escapeHtml(route)
+        const safeTitle = escapeHtml(pageTitles[route])
+        const safeDescription = escapeHtml(data.description)
+        const safeAction = escapeHtml(data.action)
+        const safeStage = escapeHtml(data.stage)
+        const safeStageMeta = escapeHtml(data.stageMeta)
         return elementFromHTML(`
-          <section class="page-view" data-page="${route}" aria-labelledby="${route}-title">
+          <section class="page-view" data-page="${safeRoute}" aria-labelledby="${safeRoute}-title">
             <header class="page-header">
               <div>
-                <p class="page-kicker">Project OS / ${String(route).replace('-', ' ')}</p>
-                <h1 id="${route}-title" tabindex="-1">${pageTitles[route]}</h1>
-                <p class="page-description">${data.description}</p>
+                <p class="page-kicker">Project OS / ${escapeHtml(String(route).replace('-', ' '))}</p>
+                <h1 id="${safeRoute}-title" tabindex="-1">${safeTitle}</h1>
+                <p class="page-description">${safeDescription}</p>
               </div>
               <div class="header-actions">
                 <button class="secondary-action" type="button" data-prototype-action="筛选">筛选视图</button>
-                <button class="primary-action" type="button" data-prototype-action="${data.action}">${data.action}</button>
+                <button class="primary-action" type="button" data-prototype-action="${safeAction}">${safeAction}</button>
               </div>
             </header>
 
@@ -1082,12 +1124,12 @@
               ${renderMetricCards(data.metrics)}
             </div>
 
-            <section class="signature-stage" aria-labelledby="${route}-signature-title">
+            <section class="signature-stage" aria-labelledby="${safeRoute}-signature-title">
               <div class="signature-heading">
-                <h2 id="${route}-signature-title">${data.stage}</h2>
-                <span>${data.stageMeta}</span>
+                <h2 id="${safeRoute}-signature-title">${safeStage}</h2>
+                <span>${safeStageMeta}</span>
               </div>
-              <div class="stage-scroll" tabindex="0" aria-label="${data.stage}可视化区域">
+              <div class="stage-scroll" tabindex="0" aria-label="${safeStage}可视化区域">
                 <div class="signature-visual">
                   ${renderVisualItems(data.items)}
                 </div>
@@ -1095,10 +1137,10 @@
             </section>
 
             <div class="content-frame">
-              <section class="glass-panel" aria-labelledby="${route}-workspace-title">
+              <section class="glass-panel" aria-labelledby="${safeRoute}-workspace-title">
                 <div class="panel-heading">
                   <div>
-                    <h2 id="${route}-workspace-title">核心工作区</h2>
+                    <h2 id="${safeRoute}-workspace-title">核心工作区</h2>
                     <p>后续任务将在此替换为可交互业务内容</p>
                   </div>
                   <div class="segmented" aria-label="预览范围">
@@ -1108,15 +1150,15 @@
                 </div>
                 <div class="empty-state">
                   <div>
-                    <strong>${data.stage}已就位</strong>
+                    <strong>${safeStage}已就位</strong>
                     页面业务数据与代表性交互将在后续实现任务中接入。
                   </div>
                 </div>
               </section>
 
-              <aside class="context-panel" aria-labelledby="${route}-context-title">
+              <aside class="context-panel" aria-labelledby="${safeRoute}-context-title">
                 <div class="panel-heading">
-                  <h2 id="${route}-context-title">上下文摘要</h2>
+                  <h2 id="${safeRoute}-context-title">上下文摘要</h2>
                   <span class="status-badge ${route === 'defects' ? 'is-risk' : route === 'settings' ? '' : 'is-live'}">${route === 'settings' ? '预览' : '已同步'}</span>
                 </div>
                 <dl class="context-list">${renderContextRows(data.context)}</dl>
@@ -1162,13 +1204,42 @@
         return renderPageShell('settings')
       }
 
+      function assertRouteRegistry() {
+        const expectedRoutes = new Set(routeOrder)
+        if (expectedRoutes.size !== routeOrder.length) {
+          throw new Error('Route registry mismatch: routeOrder contains duplicates')
+        }
+
+        const routeRegistries = {
+          pageTitles: Object.keys(pageTitles),
+          pageRenderers: Object.keys(pageRenderers),
+          pageShells: Object.keys(pageShells),
+          navigation: Array.from(document.querySelectorAll('[data-route]'), (link) => link.dataset.route),
+        }
+
+        Object.entries(routeRegistries).forEach(([name, routes]) => {
+          const actualRoutes = new Set(routes)
+          const matches = routes.length === routeOrder.length
+            && actualRoutes.size === expectedRoutes.size
+            && routeOrder.every((route) => actualRoutes.has(route))
+
+          if (!matches) throw new Error(`Route registry mismatch: ${name}`)
+        })
+      }
+
       function currentRoute() {
         const candidate = location.hash.replace(/^#\/?/, '')
         return routeOrder.includes(candidate) ? candidate : 'dashboard'
       }
 
+      function canonicalizeRouteHash(route) {
+        const canonicalHash = `#${route}`
+        if (location.hash !== canonicalHash) history.replaceState(null, '', canonicalHash)
+      }
+
       function renderCurrentPage({ focusHeading = false } = {}) {
         const route = currentRoute()
+        canonicalizeRouteHash(route)
 
         document.querySelectorAll('[data-route]').forEach((link) => {
           const active = link.dataset.route === route
@@ -1183,9 +1254,13 @@
       }
 
       function showToast(message) {
+        clearTimeout(toastTimer)
         toast.textContent = message
         toast.classList.add('is-visible')
-        window.setTimeout(() => toast.classList.remove('is-visible'), 1900)
+        toastTimer = window.setTimeout(() => {
+          toast.classList.remove('is-visible')
+          toastTimer = 0
+        }, 1900)
       }
 
       skipLink.addEventListener('click', (event) => {
@@ -1200,6 +1275,7 @@
 
       window.addEventListener('hashchange', () => renderCurrentPage({ focusHeading: true }))
 
+      assertRouteRegistry()
       if (!location.hash) history.replaceState(null, '', '#dashboard')
       renderCurrentPage()
     </script>
