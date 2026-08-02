@@ -255,6 +255,11 @@ describe('TaskPage workflow', () => {
     expect(params.get('status')).toBe('overdue')
     expect(screen.getByRole('region', { name: '任务时间线工作区' }))
       .toBeVisible()
+    expect(screen.getByRole('button', {
+      name: '选择 TASK-047 断线恢复测试',
+    })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('button', { name: /TASK-052/ }))
+      .not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: '智能任务上下文' }))
       .toHaveTextContent('断线恢复测试')
   })

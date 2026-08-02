@@ -20,6 +20,7 @@ import { TaskContextPanel } from './TaskContextPanel'
 import { filterTasks, TaskFilters } from './TaskFilters'
 import { prioritizeFanTasks, TaskFan } from './TaskFan'
 import { parseTaskView } from './task-workspace-model'
+import { TaskTimeline } from './TaskTimeline'
 import { TaskViewSwitch } from './TaskViewSwitch'
 import './tasks-glass.css'
 
@@ -185,13 +186,13 @@ export function TaskPage() {
             tasks={filteredTasks}
           />
         ) : (
-          <GlassPanel
-            ariaLabel="任务时间线工作区"
-            data-slot="timeline"
-            style={{ gridColumn: '1 / span 2' }}
-          >
-            <p>任务时间线将在下一阶段接入。</p>
-          </GlassPanel>
+          <TaskTimeline
+            dataSlot="timeline"
+            onSelect={selectTask}
+            selectedTaskId={selectedTaskId}
+            tasks={filteredTasks}
+            today={today}
+          />
         )}
         <TaskContextPanel
           dataSlot="context"

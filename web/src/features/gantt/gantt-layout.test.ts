@@ -4,6 +4,7 @@ import {
   buildDateProposal,
   dateDeltaFromPixels,
   dateToPercent,
+  parseIsoDate,
   shiftDate,
   taskBarLayout,
 } from './gantt-layout'
@@ -85,6 +86,12 @@ describe('gantt date layout', () => {
 })
 
 describe('gantt date interactions', () => {
+  it('parses and shifts strict ISO dates in years 0000 through 0099', () => {
+    expect(parseIsoDate('0000-02-29')).not.toBeNull()
+    expect(parseIsoDate('0099-01-31')).not.toBeNull()
+    expect(shiftDate('0099-01-31', 1)).toBe('0099-02-01')
+  })
+
   it('shifts strict ISO dates in UTC across month boundaries', () => {
     expect(shiftDate('2026-07-31', 1)).toBe('2026-08-01')
     expect(shiftDate('2026-08-01', -1)).toBe('2026-07-31')

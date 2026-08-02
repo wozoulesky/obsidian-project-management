@@ -21,8 +21,10 @@ export interface DateProposal extends GanttTaskDates {
 export function parseIsoDate(date: string): number | null {
   if (!ISO_DATE_PATTERN.test(date)) return null
   const [year, month, day] = date.split('-').map(Number)
-  const timestamp = Date.UTC(year!, month! - 1, day)
-  const parsed = new Date(timestamp)
+  const parsed = new Date(0)
+  parsed.setUTCHours(0, 0, 0, 0)
+  parsed.setUTCFullYear(year!, month! - 1, day)
+  const timestamp = parsed.getTime()
   if (
     parsed.getUTCFullYear() !== year ||
     parsed.getUTCMonth() !== month! - 1 ||
