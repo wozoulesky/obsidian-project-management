@@ -8,7 +8,7 @@ import {
   useProjects,
   workspaceProjectStorageKey,
 } from '../data/query-hooks'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import {
   appProjectId,
   appRepository,
@@ -60,19 +60,20 @@ function selectInitialProject(
 function WorkspaceProjectGate() {
   const projects = useProjects()
   const { projectId, selectProject } = useProjectRepository()
-  const [isResolved, setIsResolved] = useState(false)
+  const desiredProjectId = projects.data === undefined
+    ? undefined
+    : selectInitialProject(projects.data, projectId)
+  const isResolved = projects.data !== undefined
+    && (desiredProjectId === undefined || desiredProjectId === projectId)
 
   useEffect(() => {
-    if (isResolved || projects.data === undefined) return
-    const selectedProjectId = selectInitialProject(projects.data, projectId)
     if (
-      selectedProjectId !== undefined
-      && selectedProjectId !== projectId
+      desiredProjectId !== undefined
+      && desiredProjectId !== projectId
     ) {
-      selectProject(selectedProjectId)
+      selectProject(desiredProjectId)
     }
-    setIsResolved(true)
-  }, [isResolved, projectId, projects.data, selectProject])
+  }, [desiredProjectId, projectId, selectProject])
 
   if (projects.isError && projects.data === undefined) {
     return (
