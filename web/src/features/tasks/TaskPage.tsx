@@ -12,6 +12,7 @@ import type { Task, TaskStatus } from '../../data/domain'
 import {
   useMoveTaskStatus,
   useProjectRepository,
+  useProjects,
   useTasks,
 } from '../../data/query-hooks'
 import { TaskBoard } from './TaskBoard'
@@ -52,8 +53,16 @@ function taskMetrics(tasks: readonly Task[], today: string) {
   }))
 }
 
+function projectFallbackName(projectId: string): string {
+  const readableId = projectId.length > 24
+    ? `${projectId.slice(0, 8)}…${projectId.slice(-4)}`
+    : projectId
+  return `项目 ${readableId}`
+}
+
 export function TaskPage() {
   const tasksQuery = useTasks()
+  const projectsQuery = useProjects()
   const moveStatus = useMoveTaskStatus()
   const { projectId: workspaceProjectId } = useProjectRepository()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -73,6 +82,10 @@ export function TaskPage() {
     ?? prioritizedTasks[0]
     ?? null
   const selectedTaskId = selectedTask?.id ?? null
+  const selectedProjectId = selectedTask?.projectId ?? workspaceProjectId
+  const selectedProjectName = projectsQuery.data?.find(
+    ({ id }) => id === selectedProjectId,
+  )?.name ?? projectFallbackName(selectedProjectId)
   const metrics = taskMetrics(filteredTasks, today)
 
   const setSelectedTaskId = (taskId: string | null) => {
@@ -196,7 +209,9 @@ export function TaskPage() {
         )}
         <TaskContextPanel
           dataSlot="context"
+          projectName={selectedProjectName}
           task={selectedTask}
+          today={today}
         />
       </div>
     </section>

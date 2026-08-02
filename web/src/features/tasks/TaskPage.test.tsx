@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../app/router'
 import { renderApp } from '../../app/test-utils'
-import type { Task } from '../../data/domain'
+import type { Project, Task } from '../../data/domain'
 import { createFixtureSeed } from '../../data/fixtures'
 import {
   projectQueryKeys,
@@ -55,6 +55,24 @@ function task(overrides: Partial<Task>): Task {
     progress: 50,
     milestoneId: 'm2',
     dependencyIds: [],
+    ...overrides,
+  }
+}
+
+function project(overrides: Partial<Project> = {}): Project {
+  return {
+    id: 'atlas',
+    code: 'ATLAS',
+    name: 'Atlas 研发平台',
+    description: '研发项目',
+    ownerId: 'human-lin',
+    startDate: '2026-07-01',
+    dueDate: '2026-08-31',
+    status: 'in_progress',
+    progress: 62,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-08-03T00:00:00.000Z',
+    version: 1,
     ...overrides,
   }
 }
@@ -197,7 +215,7 @@ describe('TaskPage workflow', () => {
     })
     expect(context).toHaveTextContent('首要风险任务')
     expect(context.querySelector('.task-context__scroll')).toBeVisible()
-    expect(context).toHaveTextContent('项目 atlas')
+    expect(await within(context).findByText('Atlas')).toBeVisible()
     const synchronizedTriggers = within(workspace).getAllByRole('button', {
       name: /首要风险任务/,
     })
@@ -287,13 +305,155 @@ describe('TaskPage workflow', () => {
     const opaqueProjectId = '7ff2589e-b92c-44e2-812c-00997cdd4527'
     renderApp(
       <TaskContextPanel
+        projectName="项目 7ff2589e…4527"
         task={task({ projectId: opaqueProjectId })}
+        today="2026-08-03"
       />,
     )
 
     const context = screen.getByRole('region', { name: '智能任务上下文' })
     expect(context).not.toHaveTextContent(opaqueProjectId)
     expect(context).toHaveTextContent('项目 7ff2589e…4527')
+  })
+
+  it('renders only real selected-task facts and deterministic insights', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 7, 3, 12))
+    vi.spyOn(projectRepository, 'listProjects').mockResolvedValue([
+      project(),
+    ])
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({
+        id: 'task-overdue-context',
+        code: 'TASK-REAL-17',
+        title: '真实逾期任务',
+        description: '只展示仓库中持久化的任务事实。',
+        projectId: 'atlas',
+        assignee: { id: 'human-maya', name: 'Maya', kind: 'human' },
+        startDate: '2026-07-18',
+        dueDate: '2026-08-01',
+        priority: 'P0',
+        status: 'overdue',
+        progress: 27,
+        milestoneId: 'release-1',
+        dependencyIds: ['task-blocker-a', 'task-blocker-b'],
+      }),
+    ])
+
+    renderApp(<TaskPage />, {
+      route: '/tasks?selected=task-overdue-context',
+    })
+
+    const context = await screen.findByRole('region', {
+      name: '智能任务上下文',
+    })
+    expect(context).toHaveTextContent('TASK-REAL-17')
+    expect(context).toHaveTextContent('Maya')
+    expect(context).toHaveTextContent('Atlas 研发平台')
+    expect(context).toHaveTextContent('P0')
+    expect(context).toHaveTextContent('已逾期')
+    expect(context).toHaveTextContent('2026-07-18')
+    expect(context).toHaveTextContent('2026-08-01')
+    expect(context).toHaveTextContent('27%')
+    expect(context).toHaveTextContent('2 项')
+    expect(context).toHaveTextContent('task-blocker-a、task-blocker-b')
+    expect(context).toHaveTextContent('release-1')
+    expect(context).toHaveTextContent('只展示仓库中持久化的任务事实。')
+    expect(within(context).getByRole('heading', { name: '任务建议' }))
+      .toBeVisible()
+    expect(context).toHaveTextContent('任务已逾期，请重新确认交付时间。')
+    expect(context).toHaveTextContent(
+      '存在 2 项前置依赖，请确认阻塞状态。',
+    )
+    expect(context).not.toHaveTextContent('历史任务')
+    expect(context).not.toHaveTextContent('AI 助手')
+    expect(context).not.toHaveTextContent('3 份')
+    expect(context).not.toHaveTextContent('关键路径')
+  })
+
+  it('shows only the real milestone as a tag, or an explicit empty tag state', () => {
+    const { rerender } = renderApp(
+      <TaskContextPanel
+        projectName="Atlas 研发平台"
+        task={task({ milestoneId: 'milestone-real' })}
+        today="2026-08-03"
+      />,
+    )
+
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    expect(context).toHaveTextContent('milestone-real')
+    expect(context).not.toHaveTextContent('暂无标签')
+
+    rerender(
+      <TaskContextPanel
+        projectName="Atlas 研发平台"
+        task={task({ milestoneId: '' })}
+        today="2026-08-03"
+      />,
+    )
+
+    expect(context).toHaveTextContent('暂无标签')
+    expect(context).not.toHaveTextContent('milestone-real')
+  })
+
+  it('falls back to a shortened opaque project id when projects have no match', async () => {
+    const opaqueProjectId = '7ff2589e-b92c-44e2-812c-00997cdd4527'
+    vi.spyOn(projectRepository, 'listProjects').mockResolvedValue([])
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({ projectId: opaqueProjectId }),
+    ])
+
+    renderApp(<TaskPage />)
+
+    const context = await screen.findByRole('region', {
+      name: '智能任务上下文',
+    })
+    expect(context).not.toHaveTextContent(opaqueProjectId)
+    expect(context).toHaveTextContent('项目 7ff2589e…4527')
+  })
+
+  it('keeps task context visible while project names load, then updates it', async () => {
+    let resolveProjects: (projects: Project[]) => void = () => undefined
+    const projectsPromise = new Promise<Project[]>((resolve) => {
+      resolveProjects = resolve
+    })
+    vi.spyOn(projectRepository, 'listProjects').mockReturnValue(projectsPromise)
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({ projectId: 'atlas', title: '项目名加载中的任务' }),
+    ])
+
+    renderApp(<TaskPage />)
+
+    const context = await screen.findByRole('region', {
+      name: '智能任务上下文',
+    })
+    expect(context).toHaveTextContent('项目名加载中的任务')
+    expect(context).toHaveTextContent('项目 atlas')
+
+    await act(async () => {
+      resolveProjects([project()])
+    })
+
+    expect(await within(context).findByText('Atlas 研发平台')).toBeVisible()
+  })
+
+  it('keeps task context visible when the project-name query fails', async () => {
+    vi.spyOn(projectRepository, 'listProjects').mockRejectedValue(
+      new Error('项目索引不可访问'),
+    )
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({ projectId: 'atlas', title: '项目索引失败时的任务' }),
+    ])
+
+    renderApp(<TaskPage />)
+
+    const context = await screen.findByRole('region', {
+      name: '智能任务上下文',
+    })
+    expect(context).toHaveTextContent('项目索引失败时的任务')
+    expect(context).toHaveTextContent('项目 atlas')
+    expect(screen.queryByRole('heading', { name: '无法读取本地项目数据' }))
+      .not.toBeInTheDocument()
   })
 
   it('uses the shared glass header and derives four metrics from task data', async () => {
