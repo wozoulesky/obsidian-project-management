@@ -5,6 +5,7 @@ import {
   activityOperationSchema,
   deleteProjectInputSchema,
   deleteProjectResultSchema,
+  projectIdParamsSchema,
 } from './index.js'
 
 const persistedHuman = {
@@ -153,6 +154,17 @@ describe('project deletion contracts', () => {
     handoffs: 6,
     deliverables: 7,
   }
+
+  it('validates shared project id route params strictly', () => {
+    expect(projectIdParamsSchema.parse({ id: 'project_demo' })).toEqual({
+      id: 'project_demo',
+    })
+    expect(projectIdParamsSchema.safeParse({ id: '' }).success).toBe(false)
+    expect(projectIdParamsSchema.safeParse({
+      id: 'project_demo',
+      unexpected: true,
+    }).success).toBe(false)
+  })
 
   it('validates deletion input and result schemas strictly', () => {
     expect(deleteProjectInputSchema.parse({ version: 2 })).toEqual({

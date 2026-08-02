@@ -4,6 +4,7 @@ import {
   deleteProjectResultSchema,
   persistedProjectMemberSchema,
   persistedProjectSchema,
+  projectIdParamsSchema,
   projectStatusSchema,
 } from '@project-os/contracts'
 import type { Router } from 'express'
@@ -33,10 +34,6 @@ const limitQuerySchema = z.string()
   .transform(Number)
   .pipe(z.number().int().min(1).max(200))
   .default(50)
-
-const projectIdParamsSchema = z.object({
-  id: routeIdSchema,
-}).strict()
 
 const projectListQuerySchema = z.object({
   owner_id: routeIdSchema.optional(),

@@ -218,6 +218,11 @@ export const createProjectInputSchema = projectSchema.omit({
 })
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>
 
+export const projectIdParamsSchema = z.object({
+  id: idSchema,
+}).strict()
+export type ProjectIdParams = z.infer<typeof projectIdParamsSchema>
+
 export const deleteProjectInputSchema = z.object({
   version: versionSchema,
 }).strict()
