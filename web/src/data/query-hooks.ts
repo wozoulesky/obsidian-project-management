@@ -3,6 +3,7 @@ import {
   useQuery,
   useQueryClient,
   type QueryClient,
+  type QueryFilters,
 } from '@tanstack/react-query'
 import type { PersistedAppSettings } from '@project-os/contracts'
 import {
@@ -16,7 +17,9 @@ import {
 
 import type {
   CreateProjectInput,
+  Project,
   RequirementStatus,
+  Task,
   TaskDateInput,
   TaskProgressInput,
 } from './domain'
@@ -46,6 +49,7 @@ type ProjectRepositoryContextValue = {
 }
 
 export const workspaceProjectStorageKey = 'project-os:workspace-project'
+const deletedProjectIdsByClient = new WeakMap<QueryClient, Set<string>>()
 
 const ProjectRepositoryContext =
   createContext<ProjectRepositoryContextValue | null>(null)
@@ -135,9 +139,79 @@ export const projectQueryKeys = {
   gantt: ['gantt', projectId] as const,
 }
 
+function useProjectQueryEnabled(selectedProjectId: string): boolean {
+  const queryClient = useQueryClient()
+  return (
+    selectedProjectId !== ''
+    && !deletedProjectIdsByClient.get(queryClient)?.has(selectedProjectId)
+  )
+}
+
+function markProjectDeleted(
+  queryClient: QueryClient,
+  selectedProjectId: string,
+) {
+  const deletedProjectIds = deletedProjectIdsByClient.get(queryClient)
+    ?? new Set<string>()
+  deletedProjectIds.add(selectedProjectId)
+  deletedProjectIdsByClient.set(queryClient, deletedProjectIds)
+}
+
+function clearDeletedProjects(queryClient: QueryClient) {
+  deletedProjectIdsByClient.delete(queryClient)
+}
+
+export function projectOwnedQueryKeys(
+  selectedProjectId: string,
+): readonly QueryFilters[] {
+  return [
+    {
+      queryKey: projectQueryKeys.projectFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.projectMembersFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.requirementsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.defectsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.ganttFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.dashboardPrefixFor(selectedProjectId),
+      exact: false,
+    },
+    {
+      queryKey: projectQueryKeys.sessionsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.handoffsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.deliverablesFor(selectedProjectId),
+      exact: true,
+    },
+  ] as const
+}
+
 const createTaskQueryOptions = (
   repository: ProjectRepository,
   selectedProjectId: string,
+  enabled: boolean,
 ) =>
   import.meta.env.DEV
   || (
@@ -157,6 +231,7 @@ const createTaskQueryOptions = (
 
         return {
           queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+          enabled,
           queryFn: shouldFail
             ? () => {
                 throw new Error('任务数据加载失败，请重试。')
@@ -167,6 +242,7 @@ const createTaskQueryOptions = (
       }
     : () => ({
         queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+        enabled,
         queryFn: () => repository.listTasks(selectedProjectId),
       })
 
@@ -225,9 +301,11 @@ function invalidateKeys(
 
 export function useDashboard(days: 7 | 30 | 90 = 30) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery({
     queryKey: projectQueryKeys.dashboardFor(context.projectId, days),
     queryFn: () => context.repository.getDashboard(context.projectId, days),
+    enabled,
   })
 }
 
@@ -241,47 +319,52 @@ export function useProjects() {
 
 export function useProject(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.projectFor(selectedProjectId),
     queryFn: () => context.repository.getProject(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
 export function useProjectMembers(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.projectMembersFor(selectedProjectId),
     queryFn: () => context.repository.listProjectMembers(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
 export function useProjectSessions(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.sessionsFor(selectedProjectId),
     queryFn: () => context.repository.listProjectSessions(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
 export function useProjectHandoffs(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.handoffsFor(selectedProjectId),
     queryFn: () => context.repository.listProjectHandoffs(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
 export function useProjectDeliverables(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.deliverablesFor(selectedProjectId),
     queryFn: () =>
       context.repository.listProjectDeliverables(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
@@ -388,6 +471,68 @@ export function useCreateProject() {
   })
 }
 
+export function useDeleteProject() {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: ({ projectId: selectedProjectId, version }: {
+      projectId: string
+      version: number
+    }) => context.repository.deleteProject(selectedProjectId, version),
+    onSuccess: async (_, { projectId: deletedProjectId }) => {
+      const cachedProjects = queryClient.getQueryData<Project[]>(
+        projectQueryKeys.projects,
+      )
+      const remainingProjects = cachedProjects?.filter(
+        ({ id }) => id !== deletedProjectId,
+      )
+      if (remainingProjects !== undefined) {
+        queryClient.setQueryData(projectQueryKeys.projects, remainingProjects)
+      }
+
+      const cachedTasks = queryClient.getQueryData<Task[]>(
+        projectQueryKeys.allTasks,
+      )
+      if (cachedTasks !== undefined) {
+        queryClient.setQueryData(
+          projectQueryKeys.allTasks,
+          cachedTasks.filter(({ projectId }) => projectId !== deletedProjectId),
+        )
+      }
+
+      markProjectDeleted(queryClient, deletedProjectId)
+
+      for (const filters of projectOwnedQueryKeys(deletedProjectId)) {
+        queryClient.removeQueries(filters)
+      }
+
+      if (context.projectId === deletedProjectId) {
+        const nextProjectId = remainingProjects?.find(
+          ({ id }) => id === 'project_default',
+        )?.id ?? remainingProjects?.[0]?.id ?? 'project_default'
+        context.selectProject(nextProjectId)
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.projects,
+          exact: true,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.allTasks,
+          exact: true,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.workspaceDashboardPrefix,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.activities,
+        }),
+      ])
+    },
+  })
+}
+
 export function useCreateTask(selectedProjectId: string) {
   const queryClient = useQueryClient()
   const context = useProjectRepository()
@@ -417,15 +562,17 @@ export function useCreateTask(selectedProjectId: string) {
 
 export function useProjectTasks(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery(
-    createTaskQueryOptions(context.repository, selectedProjectId)(),
+    createTaskQueryOptions(context.repository, selectedProjectId, enabled)(),
   )
 }
 
 export function useTasks() {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery(
-    createTaskQueryOptions(context.repository, context.projectId)(),
+    createTaskQueryOptions(context.repository, context.projectId, enabled)(),
   )
 }
 
@@ -486,9 +633,11 @@ export function useUpdateTaskDates() {
 
 export function useRequirements() {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery({
     queryKey: projectQueryKeys.requirementsFor(context.projectId),
     queryFn: () => context.repository.listRequirements(context.projectId),
+    enabled,
   })
 }
 
@@ -518,9 +667,11 @@ export function useUpdateRequirementStatus() {
 
 export function useDefects() {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery({
     queryKey: projectQueryKeys.defectsFor(context.projectId),
     queryFn: () => context.repository.listDefects(context.projectId),
+    enabled,
   })
 }
 
@@ -548,9 +699,11 @@ export function useCreateTaskFromDefect() {
 
 export function useGanttTasks() {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery({
     queryKey: projectQueryKeys.ganttFor(context.projectId),
     queryFn: () => context.repository.listGanttTasks(context.projectId),
+    enabled,
   })
 }
 
@@ -642,6 +795,7 @@ export function useRestoreBackup() {
   return useMutation({
     mutationFn: (filename: string) => repository.restoreBackup(filename),
     onSuccess: async () => {
+      clearDeletedProjects(queryClient)
       await queryClient.invalidateQueries()
     },
   })
@@ -653,6 +807,7 @@ export function useImportData() {
   return useMutation({
     mutationFn: (file: File) => repository.importData(file),
     onSuccess: async () => {
+      clearDeletedProjects(queryClient)
       await queryClient.invalidateQueries()
     },
   })

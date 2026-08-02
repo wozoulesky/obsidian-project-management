@@ -90,6 +90,7 @@ export function createMockProjectRepository(): ProjectRepository {
     joinedAt: '2026-07-01T00:00:00.000Z',
   }))
   let activitySequence = activityState.length
+  let projectSequence = projectState.length
 
   const nextActivityId = () => {
     activitySequence += 1
@@ -257,7 +258,8 @@ export function createMockProjectRepository(): ProjectRepository {
 
     async createProject(input: CreateProjectInput) {
       const now = new Date().toISOString()
-      const sequence = projectState.length + 1
+      projectSequence += 1
+      const sequence = projectSequence
       const project: Project = {
         ...clone(input),
         id: `project-${sequence}`,
@@ -276,6 +278,64 @@ export function createMockProjectRepository(): ProjectRepository {
         joinedAt: now,
       })
       return clone(project)
+    },
+
+    async deleteProject(projectId, version) {
+      const projectIndex = projectState.findIndex(({ id }) => id === projectId)
+      if (projectIndex === -1) {
+        throw new Error(`Project not found: ${projectId}`)
+      }
+      const project = projectState[projectIndex]!
+      if (project.version !== version) throw new Error('Project version is stale')
+
+      const deleteOwnedRows = <Row>(
+        rows: Row[],
+        owns: (row: Row) => boolean,
+      ) => {
+        const before = rows.length
+        for (let index = rows.length - 1; index >= 0; index -= 1) {
+          if (owns(rows[index]!)) rows.splice(index, 1)
+        }
+        return before - rows.length
+      }
+      const deletedCounts = {
+        project_members: deleteOwnedRows(
+          memberState,
+          (member) => member.projectId === projectId,
+        ),
+        tasks: deleteOwnedRows(
+          taskState,
+          (task) => (task.projectId ?? 'atlas') === projectId,
+        ),
+        requirements: deleteOwnedRows(
+          requirementState,
+          (requirement) => (requirement.projectId ?? 'atlas') === projectId,
+        ),
+        defects: deleteOwnedRows(
+          defectState,
+          (defect) => (defect.projectId ?? 'atlas') === projectId,
+        ),
+        sessions: deleteOwnedRows(
+          sessionState,
+          (session) => session.projectId === projectId,
+        ),
+        handoffs: deleteOwnedRows(
+          handoffState,
+          (handoff) => handoff.projectId === projectId,
+        ),
+        deliverables: deleteOwnedRows(
+          deliverableState,
+          (deliverable) => deliverable.projectId === projectId,
+        ),
+      }
+      projectState.splice(projectIndex, 1)
+
+      return {
+        id: project.id,
+        name: project.name,
+        deletedAt: '2026-07-28T12:00:00.000Z',
+        deletedCounts,
+      }
     },
 
     async createTask(projectId, input) {
@@ -393,8 +453,14 @@ export function createMockProjectRepository(): ProjectRepository {
     },
 
     async listRequirements(projectId) {
-      void projectId
-      return clone(requirementState.map(deriveRequirementProgress))
+      return clone(
+        requirementState
+          .filter(
+            (requirement) =>
+              (requirement.projectId ?? 'atlas') === projectId,
+          )
+          .map(deriveRequirementProgress),
+      )
     },
 
     async updateRequirementStatus(
@@ -412,8 +478,11 @@ export function createMockProjectRepository(): ProjectRepository {
     },
 
     async listDefects(projectId) {
-      void projectId
-      return clone(defectState)
+      return clone(
+        defectState.filter(
+          (defect) => (defect.projectId ?? 'atlas') === projectId,
+        ),
+      )
     },
 
     async createTaskFromDefect(defectId) {
@@ -449,8 +518,11 @@ export function createMockProjectRepository(): ProjectRepository {
     },
 
     async listGanttTasks(projectId) {
-      void projectId
-      return clone(taskState)
+      return clone(
+        taskState.filter(
+          (task) => (task.projectId ?? 'atlas') === projectId,
+        ),
+      )
     },
 
     async listActivities({ after } = {}) {

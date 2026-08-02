@@ -135,6 +135,67 @@ describe('ApiClient', () => {
 })
 
 describe('HTTP project repository', () => {
+  it('deletes an encoded project with its validated version', async () => {
+    const deletion = {
+      id: 'project/one',
+      name: 'Project One',
+      deletedAt: '2026-08-02T04:00:00.000Z',
+      deletedCounts: {
+        project_members: 2,
+        tasks: 3,
+        requirements: 4,
+        defects: 5,
+        sessions: 6,
+        handoffs: 7,
+        deliverables: 8,
+      },
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(success(deletion)),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.deleteProject('project/one', 3)).resolves.toEqual(
+      deletion,
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/project%2Fone',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ version: 3 }),
+        headers: expect.objectContaining({
+          Accept: 'application/json',
+          'content-type': 'application/json',
+        }),
+      }),
+    )
+  })
+
+  it('strictly validates the complete project deletion result', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(success({
+      id: 'atlas',
+      name: 'Atlas',
+      deletedAt: '2026-08-02T04:00:00.000Z',
+      deletedCounts: {
+        project_members: 1,
+        tasks: 1,
+        requirements: 1,
+        defects: 1,
+        sessions: 1,
+        handoffs: 1,
+        deliverables: 1,
+        unexpected: 0,
+      },
+    }))))
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.deleteProject('atlas', 1)).rejects.toMatchObject({
+      code: 'API_RESPONSE_INVALID',
+      status: 200,
+    })
+  })
+
   it('loads a workspace dashboard without a project_id search parameter', async () => {
     const dashboard = {
       ...await createMockProjectRepository().getDashboard('atlas', 7),

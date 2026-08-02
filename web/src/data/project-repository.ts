@@ -6,6 +6,10 @@ import {
 import { z } from 'zod'
 
 import type {
+  DeleteProjectResult,
+  PersistedAppSettings,
+} from '@project-os/contracts'
+import type {
   ActivityEvent,
   Actor,
   Accent,
@@ -27,7 +31,6 @@ import type {
   Theme,
   Density,
 } from './domain'
-import type { PersistedAppSettings } from '@project-os/contracts'
 
 const routeIdSchema = z.string().min(1).max(256)
 const actorNameSchema = z.string().trim().min(1).max(200)
@@ -159,6 +162,10 @@ export interface ProjectRepository {
   listProjectHandoffs(projectId: string): Promise<Handoff[]>
   listProjectDeliverables(projectId: string): Promise<Deliverable[]>
   createProject(input: CreateProjectInput): Promise<Project>
+  deleteProject(
+    projectId: string,
+    version: number,
+  ): Promise<DeleteProjectResult>
   createTask(
     projectId: string,
     input: CreateProjectTaskInput,

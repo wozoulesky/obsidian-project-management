@@ -4,6 +4,107 @@ import { actors, defects, requirements, tasks } from './fixtures'
 import { createMockProjectRepository } from './mock-project-repository'
 
 describe('mock project repository', () => {
+  it('deletes a project and all seven kinds of owned rows only', async () => {
+    const repository = createMockProjectRepository()
+    const otherProject = await repository.createProject({
+      name: 'Borealis',
+      description: 'Release preparation',
+      ownerId: actors.lin.id,
+      startDate: null,
+      dueDate: null,
+    })
+    const otherTask = await repository.createTask(otherProject.id, {
+      title: 'Keep this task',
+      assigneeId: actors.lin.id,
+      startDate: '2026-08-01',
+      dueDate: '2026-08-02',
+      priority: 'P1',
+    })
+    const before = {
+      project_members: (await repository.listProjectMembers('atlas')).length,
+      tasks: (await repository.listTasks('atlas')).length,
+      requirements: (await repository.listRequirements('atlas')).length,
+      defects: (await repository.listDefects('atlas')).length,
+      sessions: (await repository.listProjectSessions('atlas')).length,
+      handoffs: (await repository.listProjectHandoffs('atlas')).length,
+      deliverables: (await repository.listProjectDeliverables('atlas')).length,
+    }
+    expect(Object.values(before).every((count) => count > 0)).toBe(true)
+
+    await expect(repository.deleteProject('atlas', 1)).resolves.toEqual({
+      id: 'atlas',
+      name: 'Atlas',
+      deletedAt: '2026-07-28T12:00:00.000Z',
+      deletedCounts: before,
+    })
+
+    await expect(repository.getProject('atlas')).rejects.toThrow(
+      'Project not found: atlas',
+    )
+    await expect(repository.listProjectMembers('atlas')).resolves.toEqual([])
+    await expect(repository.listTasks('atlas')).resolves.toEqual([])
+    await expect(repository.listRequirements('atlas')).resolves.toEqual([])
+    await expect(repository.listDefects('atlas')).resolves.toEqual([])
+    await expect(repository.listProjectSessions('atlas')).resolves.toEqual([])
+    await expect(repository.listProjectHandoffs('atlas')).resolves.toEqual([])
+    await expect(repository.listProjectDeliverables('atlas')).resolves.toEqual(
+      [],
+    )
+    await expect(repository.getProject(otherProject.id)).resolves.toEqual(
+      otherProject,
+    )
+    await expect(repository.listProjectMembers(otherProject.id)).resolves
+      .toContainEqual(expect.objectContaining({ projectId: otherProject.id }))
+    await expect(repository.listTasks(otherProject.id)).resolves.toEqual([
+      otherTask,
+    ])
+  })
+
+  it('leaves all state unchanged when project deletion is stale or missing', async () => {
+    const repository = createMockProjectRepository()
+    const snapshot = async () => ({
+      projects: await repository.listProjects(),
+      members: await repository.listProjectMembers('atlas'),
+      tasks: await repository.listTasks('atlas'),
+      requirements: await repository.listRequirements('atlas'),
+      defects: await repository.listDefects('atlas'),
+      sessions: await repository.listProjectSessions('atlas'),
+      handoffs: await repository.listProjectHandoffs('atlas'),
+      deliverables: await repository.listProjectDeliverables('atlas'),
+    })
+    const before = await snapshot()
+
+    await expect(repository.deleteProject('atlas', 2)).rejects.toThrow(
+      'Project version is stale',
+    )
+    expect(await snapshot()).toEqual(before)
+    await expect(repository.deleteProject('missing', 1)).rejects.toThrow(
+      'Project not found: missing',
+    )
+    expect(await snapshot()).toEqual(before)
+  })
+
+  it('does not reuse a project id after an earlier project is deleted', async () => {
+    const repository = createMockProjectRepository()
+    const input = {
+      name: 'Borealis',
+      description: '',
+      ownerId: actors.lin.id,
+      startDate: null,
+      dueDate: null,
+    }
+    const first = await repository.createProject(input)
+
+    await repository.deleteProject('atlas', 1)
+    const second = await repository.createProject({
+      ...input,
+      name: 'Cygnus',
+    })
+
+    expect(second.id).not.toBe(first.id)
+    await expect(repository.listProjects()).resolves.toEqual([first, second])
+  })
+
   it('starts a fresh mock workspace with the approved dark glass settings', async () => {
     const repository = createMockProjectRepository()
 
