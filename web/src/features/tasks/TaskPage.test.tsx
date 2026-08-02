@@ -356,7 +356,12 @@ describe('TaskPage workflow', () => {
     expect(context).toHaveTextContent('2026-08-01')
     expect(context).toHaveTextContent('27%')
     expect(context).toHaveTextContent('2 项')
-    expect(context).toHaveTextContent('task-blocker-a、task-blocker-b')
+    const dependencies = within(context).getByRole('list', {
+      name: '依赖任务',
+    })
+    expect(within(dependencies).getAllByRole('listitem')).toHaveLength(2)
+    expect(dependencies).toHaveTextContent('task-blocker-a')
+    expect(dependencies).toHaveTextContent('task-blocker-b')
     expect(context).toHaveTextContent('release-1')
     expect(context).toHaveTextContent('只展示仓库中持久化的任务事实。')
     expect(within(context).getByRole('heading', { name: '任务建议' }))
@@ -454,6 +459,110 @@ describe('TaskPage workflow', () => {
     expect(context).toHaveTextContent('项目 atlas')
     expect(screen.queryByRole('heading', { name: '无法读取本地项目数据' }))
       .not.toBeInTheDocument()
+  })
+
+  it('bounds a large dependency list until the user explicitly expands it', async () => {
+    const user = userEvent.setup()
+    const dependencyIds = Array.from(
+      { length: 1_000 },
+      (_, index) => `dependency-${index}-${'x'.repeat(80)}`,
+    )
+    const firstTask = task({
+      id: 'large-dependencies',
+      dependencyIds,
+    })
+    const { rerender } = renderApp(
+      <TaskContextPanel
+        projectName="Atlas 研发平台"
+        task={firstTask}
+        today="2026-08-03"
+      />,
+    )
+
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    expect(context).toHaveTextContent('1000 项')
+    expect(context).toHaveTextContent('另 995 项')
+    expect(context).toHaveTextContent(dependencyIds[0]!)
+    expect(context).not.toHaveTextContent(dependencyIds.at(-1)!)
+    expect(context.querySelectorAll('.task-context__dependencies li'))
+      .toHaveLength(5)
+
+    const expand = within(context).getByRole('button', {
+      name: '展开全部依赖',
+    })
+    expect(expand).toHaveAttribute('aria-expanded', 'false')
+    await user.click(expand)
+
+    expect(context).toHaveTextContent(dependencyIds.at(-1)!)
+    expect(context.querySelectorAll('.task-context__dependencies li'))
+      .toHaveLength(1_000)
+    const collapse = within(context).getByRole('button', {
+      name: '收起依赖',
+    })
+    expect(collapse).toHaveAttribute('aria-expanded', 'true')
+    await user.click(collapse)
+    expect(context).not.toHaveTextContent(dependencyIds.at(-1)!)
+
+    await user.click(within(context).getByRole('button', {
+      name: '展开全部依赖',
+    }))
+    rerender(
+      <TaskContextPanel
+        projectName="Atlas 研发平台"
+        task={task({ id: 'next-task', dependencyIds })}
+        today="2026-08-03"
+      />,
+    )
+    expect(within(context).getByRole('button', { name: '展开全部依赖' }))
+      .toHaveAttribute('aria-expanded', 'false')
+    expect(context).not.toHaveTextContent(dependencyIds.at(-1)!)
+  })
+
+  it('shows zero and small dependency sets without an expansion control', () => {
+    const { rerender } = renderApp(
+      <TaskContextPanel
+        projectName="Atlas 研发平台"
+        task={task({ dependencyIds: [] })}
+        today="2026-08-03"
+      />,
+    )
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    expect(context).toHaveTextContent('0 项')
+    expect(within(context).queryByRole('button', { name: /依赖/ }))
+      .not.toBeInTheDocument()
+
+    rerender(
+      <TaskContextPanel
+        projectName="Atlas 研发平台"
+        task={task({ dependencyIds: ['task-a', 'task-b'] })}
+        today="2026-08-03"
+      />,
+    )
+    const dependencies = within(context).getByRole('list', {
+      name: '依赖任务',
+    })
+    expect(within(dependencies).getAllByRole('listitem')).toHaveLength(2)
+    expect(dependencies).toHaveTextContent('task-a')
+    expect(dependencies).toHaveTextContent('task-b')
+    expect(within(context).queryByRole('button', { name: /依赖/ }))
+      .not.toBeInTheDocument()
+  })
+
+  it('uses a generated id to associate insights for special task ids', () => {
+    renderApp(
+      <TaskContextPanel
+        projectName="Atlas 研发平台"
+        task={task({ id: 'task id/特殊?#[]' })}
+        today="2026-08-03"
+      />,
+    )
+
+    const insights = document.querySelector('.task-context__insights')
+    expect(insights).not.toBeNull()
+    const labelledBy = insights?.getAttribute('aria-labelledby')
+    expect(labelledBy).toBeTruthy()
+    expect(labelledBy).not.toContain('task id/特殊?#[]')
+    expect(document.getElementById(labelledBy!)).toHaveTextContent('任务建议')
   })
 
   it('uses the shared glass header and derives four metrics from task data', async () => {
@@ -899,6 +1008,108 @@ describe('TaskPage workflow', () => {
     )
     expect(progress).toHaveValue(80)
     expect(note).toHaveValue('等待服务恢复')
+  })
+
+  it('synchronizes clean progress fields when the same task updates externally', () => {
+    const original = task({
+      id: 'same-task-clean',
+      progress: 45,
+      status: 'in_progress',
+    })
+    const { rerender } = renderApp(
+      <TaskInspector onClose={vi.fn()} task={original} />,
+    )
+    const dialog = screen.getByRole('dialog', { name: original.title })
+
+    rerender(
+      <TaskInspector
+        onClose={vi.fn()}
+        task={{ ...original, progress: 100, status: 'done' }}
+      />,
+    )
+
+    expect(within(dialog).getByRole('spinbutton', { name: '任务进度' }))
+      .toHaveValue(100)
+    expect(within(dialog).getByRole('combobox', { name: '状态' }))
+      .toHaveValue('done')
+  })
+
+  it('preserves dirty progress and note while syncing a clean status field', async () => {
+    const user = userEvent.setup()
+    const original = task({
+      id: 'same-task-draft',
+      progress: 45,
+      status: 'in_progress',
+    })
+    const { rerender } = renderApp(
+      <TaskInspector onClose={vi.fn()} task={original} />,
+    )
+    const dialog = screen.getByRole('dialog', { name: original.title })
+    const progress = within(dialog).getByRole('spinbutton', {
+      name: '任务进度',
+    })
+    const note = within(dialog).getByRole('textbox', { name: '进度备注' })
+    await user.clear(progress)
+    await user.type(progress, '73')
+    await user.type(note, '保留这段草稿')
+
+    rerender(
+      <TaskInspector
+        onClose={vi.fn()}
+        task={{ ...original, progress: 90, status: 'done' }}
+      />,
+    )
+
+    expect(progress).toHaveValue(73)
+    expect(within(dialog).getByRole('combobox', { name: '状态' }))
+      .toHaveValue('done')
+    expect(note).toHaveValue('保留这段草稿')
+  })
+
+  it('submits an externally updated clean status without reverting it', async () => {
+    const updatedTask = task({
+      id: 'same-task-submit',
+      progress: 90,
+      status: 'done',
+    })
+    const updateProgress = vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockResolvedValue(updatedTask)
+    const user = userEvent.setup()
+    const original = { ...updatedTask, progress: 45, status: 'in_progress' as const }
+    const { rerender } = renderApp(
+      <TaskInspector onClose={vi.fn()} task={original} />,
+    )
+    const dialog = screen.getByRole('dialog', { name: original.title })
+    const progress = within(dialog).getByRole('spinbutton', {
+      name: '任务进度',
+    })
+    await user.clear(progress)
+    await user.type(progress, '73')
+
+    rerender(<TaskInspector onClose={vi.fn()} task={updatedTask} />)
+    await user.click(within(dialog).getByRole('button', {
+      name: '提交进度',
+    }))
+
+    await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(
+      'same-task-submit',
+      expect.objectContaining({ progress: 73, status: 'done' }),
+    ))
+  })
+
+  it('uses the shared overdue status label in the progress form', () => {
+    renderApp(
+      <TaskInspector
+        onClose={vi.fn()}
+        task={task({ status: 'overdue' })}
+      />,
+    )
+
+    const status = screen.getByRole('combobox', { name: '状态' })
+    expect(within(status).getByRole('option', { name: '已逾期' }))
+      .toBeInTheDocument()
+    expect(within(status).queryByRole('option', { name: '已延期' }))
+      .not.toBeInTheDocument()
   })
 
   it('resets the controlled form when the selected task changes', async () => {

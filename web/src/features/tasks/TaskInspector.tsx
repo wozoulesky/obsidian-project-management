@@ -1,16 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { EntityInspector } from '../../components/data/EntityInspector'
 import { Button } from '../../components/ui/Button'
 import type { Task, TaskStatus } from '../../data/domain'
 import { useUpdateTaskProgress } from '../../data/query-hooks'
-
-const statusLabels: Record<TaskStatus, string> = {
-  not_started: '未开始',
-  in_progress: '进行中',
-  done: '已完成',
-  overdue: '已延期',
-}
+import { taskStatusLabels } from './task-workspace-model'
 
 export interface TaskInspectorProps {
   fallbackFocusId?: string
@@ -25,6 +19,29 @@ export function TaskProgressForm({ task }: { task: Task }) {
   const [status, setStatus] = useState<TaskStatus>(task.status)
   const [note, setNote] = useState('')
   const [formError, setFormError] = useState('')
+  const taskIdRef = useRef(task.id)
+  const progressDirtyRef = useRef(false)
+  const statusDirtyRef = useRef(false)
+
+  useEffect(() => {
+    if (taskIdRef.current !== task.id) {
+      taskIdRef.current = task.id
+      progressDirtyRef.current = false
+      statusDirtyRef.current = false
+      setProgress(String(task.progress))
+      setStatus(task.status)
+      setNote('')
+      setFormError('')
+      return
+    }
+
+    if (!progressDirtyRef.current) {
+      setProgress(String(task.progress))
+    }
+    if (!statusDirtyRef.current) {
+      setStatus(task.status)
+    }
+  }, [task.id, task.progress, task.status])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -46,6 +63,12 @@ export function TaskProgressForm({ task }: { task: Task }) {
         input: { progress: numericProgress, status, note },
       },
       {
+        onSuccess: (updatedTask) => {
+          progressDirtyRef.current = false
+          statusDirtyRef.current = false
+          setProgress(String(updatedTask.progress))
+          setStatus(updatedTask.status)
+        },
         onError: (error) => {
           setFormError(
             error instanceof Error ? error.message : '保存失败，请稍后重试。',
@@ -67,7 +90,10 @@ export function TaskProgressForm({ task }: { task: Task }) {
           inputMode="numeric"
           max="100"
           min="0"
-          onChange={(event) => setProgress(event.target.value)}
+          onChange={(event) => {
+            progressDirtyRef.current = true
+            setProgress(event.target.value)
+          }}
           step="1"
           type="number"
           value={progress}
@@ -76,12 +102,13 @@ export function TaskProgressForm({ task }: { task: Task }) {
       <label>
         状态
         <select
-          onChange={(event) =>
+          onChange={(event) => {
+            statusDirtyRef.current = true
             setStatus(event.target.value as TaskStatus)
-          }
+          }}
           value={status}
         >
-          {Object.entries(statusLabels).map(([value, label]) => (
+          {Object.entries(taskStatusLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -132,7 +159,7 @@ export function TaskInspector({
           <div><dt>依赖</dt><dd>{task.dependencyIds.join('、') || '无'}</dd></div>
         </dl>
         <p className="task-inspector__description">{task.description}</p>
-        <TaskProgressForm key={task.id} task={task} />
+        <TaskProgressForm task={task} />
       </div>
     </EntityInspector>
   )

@@ -1,7 +1,54 @@
+import { useId, useState } from 'react'
+
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Task } from '../../data/domain'
 import { TaskProgressForm } from './TaskInspector'
 import { taskInsights, taskStatusLabels } from './task-workspace-model'
+
+const DEPENDENCY_PREVIEW_LIMIT = 5
+
+function TaskDependencies({
+  dependencyIds,
+}: {
+  dependencyIds: readonly string[]
+}) {
+  const dependencyListId = useId()
+  const [expanded, setExpanded] = useState(false)
+  const visibleDependencyIds = expanded
+    ? dependencyIds
+    : dependencyIds.slice(0, DEPENDENCY_PREVIEW_LIMIT)
+  const hiddenDependencyCount = dependencyIds.length - visibleDependencyIds.length
+
+  return (
+    <dd>
+      {dependencyIds.length} 项
+      {visibleDependencyIds.length > 0 ? (
+        <ul
+          aria-label="依赖任务"
+          className="task-context__dependencies"
+          id={dependencyListId}
+        >
+          {visibleDependencyIds.map((dependencyId, index) => (
+            <li key={`${dependencyId}-${index}`}>{dependencyId}</li>
+          ))}
+        </ul>
+      ) : null}
+      {hiddenDependencyCount > 0 ? (
+        <span>另 {hiddenDependencyCount} 项</span>
+      ) : null}
+      {dependencyIds.length > DEPENDENCY_PREVIEW_LIMIT ? (
+        <button
+          aria-controls={dependencyListId}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
+        >
+          {expanded ? '收起依赖' : '展开全部依赖'}
+        </button>
+      ) : null}
+    </dd>
+  )
+}
 
 export interface TaskContextPanelProps {
   dataSlot?: string
@@ -17,6 +64,7 @@ export function TaskContextPanel({
   today,
 }: TaskContextPanelProps) {
   const insights = task ? taskInsights(task, today) : []
+  const insightsHeadingId = useId()
 
   return (
     <GlassPanel
@@ -46,12 +94,10 @@ export function TaskContextPanel({
             <div><dt>当前进度</dt><dd>{task.progress}%</dd></div>
             <div>
               <dt>依赖</dt>
-              <dd>
-                {task.dependencyIds.length} 项
-                {task.dependencyIds.length > 0
-                  ? `（${task.dependencyIds.join('、')}）`
-                  : null}
-              </dd>
+              <TaskDependencies
+                dependencyIds={task.dependencyIds}
+                key={task.id}
+              />
             </div>
             <div>
               <dt>标签</dt>
@@ -60,10 +106,10 @@ export function TaskContextPanel({
           </dl>
           <p className="task-context__description">{task.description}</p>
           <section
-            aria-labelledby={`task-context-insights-${task.id}`}
+            aria-labelledby={insightsHeadingId}
             className="task-context__insights"
           >
-            <h3 id={`task-context-insights-${task.id}`}>任务建议</h3>
+            <h3 id={insightsHeadingId}>任务建议</h3>
             {insights.length > 0 ? (
               <ul>
                 {insights.map((insight) => (
@@ -74,7 +120,7 @@ export function TaskContextPanel({
               <p>暂无任务建议</p>
             )}
           </section>
-          <TaskProgressForm key={task.id} task={task} />
+          <TaskProgressForm task={task} />
         </div>
       ) : (
         <p className="task-context__empty" role="status">
