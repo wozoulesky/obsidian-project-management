@@ -158,6 +158,18 @@ describe('mock project repository', () => {
     expect(dashboard.metrics.deliveredRequirements).toBe(14)
   })
 
+  it('exposes the same global fixture through the workspace dashboard', async () => {
+    const repository = createMockProjectRepository()
+
+    const [workspace, project] = await Promise.all([
+      repository.getWorkspaceDashboard(7),
+      repository.getDashboard('atlas', 7),
+    ])
+
+    expect(workspace).toEqual(project)
+    expect(workspace.metrics.totalTasks).toBe(tasks.length)
+  })
+
   it('returns the approved dashboard metrics and ordered risk/activity data', async () => {
     const repository = createMockProjectRepository()
 

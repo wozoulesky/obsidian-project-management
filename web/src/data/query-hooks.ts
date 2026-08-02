@@ -106,6 +106,12 @@ export const projectQueryKeys = {
     ['dashboard', selectedProjectId] as const,
   dashboardFor: (selectedProjectId: string, days: 7 | 30 | 90) =>
     ['dashboard', selectedProjectId, days] as const,
+  workspaceDashboardPrefix: [
+    'dashboard',
+    { scope: 'workspace' },
+  ] as const,
+  workspaceDashboardFor: (days: 7 | 30 | 90) =>
+    ['dashboard', { scope: 'workspace' }, days] as const,
   tasksFor: (selectedProjectId: string) =>
     ['tasks', selectedProjectId] as const,
   requirementsFor: (selectedProjectId: string) =>
@@ -177,6 +183,7 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.gantt,
     projectQueryKeys.requirements,
     projectQueryKeys.dashboardPrefix,
+    projectQueryKeys.workspaceDashboardPrefix,
   ],
   actorMutation: [
     projectQueryKeys.actors,
@@ -190,10 +197,12 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.allTasks,
     projectQueryKeys.gantt,
     projectQueryKeys.dashboardPrefix,
+    projectQueryKeys.workspaceDashboardPrefix,
   ],
   requirementStatus: [
     projectQueryKeys.requirements,
     projectQueryKeys.dashboardPrefix,
+    projectQueryKeys.workspaceDashboardPrefix,
   ],
   defectConversion: [
     projectQueryKeys.tasks,
@@ -201,6 +210,7 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.gantt,
     projectQueryKeys.defects,
     projectQueryKeys.dashboardPrefix,
+    projectQueryKeys.workspaceDashboardPrefix,
   ],
 } as const
 
@@ -280,6 +290,14 @@ export function useActors() {
   return useQuery({
     queryKey: projectQueryKeys.actors,
     queryFn: () => context.repository.listActors(),
+  })
+}
+
+export function useWorkspaceDashboard(days: 7 | 30 | 90 = 30) {
+  const { repository } = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.workspaceDashboardFor(days),
+    queryFn: () => repository.getWorkspaceDashboard(days),
   })
 }
 
@@ -433,6 +451,7 @@ export function useUpdateTaskProgress() {
           projectQueryKeys.ganttFor(selectedProjectId),
           projectQueryKeys.requirementsFor(selectedProjectId),
           projectQueryKeys.dashboardPrefixFor(selectedProjectId),
+          projectQueryKeys.workspaceDashboardPrefix,
           projectQueryKeys.projectFor(selectedProjectId),
           projectQueryKeys.projects,
           projectQueryKeys.activities,
@@ -459,6 +478,7 @@ export function useUpdateTaskDates() {
         projectQueryKeys.allTasks,
         projectQueryKeys.ganttFor(context.projectId),
         projectQueryKeys.dashboardPrefixFor(context.projectId),
+        projectQueryKeys.workspaceDashboardPrefix,
       ])
     },
   })
@@ -489,6 +509,7 @@ export function useUpdateRequirementStatus() {
         [
           projectQueryKeys.requirementsFor(context.projectId),
           projectQueryKeys.dashboardPrefixFor(context.projectId),
+          projectQueryKeys.workspaceDashboardPrefix,
         ],
       )
     },
@@ -518,6 +539,7 @@ export function useCreateTaskFromDefect() {
           projectQueryKeys.ganttFor(context.projectId),
           projectQueryKeys.defectsFor(context.projectId),
           projectQueryKeys.dashboardPrefixFor(context.projectId),
+          projectQueryKeys.workspaceDashboardPrefix,
         ],
       )
     },

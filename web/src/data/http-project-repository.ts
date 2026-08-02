@@ -267,6 +267,13 @@ export function createHttpProjectRepository(
       )
     },
 
+    getWorkspaceDashboard(days = 30) {
+      return client.request(
+        appendSearch('/dashboard', { days }),
+        dashboardSnapshotSchema,
+      )
+    },
+
     listTasks(projectId) {
       return allPages(
         client,

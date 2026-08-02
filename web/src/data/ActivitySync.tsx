@@ -10,11 +10,12 @@ function affectedQueryKeys(
 ): readonly (readonly unknown[])[] {
   const projectId = activity.projectId ?? selectedProjectId
   const dashboard = projectQueryKeys.dashboardPrefixFor(projectId)
+  const workspaceDashboard = projectQueryKeys.workspaceDashboardPrefix
   if (activity.operation.startsWith('actor.')) {
-    return [projectQueryKeys.actors, dashboard]
+    return [projectQueryKeys.actors, dashboard, workspaceDashboard]
   }
   if (activity.operation.startsWith('project.')) {
-    return [projectQueryKeys.projects, dashboard]
+    return [projectQueryKeys.projects, dashboard, workspaceDashboard]
   }
   if (activity.operation.startsWith('task.')) {
     return [
@@ -23,10 +24,15 @@ function affectedQueryKeys(
       projectQueryKeys.ganttFor(projectId),
       projectQueryKeys.requirementsFor(projectId),
       dashboard,
+      workspaceDashboard,
     ]
   }
   if (activity.operation.startsWith('requirement.')) {
-    return [projectQueryKeys.requirementsFor(projectId), dashboard]
+    return [
+      projectQueryKeys.requirementsFor(projectId),
+      dashboard,
+      workspaceDashboard,
+    ]
   }
   if (activity.operation === 'defect.to_task') {
     return [
@@ -35,10 +41,15 @@ function affectedQueryKeys(
       projectQueryKeys.allTasks,
       projectQueryKeys.ganttFor(projectId),
       dashboard,
+      workspaceDashboard,
     ]
   }
   if (activity.operation.startsWith('defect.')) {
-    return [projectQueryKeys.defectsFor(projectId), dashboard]
+    return [
+      projectQueryKeys.defectsFor(projectId),
+      dashboard,
+      workspaceDashboard,
+    ]
   }
   if (activity.operation === 'settings.update') {
     return [projectQueryKeys.settings]

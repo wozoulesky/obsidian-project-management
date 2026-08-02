@@ -9,6 +9,7 @@ import { z } from 'zod'
 
 import { ApiClient, ApiError } from './api-client'
 import { createHttpProjectRepository } from './http-project-repository'
+import { createMockProjectRepository } from './mock-project-repository'
 
 const requestId = 'request-1'
 
@@ -134,6 +135,27 @@ describe('ApiClient', () => {
 })
 
 describe('HTTP project repository', () => {
+  it('loads a workspace dashboard without a project_id search parameter', async () => {
+    const dashboard = {
+      ...await createMockProjectRepository().getDashboard('atlas', 7),
+      activities: [],
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(success(dashboard)),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const repository = createHttpProjectRepository(new ApiClient('/api'))
+
+    await expect(repository.getWorkspaceDashboard(7)).resolves
+      .toEqual(dashboard)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/dashboard?days=7',
+      expect.any(Object),
+    )
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('project_id')
+  })
+
   it('loads and strictly parses the current actor endpoint', async () => {
     const currentActor = persistedActorSchema.parse({
       ...task.assignee,

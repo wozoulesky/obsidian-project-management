@@ -168,6 +168,7 @@ export interface ProjectRepository {
     projectId: string,
     days?: 7 | 30 | 90,
   ): Promise<DashboardSnapshot>
+  getWorkspaceDashboard(days?: 7 | 30 | 90): Promise<DashboardSnapshot>
   listTasks(projectId: string): Promise<Task[]>
   updateTaskProgress(taskId: string, input: TaskProgressInput): Promise<Task>
   updateTaskDates(taskId: string, input: TaskDateInput): Promise<Task>

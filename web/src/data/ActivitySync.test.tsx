@@ -170,6 +170,9 @@ describe('ActivitySync', () => {
       queryKey: projectQueryKeys.dashboardPrefixFor('project-2'),
     })
     expect(invalidate).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.workspaceDashboardPrefix,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
       queryKey: projectQueryKeys.projects,
     })
     expect(invalidate).toHaveBeenCalledWith({

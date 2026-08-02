@@ -116,6 +116,54 @@ export function createMockProjectRepository(): ProjectRepository {
       (taskId) => taskState.find((task) => task.id === taskId)?.status === 'done',
     ).length,
   })
+  const buildDashboardSnapshot = (
+    days: 7 | 30 | 90,
+  ): DashboardSnapshot => {
+    const activeDefects = defectState.filter(
+      (defect) => !inactiveDefectStatuses.has(defect.status),
+    )
+    const actorList = Object.values(seed.actors)
+    const taskStatusCounts = taskState.reduce<
+      DashboardSnapshot['taskStatusCounts']
+    >(
+      (counts, task) => {
+        counts[task.status] += 1
+        return counts
+      },
+      {
+        not_started: 0,
+        in_progress: 0,
+        done: 0,
+        overdue: 0,
+      },
+    )
+    return {
+      metrics: {
+        totalTasks: taskState.length,
+        completedTasks: taskState.filter((task) => task.status === 'done')
+          .length,
+        deliveredRequirements: requirementState.filter(
+          (requirement) =>
+            requirement.status === 'delivered' ||
+            requirement.status === 'accepted',
+        ).length,
+        totalRequirements: requirementState.length,
+        activeDefects: activeDefects.length,
+        seriousDefects: activeDefects.filter(
+          (defect) =>
+            defect.severity === 'fatal' || defect.severity === 'serious',
+        ).length,
+        velocityPerWeek: 16.4,
+        activeActors: actorList.length,
+        activeAgents: actorList.filter((actor) => actor.kind === 'agent')
+          .length,
+      },
+      taskStatusCounts,
+      trend: seed.trendByDays[days],
+      risks: seed.risks,
+      activities: activityState,
+    }
+  }
 
   return {
     async listActors() {
@@ -280,50 +328,11 @@ export function createMockProjectRepository(): ProjectRepository {
 
     async getDashboard(projectId, days = 30): Promise<DashboardSnapshot> {
       void projectId
-      const activeDefects = defectState.filter(
-        (defect) => !inactiveDefectStatuses.has(defect.status),
-      )
-      const actorList = Object.values(seed.actors)
-      const taskStatusCounts = taskState.reduce<
-        DashboardSnapshot['taskStatusCounts']
-      >(
-        (counts, task) => {
-          counts[task.status] += 1
-          return counts
-        },
-        {
-          not_started: 0,
-          in_progress: 0,
-          done: 0,
-          overdue: 0,
-        },
-      )
-      return clone({
-        metrics: {
-          totalTasks: taskState.length,
-          completedTasks: taskState.filter((task) => task.status === 'done')
-            .length,
-          deliveredRequirements: requirementState.filter(
-            (requirement) =>
-              requirement.status === 'delivered' ||
-              requirement.status === 'accepted',
-          ).length,
-          totalRequirements: requirementState.length,
-          activeDefects: activeDefects.length,
-          seriousDefects: activeDefects.filter(
-            (defect) =>
-              defect.severity === 'fatal' || defect.severity === 'serious',
-          ).length,
-          velocityPerWeek: 16.4,
-          activeActors: actorList.length,
-          activeAgents: actorList.filter((actor) => actor.kind === 'agent')
-            .length,
-        },
-        taskStatusCounts,
-        trend: seed.trendByDays[days],
-        risks: seed.risks,
-        activities: activityState,
-      })
+      return clone(buildDashboardSnapshot(days))
+    },
+
+    async getWorkspaceDashboard(days = 30): Promise<DashboardSnapshot> {
+      return clone(buildDashboardSnapshot(days))
     },
 
     async listTasks(projectId) {
