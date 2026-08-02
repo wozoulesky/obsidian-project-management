@@ -66,7 +66,7 @@ test('dark create project refocuses the same 503 on every attempt', async ({
 
   await page.goto(new URL('/settings', runtime.baseURL).href)
   await page.getByLabel('深色').check()
-  await page.getByRole('link', { name: '项目' }).click()
+  await page.getByRole('link', { name: '项目', exact: true }).click()
   await page.getByRole('button', { name: '新建项目' }).click()
   const dialog = page.getByRole('dialog', { name: '新建项目' })
   await dialog.getByLabel('项目名称').fill('保留失败草稿')
@@ -157,7 +157,9 @@ test('quick submit keeps values after 409 and retries the frozen version', async
   ).toHaveCount(0)
 
   await dialog.getByRole('button', { name: '提交进度' }).click()
-  await expect(page.getByRole('status')).toContainText('已更新至 79%')
+  await expect(
+    page.getByRole('status').filter({ hasText: '已更新至 79%' }),
+  ).toContainText('已更新至 79%')
   expect(submittedVersions).toHaveLength(2)
   expect(submittedVersions[1]).toBe(submittedVersions[0])
 })

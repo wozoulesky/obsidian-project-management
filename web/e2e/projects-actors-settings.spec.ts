@@ -77,7 +77,7 @@ test('current actor endpoint drives the local actor identity without a client id
   await expect(
     page.getByRole('heading', { level: 1, name: '全局驾驶舱' }),
   ).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Agent 现场' })).toBeVisible()
+  await expect(page.getByRole('region', { name: '协作者状态' })).toBeVisible()
 })
 
 test('shows all projects, filters by owner, and creates a task inside its project', async ({
@@ -184,7 +184,11 @@ test('creates, edits, and deactivates a human while exposing the Agent ID', asyn
     page.getByRole('heading', { level: 1, name: '协作者网络' }),
   ).toBeVisible()
 
-  const agentRow = page.getByRole('row', { name: new RegExp(runtime.seed.agentName) })
+  const directory = page.getByRole('group', { name: '协作者管理目录' })
+  await directory.locator('summary').click()
+  const agentRow = directory.getByRole('row', {
+    name: new RegExp(runtime.seed.agentName),
+  })
   await expect(agentRow).toContainText('Agent')
   await expect(agentRow).toContainText('codex')
   await expect(agentRow).toContainText(runtime.seed.agentId)
@@ -202,14 +206,14 @@ test('creates, edits, and deactivates a human while exposing the Agent ID', asyn
   await createHuman.getByLabel('能力').fill('planning, delivery')
   await createHuman.getByRole('button', { name: '创建负责人' }).click()
 
-  let humanRow = page.getByRole('row', { name: /Journey Owner/ })
+  let humanRow = directory.getByRole('row', { name: /Journey Owner/ })
   await expect(humanRow).toContainText('人类')
   await humanRow.getByRole('button', { name: '编辑 Journey Owner' }).click()
   const editHuman = page.getByRole('dialog', { name: '编辑负责人' })
   await editHuman.getByLabel('姓名').fill('Journey Owner Edited')
   await editHuman.getByRole('button', { name: '保存负责人' }).click()
 
-  humanRow = page.getByRole('row', { name: /Journey Owner Edited/ })
+  humanRow = directory.getByRole('row', { name: /Journey Owner Edited/ })
   await humanRow
     .getByRole('button', { name: '停用 Journey Owner Edited' })
     .click()
@@ -303,6 +307,8 @@ test('keeps settings populated and persists saved appearance after reload', asyn
   await expect(
     page.getByRole('button', { name: '下载 Project OS Skill' }),
   ).toBeVisible()
+  const moreClients = page.getByRole('group', { name: '更多客户端配置' })
+  await moreClients.locator('summary').click()
   for (const client of ['Codex', 'Claude Code', 'Kimi Code']) {
     await expect(
       page.getByRole('button', { name: `复制 ${client} 配置` }),
