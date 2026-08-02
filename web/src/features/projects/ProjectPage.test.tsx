@@ -161,6 +161,9 @@ describe('ProjectPage', () => {
     ['line-break-only project name', { projectNotice: '已永久删除项目 \n' }],
     ['non-breaking whitespace project name', { projectNotice: '已永久删除项目 \u00a0' }],
     ['zero-width project name', { projectNotice: '已永久删除项目 \u200b' }],
+    ['word-joiner project name', { projectNotice: '已永久删除项目 \u2060' }],
+    ['soft-hyphen project name', { projectNotice: '已永久删除项目 \u00ad' }],
+    ['left-to-right isolate project name', { projectNotice: '已永久删除项目 \u2066' }],
     [
       'prefixed markup',
       { projectNotice: '已永久删除项目 <img src=x onerror=alert(1)>' },

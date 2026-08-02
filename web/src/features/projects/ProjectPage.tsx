@@ -28,7 +28,7 @@ import {
 import './projects-glass.css'
 
 const projectNoticePrefix = '已永久删除项目 '
-const invisibleCharacters = ['\u200b', '\u200c', '\u200d', '\ufeff']
+const unsafeUnicodeNoticeCharacterPattern = /[\p{Cc}\p{Cf}]/u
 
 export function ProjectPage() {
   const location = useLocation()
@@ -51,8 +51,7 @@ export function ProjectPage() {
       !projectName.trim()
       || projectName.includes('<')
       || projectName.includes('>')
-      || invisibleCharacters.some((character) => projectName.includes(character))
-      || Array.from(notice).some((character) => character.charCodeAt(0) < 32)
+      || unsafeUnicodeNoticeCharacterPattern.test(projectName)
     ) return null
     return notice
   })
