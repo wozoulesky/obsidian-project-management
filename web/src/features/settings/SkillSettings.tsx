@@ -21,6 +21,33 @@ const clientLabels: Record<SkillConfigClient, string> = {
   'kimi-code': 'Kimi Code',
 }
 
+function SkillSnippet({
+  client,
+  onCopy,
+  snippet,
+}: {
+  client: SkillConfigClient
+  onCopy: (client: SkillConfigClient) => void
+  snippet?: string
+}) {
+  return (
+    <article>
+      <h4>{clientLabels[client]}</h4>
+      <pre tabIndex={0}><code>
+        {snippet ?? '正在读取服务端配置…'}
+      </code></pre>
+      <button
+        className="button button--secondary"
+        disabled={snippet === undefined}
+        onClick={() => onCopy(client)}
+        type="button"
+      >
+        复制 {clientLabels[client]} 配置
+      </button>
+    </article>
+  )
+}
+
 export function SkillSettings() {
   const { repository } = useProjectRepository()
   const [snippets, setSnippets] = useState<
@@ -105,26 +132,31 @@ export function SkillSettings() {
       className="settings-card settings-card--wide"
     >
       <header>
-        <h2 id="skill-settings-title">Agent Skills</h2>
+        <h3 id="skill-settings-title">Agent Skills</h3>
         <p>复制本机 stdio 连接片段，或下载可安装的完整 Skill ZIP。</p>
       </header>
       <div className="settings-snippets">
-        {clients.map((client) => (
-          <article key={client}>
-            <h3>{clientLabels[client]}</h3>
-            <pre tabIndex={0}><code>
-              {snippets[client]?.snippet ?? '正在读取服务端配置…'}
-            </code></pre>
-            <button
-              className="button button--secondary"
-              disabled={snippets[client] === undefined}
-              onClick={() => void copy(client)}
-              type="button"
-            >
-              复制 {clientLabels[client]} 配置
-            </button>
-          </article>
-        ))}
+        <SkillSnippet
+          client="codex"
+          onCopy={(client) => void copy(client)}
+          snippet={snippets.codex?.snippet}
+        />
+        <details aria-label="更多客户端配置" className="settings-disclosure">
+          <summary>
+            <span>更多客户端配置</span>
+            <small>Claude Code · Kimi Code</small>
+          </summary>
+          <div className="settings-snippets__secondary">
+            {clients.slice(1).map((client) => (
+              <SkillSnippet
+                client={client}
+                key={client}
+                onCopy={(selected) => void copy(selected)}
+                snippet={snippets[client]?.snippet}
+              />
+            ))}
+          </div>
+        </details>
       </div>
       <div className="settings-actions">
         <button

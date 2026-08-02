@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test'
 const routes = [
   '/dashboard',
   '/projects',
+  '/projects/atlas',
   '/actors',
   '/settings',
   '/tasks',
@@ -23,7 +24,10 @@ async function expectNoSeriousOrCriticalViolations(
     .map(({ id, impact, nodes }) => ({
       id,
       impact,
-      targets: nodes.map(({ target }) => target.join(' ')),
+      nodes: nodes.map(({ any, target }) => ({
+        target: target.join(' '),
+        details: any.map(({ data }) => data).filter(Boolean),
+      })),
     }))
 
   expect(violations).toEqual([])
@@ -41,16 +45,16 @@ for (const route of routes) {
   })
 }
 
-test('collapsed and expanded navigation remain accessible', async ({ page }) => {
+test('desktop rail and mobile bottom navigation remain accessible', async ({ page }) => {
   await page.goto('/projects')
-  const expand = page.getByRole('button', { name: '展开侧边栏' })
-  await expect(expand).toHaveAttribute('aria-expanded', 'false')
+  const navigation = page.getByRole('navigation', { name: '主导航' })
+  await expect(navigation).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:展开|收起)侧边栏/ }))
+    .toHaveCount(0)
   await expectNoSeriousOrCriticalViolations(page)
 
-  await expand.click()
-  await expect(
-    page.getByRole('button', { name: '收起侧边栏' }),
-  ).toHaveAttribute('aria-expanded', 'true')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(navigation).toBeVisible()
   await expectNoSeriousOrCriticalViolations(page)
 })
 
@@ -84,7 +88,7 @@ test('dark compact project workflows remain accessible', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-density', 'compact')
   await expectNoSeriousOrCriticalViolations(page)
 
-  await page.getByRole('link', { name: '项目' }).click()
+  await page.getByRole('link', { name: '项目', exact: true }).click()
   await expect(
     page.getByRole('heading', { level: 1, name: '全部项目' }),
   ).toBeVisible()
@@ -92,7 +96,7 @@ test('dark compact project workflows remain accessible', async ({ page }) => {
 
   await page.getByRole('link', { name: '负责人' }).click()
   await expect(
-    page.getByRole('heading', { level: 1, name: '负责人目录' }),
+    page.getByRole('heading', { level: 1, name: '协作者网络' }),
   ).toBeVisible()
   await expectNoSeriousOrCriticalViolations(page)
 })
@@ -102,7 +106,7 @@ test('dark create project validation errors remain accessible', async ({
 }) => {
   await page.goto('/settings')
   await page.getByLabel('深色').check()
-  await page.getByRole('link', { name: '项目' }).click()
+  await page.getByRole('link', { name: '项目', exact: true }).click()
   await page.getByRole('button', { name: '新建项目' }).click()
   const dialog = page.getByRole('dialog', { name: '新建项目' })
   await dialog.getByRole('button', { name: '创建项目' }).click()

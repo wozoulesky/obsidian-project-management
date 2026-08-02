@@ -121,6 +121,25 @@ afterEach(() => {
 })
 
 describe('actor routes', () => {
+  it('returns the configured local actor from the literal current route', async () => {
+    const local = defaultSeedDocument.actors[0]!
+    const { api } = createApi(createContext(true, local.id))
+
+    const response = await api
+      .get('/api/v1/actors/current')
+      .set('X-Request-Id', 'actor-current-1')
+      .expect(200)
+
+    expect(
+      apiSuccessEnvelopeSchema(persistedActorSchema).parse(response.body),
+    ).toEqual(response.body)
+    expect(response.body.data.id).toBe(local.id)
+    expect(response.body.data).toEqual(
+      persistedActorSchema.parse(response.body.data),
+    )
+    expectRequestEnvelope(response)
+  })
+
   it('creates only human actors and returns persisted output in the envelope', async () => {
     const { api } = createApi()
 

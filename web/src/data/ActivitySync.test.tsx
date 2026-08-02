@@ -170,10 +170,84 @@ describe('ActivitySync', () => {
       queryKey: projectQueryKeys.dashboardPrefixFor('project-2'),
     })
     expect(invalidate).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.workspaceDashboardPrefix,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
       queryKey: projectQueryKeys.projects,
     })
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: projectQueryKeys.actors,
+    })
+  })
+
+  it('refreshes collaboration resources and dashboards after MCP relay events', async () => {
+    vi.useFakeTimers()
+    const repository = createMockProjectRepository()
+    const actor = {
+      id: 'agent-1',
+      name: 'Agent',
+      kind: 'agent' as const,
+      role: 'dev-agent' as const,
+    }
+    vi.spyOn(repository, 'listActivities')
+      .mockResolvedValueOnce({ items: [], nextCursor: 'activity-initial' })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'activity-session',
+            actor,
+            action: 'Agent checked in',
+            operation: 'session.checkin',
+            createdAt: '2026-07-29T00:00:03.000Z',
+            source: 'mcp',
+            projectId: 'project-2',
+          },
+          {
+            id: 'activity-handoff',
+            actor,
+            action: 'Handoff updated',
+            operation: 'handoff.update',
+            createdAt: '2026-07-29T00:00:04.000Z',
+            source: 'mcp',
+            projectId: 'project-2',
+          },
+          {
+            id: 'activity-deliverable',
+            actor,
+            action: 'Deliverable recorded',
+            operation: 'deliverable.record',
+            createdAt: '2026-07-29T00:00:05.000Z',
+            source: 'mcp',
+            projectId: 'project-2',
+          },
+        ],
+        nextCursor: 'activity-deliverable',
+      })
+    const queryClient = new QueryClient()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    render(<ActivitySync intervalMs={3_000} />, {
+      wrapper: wrapper(queryClient, repository),
+    })
+    await act(async () => Promise.resolve())
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.sessionsFor('project-2'),
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.handoffsFor('project-2'),
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.deliverablesFor('project-2'),
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.dashboardPrefixFor('project-2'),
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: projectQueryKeys.workspaceDashboardPrefix,
     })
   })
 

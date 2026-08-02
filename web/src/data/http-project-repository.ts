@@ -166,6 +166,8 @@ export function createHttpProjectRepository(
 
   return {
     listActors: () => allPages(client, '/actors', persistedActorSchema),
+    getCurrentActor: () =>
+      client.request('/actors/current', persistedActorSchema),
     createHuman(input) {
       const body = createHumanActorInputSchema.parse(input)
       return client.request('/actors', persistedActorSchema, {
@@ -261,6 +263,13 @@ export function createHttpProjectRepository(
           project_id: projectId,
           days,
         }),
+        dashboardSnapshotSchema,
+      )
+    },
+
+    getWorkspaceDashboard(days = 30) {
+      return client.request(
+        appendSearch('/dashboard', { days }),
         dashboardSnapshotSchema,
       )
     },

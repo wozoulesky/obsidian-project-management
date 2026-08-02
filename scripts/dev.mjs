@@ -5,15 +5,15 @@ import {
   RuntimeControl,
   supervisedExitCode,
 } from './runtime-control.mjs'
+import { resolveNpmCommand } from './npm-command.mjs'
 
 const execFileAsync = promisify(execFile)
-const npmCli = process.env.npm_execpath
-  ?? (process.platform === 'win32' ? 'npm.cmd' : 'npm')
+const npmCommand = resolveNpmCommand()
 
 function spawnNpm(args) {
   return spawn(
-    npmCli === process.env.npm_execpath ? process.execPath : npmCli,
-    npmCli === process.env.npm_execpath ? [npmCli, ...args] : args,
+    npmCommand.command,
+    [...npmCommand.prefixArgs, ...args],
     {
       detached: process.platform !== 'win32',
       env: process.env,

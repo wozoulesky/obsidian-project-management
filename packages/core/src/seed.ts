@@ -208,9 +208,9 @@ export function createLegacyFixtureSeedDocument(
     handoffs: [],
     deliverables: [],
     settings: {
-      theme: 'system',
+      theme: 'dark',
       background: 'soft',
-      accent: 'blue',
+      accent: 'teal',
       density: 'comfortable',
       updatedAt: seedTimestamp,
       version: 1,

@@ -1,0 +1,154 @@
+@media (width < 48rem) {
+  .app-shell {
+    min-height: 100dvh;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-rail {
+    position: sticky;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    grid-row: 2;
+    grid-column: 1;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    overflow: hidden;
+    border-top: 1px solid var(--glass-line);
+    border-right: 0;
+  }
+
+  .app-rail__brand {
+    display: none;
+  }
+
+  .app-rail__nav {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-1);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .app-rail__group {
+    width: auto;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .app-rail__group--system {
+    margin-top: 0;
+  }
+
+  .app-rail__group-label,
+  .app-rail__label {
+    display: none;
+  }
+
+  .app-rail__link {
+    display: grid;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    padding-inline: 0;
+    place-items: center;
+  }
+
+  .app-rail__link--active::before {
+    inset: auto auto -0.5rem;
+    width: 1.25rem;
+    height: 0.1875rem;
+    border-radius: 2px 2px 0 0;
+    transform: none;
+  }
+
+  .app-rail__footer {
+    display: flex;
+    flex: 0 0 auto;
+    gap: var(--space-1);
+    padding: 0;
+  }
+
+  .app-rail__footer-card {
+    padding: 0;
+    background: transparent;
+    border: 0;
+  }
+
+  .app-rail__workspace-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .app-rail__workspace-card .app-rail__card-label,
+  .app-rail__owner-card {
+    display: none;
+  }
+
+  .app-rail__project-select {
+    width: 6.75rem;
+    height: 2.5rem;
+    padding-inline: var(--space-2);
+    background: rgb(255 255 255 / 4%);
+    border: 1px solid color-mix(in srgb, var(--rail-text) 14%, transparent);
+  }
+
+  .app-rail__quick-submit {
+    display: grid;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    place-items: center;
+  }
+
+  .app-rail__quick-submit span,
+  .app-rail__announcement {
+    display: none;
+  }
+
+  .app-main {
+    width: 100%;
+    max-width: 100%;
+    grid-row: 1;
+    grid-column: 1;
+    padding: 0;
+  }
+
+  .page-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .page-header__actions {
+    justify-content: flex-start;
+  }
+
+  .glass-panel {
+    padding: var(--space-4);
+    border-radius: var(--glass-card-radius);
+  }
+}
+
+@media (width < 30rem) {
+  .app-rail__workspace-card .app-rail__card-copy {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link,
+  .segmented-control__option {
+    transition: none;
+  }
+}

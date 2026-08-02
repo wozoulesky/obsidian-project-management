@@ -16,6 +16,25 @@
   验收。
 - 任一客户端失败时，命令返回非零是正确门禁行为；不得为了发布把它改成零。
 
+## v1.2.0 前端重构验收证据
+
+2026-08-02（Asia/Hong_Kong）在
+`E:\project_manage\.worktrees\task-console-prototype` 的候选提交上执行：
+
+| 检查 | 命令 | 当前证据 |
+|---|---|---|
+| 完整静态、单元、构建与文档门禁 | `npm run check` | PASS：Web 320、contracts 21、core 245（另 3 skipped）、MCP 25、server 191、Skill 6、脚本 6；lint/build/docs PASS |
+| 完整浏览器门禁 | `npm run test:e2e` | PASS：85 passed，16 个按项目/视口规则 intentional skipped，0 failed；包含桌面、紧凑和真实服务三套项目 |
+| 真实服务浏览器旅程 | 上述门禁的 `real-browser-journeys` 项目 | PASS：9/9，覆盖失败恢复、项目选择、项目/任务创建、负责人 CRUD、设置持久化与快速提交 SQLite 持久化 |
+| E2E 服务直接启动 | `node scripts/e2e-server.mjs --shutdown-after-ready` | PASS：Windows / Node.js 24 下完成构建、启动随机 API 与 4173 预览并正常关闭，无 `spawn EINVAL` |
+| 默认连接验证 | `node integrations/project-os/scripts/verify-connection.mjs --database <isolated-db>` | PASS：`contract-only`、stdio、27 tools、`sideEffects: []` |
+| smoke harness 自检 | `node scripts/smoke-clients.mjs --self-test` | PASS：audit、isolation、invocation adapter、process tree、redaction、evidence |
+| 空白/冲突标记 | `git diff --check` | PASS |
+
+v1.2.0 没有把浏览器自动化或 MCP contract-only 验证当作真实模型客户端写入
+证据。Codex、Claude Code、Kimi Code 的三客户端状态仍沿用下方已记录的真实
+边界，因此本版本**不得**描述为“三客户端完全验收”。
+
 ## v1.1.0 接力验收证据
 
 以下 focused 结果来自当前 v1.1 集成工作；它们证明接力链路的对应层，不替代

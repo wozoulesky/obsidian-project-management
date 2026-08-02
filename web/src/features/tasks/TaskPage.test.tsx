@@ -21,9 +21,11 @@ import {
   projectRepository,
 } from '../../data/query-hooks'
 import { filterTasks } from './TaskFilters'
+import { TaskContextPanel } from './TaskContextPanel'
 import { TaskInspector } from './TaskInspector'
 import { TaskPage } from './TaskPage'
 import { TaskTable } from './TaskTable'
+import tasksGlassCss from './tasks-glass.css?raw'
 
 const fixtureTasks = createFixtureSeed().tasks
 
@@ -78,6 +80,7 @@ function renderTaskPage() {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.useRealTimers()
   window.history.pushState({}, '', '/')
 })
 
@@ -129,6 +132,283 @@ describe('filterTasks', () => {
 })
 
 describe('TaskPage workflow', () => {
+  it('renders list, fan and persistent context before the independent timeline', async () => {
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({
+        id: 'done-early',
+        code: 'TASK-DONE',
+        title: '已完成早期任务',
+        dueDate: '2026-07-01',
+        priority: 'P3',
+        status: 'done',
+      }),
+      task({
+        id: 'overdue-p0',
+        code: 'TASK-RISK',
+        title: '首要风险任务',
+        dueDate: '2026-07-30',
+        priority: 'P0',
+        status: 'overdue',
+      }),
+    ])
+    const { container } = renderApp(<TaskPage />)
+
+    const workspace = await screen.findByTestId('task-workspace')
+    const filterToolbar = screen.getByTestId('task-filter-toolbar')
+    expect(
+      within(filterToolbar).getByRole('region', { name: '任务筛选' }),
+    ).toBeVisible()
+    expect(
+      Array.from(workspace.children).map((node) =>
+        node.getAttribute('data-slot'),
+      ),
+    ).toEqual(['list', 'fan', 'context'])
+    const list = within(workspace).getByRole('region', { name: '任务列表' })
+    expect(list).toBeVisible()
+    expect(within(list).queryByRole('region', { name: '任务筛选' }))
+      .not.toBeInTheDocument()
+    expect(
+      within(workspace).getByRole('region', { name: '关键任务扇面' }),
+    ).toBeVisible()
+    const context = within(workspace).getByRole('region', {
+      name: '智能任务上下文',
+    })
+    expect(context).toHaveTextContent('首要风险任务')
+    expect(context.querySelector('.task-context__scroll')).toBeVisible()
+    expect(context).toHaveTextContent('项目 atlas')
+    const synchronizedTriggers = within(workspace).getAllByRole('button', {
+      name: /首要风险任务/,
+    })
+    expect(synchronizedTriggers).toHaveLength(2)
+    synchronizedTriggers.forEach((trigger) => {
+      expect(trigger).toHaveAttribute('aria-pressed', 'true')
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(window.location.search).not.toContain('selected=')
+
+    const timeline = screen.getByRole('region', { name: '独立交付时间线' })
+    expect(timeline).toBe(container.querySelector('.task-workspace')?.nextElementSibling)
+    expect(filterToolbar.nextElementSibling).toBe(workspace)
+  })
+
+  it('shortens opaque project ids in the persistent context', () => {
+    const opaqueProjectId = '7ff2589e-b92c-44e2-812c-00997cdd4527'
+    renderApp(
+      <TaskContextPanel
+        task={task({ projectId: opaqueProjectId })}
+      />,
+    )
+
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    expect(context).not.toHaveTextContent(opaqueProjectId)
+    expect(context).toHaveTextContent('项目 7ff2589e…4527')
+  })
+
+  it('uses the shared glass header and derives four metrics from task data', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 6, 28, 12))
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({
+        id: 'today',
+        code: 'TASK-TODAY',
+        title: '今日交付',
+        dueDate: '2026-07-28',
+        status: 'not_started',
+        progress: 0,
+      }),
+      task({
+        id: 'active',
+        code: 'TASK-ACTIVE',
+        title: '持续推进',
+        dueDate: '2026-07-30',
+      }),
+      task({
+        id: 'done',
+        code: 'TASK-DONE',
+        title: '完成交付',
+        status: 'done',
+        progress: 100,
+      }),
+      task({
+        id: 'overdue',
+        code: 'TASK-OVERDUE',
+        title: '风险任务',
+        status: 'overdue',
+      }),
+    ])
+    const { container } = renderApp(<TaskPage />)
+
+    expect(
+      await screen.findByRole('heading', { name: '任务控制台' }),
+    ).toBeVisible()
+    expect(container.querySelector('.page-header')).toBeInTheDocument()
+    const metrics = screen.getByRole('group', { name: '任务关键指标' })
+    expect(metrics).toHaveClass('metric-grid')
+    const values = Object.fromEntries(
+      Array.from(metrics.querySelectorAll<HTMLElement>('[data-metric]')).map(
+        (metric) => [
+          metric.dataset.metric,
+          within(metric).getByTestId('metric-value').textContent,
+        ],
+      ),
+    )
+    expect(values).toEqual({
+      今日待办: '1',
+      进行中: '1',
+      已完成: '1',
+      逾期: '1',
+    })
+    expect(metrics.querySelectorAll('.glass-panel')).toHaveLength(4)
+  })
+
+  it('derives today tasks from the current local business date', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 6, 28, 12))
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      task({
+        id: 'july-28',
+        code: 'TASK-JULY-28',
+        title: '七月二十八日任务',
+        dueDate: '2026-07-28',
+        status: 'not_started',
+        progress: 0,
+      }),
+      task({
+        id: 'july-29-a',
+        code: 'TASK-JULY-29-A',
+        title: '七月二十九日任务一',
+        dueDate: '2026-07-29',
+        status: 'not_started',
+        progress: 0,
+      }),
+      task({
+        id: 'july-29-b',
+        code: 'TASK-JULY-29-B',
+        title: '七月二十九日任务二',
+        dueDate: '2026-07-29',
+        status: 'in_progress',
+      }),
+    ])
+    const { rerender } = renderApp(<TaskPage />)
+
+    await screen.findByRole('heading', { name: '任务控制台' })
+    const todayValue = () => {
+      const metric = screen.getByText('今日待办').closest('[data-metric]')
+      expect(metric).not.toBeNull()
+      return within(metric as HTMLElement).getByTestId('metric-value')
+    }
+    expect(todayValue()).toHaveTextContent('1')
+    expect(screen.getByText(/以 2026-07-28 为今日基准/)).toBeVisible()
+
+    vi.setSystemTime(new Date(2026, 6, 29, 12))
+    rerender(<TaskPage />)
+
+    expect(todayValue()).toHaveTextContent('2')
+    expect(screen.getByText(/以 2026-07-29 为今日基准/)).toBeVisible()
+  })
+
+  it('keeps the complete filtered compact list beside the six-card fan', async () => {
+    renderApp(<TaskPage />)
+
+    const fan = await screen.findByRole('region', { name: '关键任务扇面' })
+    expect(within(fan).getAllByRole('button')).toHaveLength(6)
+    const list = screen.getByRole('region', { name: '任务列表' })
+    expect(
+      within(list).getByRole('button', { name: '查看 甘特图渲染' }),
+    ).toBeVisible()
+    expect(within(list).getAllByRole('button', { name: /^查看 / }))
+      .toHaveLength(fixtureTasks.length)
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('links a fan selection through the URL, list, and persistent context', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, {
+      route: '/tasks?priority=P0&sort=due_desc',
+    })
+
+    const fanTrigger = await screen.findByRole('button', {
+      name: '选择 TASK-047 断线恢复测试',
+    })
+    await user.click(fanTrigger)
+
+    expect(window.location.search).toContain('priority=P0')
+    expect(window.location.search).toContain('sort=due_desc')
+    expect(window.location.search).toContain('selected=task-047')
+    expect(fanTrigger).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '查看 断线恢复测试' }))
+      .toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('断线恢复测试')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps timeline range local and writes timeline selection without dropping filters', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, {
+      route: '/tasks?priority=P1&sort=due_desc',
+    })
+
+    const workspace = await screen.findByTestId('task-workspace')
+    const listCount = within(workspace).getAllByRole('button', {
+      name: /^查看 /,
+    }).length
+    const context = within(workspace).getByRole('region', {
+      name: '智能任务上下文',
+    })
+    const initialContext = context.textContent
+    const timeline = screen.getByRole('region', { name: '独立交付时间线' })
+
+    await user.click(within(timeline).getByRole('button', { name: '季度' }))
+
+    expect(window.location.search).toBe('?priority=P1&sort=due_desc')
+    expect(within(workspace).getAllByRole('button', { name: /^查看 / }))
+      .toHaveLength(listCount)
+    expect(context.textContent).toBe(initialContext)
+
+    await user.click(within(timeline).getByRole('button', {
+      name: '选择 TASK-063 甘特图渲染',
+    }))
+    expect(window.location.search).toContain('priority=P1')
+    expect(window.location.search).toContain('sort=due_desc')
+    expect(window.location.search).toContain('selected=task-063')
+    expect(context).toHaveTextContent('甘特图渲染')
+  })
+
+  it('keeps focus on the fan trigger without opening an inspector dialog', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, {
+      route: '/tasks?priority=P0&sort=due_desc',
+    })
+
+    const fanTrigger = await screen.findByRole('button', {
+      name: '选择 TASK-047 断线恢复测试',
+    })
+    expect(fanTrigger).toHaveAttribute('id', 'task-fan-trigger-task-047')
+    await user.click(fanTrigger)
+
+    expect(fanTrigger).toHaveFocus()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps page width bounded while signature regions own their scrolling', () => {
+    expect(tasksGlassCss).toMatch(
+      /\.task-page\s*{[^}]*overflow-x:\s*clip/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-fan__scroll,[^}]*\.delivery-timeline__scroll\s*{[^}]*overflow-x:\s*auto/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-workspace\s*{[^}]*height:\s*clamp\(350px,\s*42vh,\s*380px\)/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-context__scroll\s*{[^}]*min-height:\s*0[^}]*overflow-y:\s*auto/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-filter-toolbar\s+\.task-filters\s*{[^}]*grid-template-columns:[^}]*overflow:\s*visible/s,
+    )
+  })
+
   it('uses shared loading, error with retry, and empty states', async () => {
     const user = userEvent.setup()
     vi.spyOn(projectRepository, 'listTasks').mockImplementationOnce(
@@ -196,62 +476,63 @@ describe('TaskPage workflow', () => {
     ).toBeVisible()
   })
 
-  it('opens a valid visible task from the selected query parameter', async () => {
+  it('shows a valid visible task from the selected query parameter in context', async () => {
     renderApp(<AppRoutes />, {
       route: '/tasks?selected=task-047',
     })
 
-    const dialog = await screen.findByRole('dialog', {
-      name: '断线恢复测试',
+    const context = await screen.findByRole('region', {
+      name: '智能任务上下文',
     })
-    expect(within(dialog).getByText('TASK-047')).toBeVisible()
+    expect(within(context).getByText('TASK-047')).toBeVisible()
+    expect(context).toHaveTextContent('断线恢复测试')
     expect(
       screen.getByRole('button', { name: '查看 断线恢复测试' }),
     ).toBeVisible()
   })
 
-  it('ignores missing, invalid, and filter-hidden selected tasks', async () => {
+  it('falls back from missing, invalid, and filter-hidden selections', async () => {
     const missing = renderApp(<AppRoutes />, {
       route: '/tasks?selected=missing-task',
     })
-    await screen.findByRole('table', { name: '任务列表' })
+    expect(await screen.findByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('断线恢复测试')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     missing.unmount()
 
     const hidden = renderApp(<AppRoutes />, {
       route: '/tasks?status=done&selected=task-047',
     })
-    await screen.findByRole('table', { name: '任务列表' })
+    expect(await screen.findByRole('region', { name: '智能任务上下文' }))
+      .not.toHaveTextContent('断线恢复测试')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     hidden.unmount()
 
     renderApp(<AppRoutes />, {
       route: '/tasks?selected=%3Cscript%3E',
     })
-    await screen.findByRole('table', { name: '任务列表' })
+    expect(await screen.findByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('断线恢复测试')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('stores selection in the URL and closes it without dropping filters', async () => {
+  it('stores compact-list selection in the URL without dropping filters', async () => {
     const user = userEvent.setup()
     renderApp(<AppRoutes />, {
       route: '/tasks?priority=P0&sort=due_desc',
     })
 
-    await user.click(
-      await screen.findByRole('button', { name: '查看 断线恢复测试' }),
-    )
+    const listTrigger = await screen.findByRole('button', {
+      name: '查看 MCP 权限校验',
+    })
+    expect(listTrigger).toHaveAttribute('id', 'task-list-trigger-task-051')
+    await user.click(listTrigger)
     expect(window.location.search).toContain('priority=P0')
     expect(window.location.search).toContain('sort=due_desc')
-    expect(window.location.search).toContain('selected=task-047')
-
-    const dialog = screen.getByRole('dialog', { name: '断线恢复测试' })
-    await user.click(
-      within(dialog).getByRole('button', { name: '关闭 断线恢复测试' }),
-    )
-    expect(window.location.search).toContain('priority=P0')
-    expect(window.location.search).toContain('sort=due_desc')
-    expect(window.location.search).not.toContain('selected=')
+    expect(window.location.search).toContain('selected=task-051')
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('MCP 权限校验')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('writes the overdue filter to the URL and only shows overdue work', async () => {
@@ -290,23 +571,22 @@ describe('TaskPage workflow', () => {
     ).toBeVisible()
   })
 
-  it('closes and clears an inspector hidden by a new filter', async () => {
+  it('falls back to visible persistent context when a filter hides selection', async () => {
     const user = userEvent.setup()
     renderApp(<AppRoutes />, { route: '/tasks' })
 
     await user.click(
       await screen.findByRole('button', { name: '查看 MCP 权限校验' }),
     )
-    expect(
-      screen.getByRole('dialog', { name: 'MCP 权限校验' }),
-    ).toBeVisible()
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('MCP 权限校验')
 
     await user.click(screen.getByRole('button', { name: '已延期' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { name: '任务工作台' }),
-    ).toHaveFocus()
+    expect(window.location.search).not.toContain('selected=')
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('断线恢复测试')
 
     await user.click(screen.getByRole('button', { name: '已延期' }))
     expect(
@@ -316,23 +596,26 @@ describe('TaskPage workflow', () => {
   })
 
   it('updates MCP permission validation to 80 percent', async () => {
+    const updateProgress = vi.spyOn(projectRepository, 'updateTaskProgress')
     const user = userEvent.setup()
     renderApp(<AppRoutes />, { route: '/tasks' })
 
     await user.click(
       await screen.findByRole('button', { name: '查看 MCP 权限校验' }),
     )
-    const dialog = screen.getByRole('dialog', { name: 'MCP 权限校验' })
-    const progress = within(dialog).getByRole('spinbutton', {
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    const progress = within(context).getByRole('spinbutton', {
       name: '任务进度',
     })
     await user.clear(progress)
     await user.type(progress, '80')
-    await user.click(within(dialog).getByRole('button', { name: '提交进度' }))
+    await user.click(within(context).getByRole('button', { name: '提交进度' }))
 
-    await waitFor(() => {
-      expect(screen.getAllByText('80%').length).toBeGreaterThan(0)
-    })
+    await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(
+      'task-051',
+      expect.objectContaining({ progress: 80 }),
+    ))
+    expect(progress).toHaveValue(80)
   })
 
   it('rejects non-integer progress and retains the entered value', async () => {
@@ -342,15 +625,15 @@ describe('TaskPage workflow', () => {
     await user.click(
       await screen.findByRole('button', { name: '查看 MCP 权限校验' }),
     )
-    const dialog = screen.getByRole('dialog', { name: 'MCP 权限校验' })
-    const progress = within(dialog).getByRole('spinbutton', {
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    const progress = within(context).getByRole('spinbutton', {
       name: '任务进度',
     })
     await user.clear(progress)
     await user.type(progress, '80.5')
-    await user.click(within(dialog).getByRole('button', { name: '提交进度' }))
+    await user.click(within(context).getByRole('button', { name: '提交进度' }))
 
-    expect(within(dialog).getByRole('alert')).toHaveTextContent('0 到 100 的整数')
+    expect(within(context).getByRole('alert')).toHaveTextContent('0 到 100 的整数')
     expect(progress).toHaveValue(80.5)
   })
 
@@ -364,17 +647,17 @@ describe('TaskPage workflow', () => {
     await user.click(
       await screen.findByRole('button', { name: '查看 MCP 权限校验' }),
     )
-    const dialog = screen.getByRole('dialog', { name: 'MCP 权限校验' })
-    const progress = within(dialog).getByRole('spinbutton', {
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    const progress = within(context).getByRole('spinbutton', {
       name: '任务进度',
     })
-    const note = within(dialog).getByRole('textbox', { name: '进度备注' })
+    const note = within(context).getByRole('textbox', { name: '进度备注' })
     await user.clear(progress)
     await user.type(progress, '80')
     await user.type(note, '等待服务恢复')
-    await user.click(within(dialog).getByRole('button', { name: '提交进度' }))
+    await user.click(within(context).getByRole('button', { name: '提交进度' }))
 
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    expect(await within(context).findByRole('alert')).toHaveTextContent(
       '网络暂时不可用',
     )
     expect(progress).toHaveValue(80)
@@ -424,7 +707,7 @@ describe('TaskPage workflow', () => {
     ).toHaveValue('')
   })
 
-  it('restores focus to the latest task trigger after switching tasks', async () => {
+  it('switches the persistent form to the latest compact-list selection', async () => {
     const user = userEvent.setup()
     renderApp(<AppRoutes />, { route: '/tasks' })
 
@@ -432,30 +715,22 @@ describe('TaskPage workflow', () => {
       name: '查看 MCP 权限校验',
     })
     await user.click(firstTrigger)
-    expect(
-      screen.getByRole('dialog', { name: 'MCP 权限校验' }),
-    ).toBeVisible()
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('MCP 权限校验')
 
     const latestTrigger = screen.getByRole('button', {
       name: '查看 断线恢复测试',
     })
     await user.click(latestTrigger)
 
-    const latestDialog = screen.getByRole('dialog', {
-      name: '断线恢复测试',
+    const latestContext = screen.getByRole('region', {
+      name: '智能任务上下文',
     })
     expect(
-      within(latestDialog).getByRole('spinbutton', { name: '任务进度' }),
+      within(latestContext).getByRole('spinbutton', { name: '任务进度' }),
     ).toHaveValue(45)
-    await user.click(
-      within(latestDialog).getByRole('button', {
-        name: '关闭 断线恢复测试',
-      }),
-    )
-
-    expect(
-      screen.getByRole('button', { name: '查看 断线恢复测试' }),
-    ).toHaveFocus()
+    expect(latestTrigger).toHaveFocus()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('uses the shared six-column grid in the virtual table branch', () => {

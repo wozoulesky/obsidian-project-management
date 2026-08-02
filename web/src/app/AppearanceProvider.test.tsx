@@ -89,6 +89,23 @@ describe('AppearanceProvider reconciliation', () => {
     document.documentElement.removeAttribute('data-density')
   })
 
+  it('uses the approved dark glass appearance when no cache or API is available yet', () => {
+    const repository = createMockProjectRepository()
+    repository.getSettings = vi.fn(() =>
+      new Promise<PersistedAppSettings>(() => undefined),
+    )
+
+    render(<Harness repository={repository}><Probe /></Harness>)
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(document.documentElement).toHaveAttribute('data-background', 'soft')
+    expect(document.documentElement).toHaveAttribute('data-accent', 'teal')
+    expect(document.documentElement).toHaveAttribute(
+      'data-density',
+      'comfortable',
+    )
+  })
+
   it('uses local cache synchronously, then applies the API baseline while clean', async () => {
     localStorage.setItem('project-os:appearance', JSON.stringify({
       theme: 'dark',
@@ -107,6 +124,12 @@ describe('AppearanceProvider reconciliation', () => {
 
     render(<Harness repository={repository}><Probe /></Harness>)
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(document.documentElement).toHaveAttribute(
+      'data-background',
+      'gradient',
+    )
+    expect(document.documentElement).toHaveAttribute('data-accent', 'orange')
+    expect(document.documentElement).toHaveAttribute('data-density', 'compact')
 
     await act(async () => resolveSettings?.(remoteLight))
 

@@ -5,6 +5,11 @@ test('quick submit writes to SQLite and remains visible after reload', async ({
   runtime,
 }) => {
   await page.goto(new URL('/dashboard', runtime.baseURL).href)
+  const workspaceSelector = page.getByRole('combobox', {
+    name: '选择当前工作区',
+  })
+  await workspaceSelector.selectOption(runtime.seed.defaultProjectId)
+  await expect(workspaceSelector).toHaveValue(runtime.seed.defaultProjectId)
   await page.getByRole('button', { name: '快速提交' }).click()
   const dialog = page.getByRole('dialog', { name: '快速提交' })
   await dialog
@@ -25,9 +30,15 @@ test('quick submit writes to SQLite and remains visible after reload', async ({
 
   await page.reload()
   await page.goto(new URL('/tasks', runtime.baseURL).href)
+  await expect(workspaceSelector).toHaveValue(runtime.seed.defaultProjectId)
+  await page.getByRole('button', {
+    name: `查看 ${runtime.seed.taskTitle}`,
+  }).click()
+  const taskContext = page.getByRole('region', { name: '智能任务上下文' })
   await expect(
-    page.getByRole('progressbar', {
-      name: `${runtime.seed.taskTitle}进度 80%`,
-    }),
-  ).toHaveAttribute('aria-valuenow', '80')
+    taskContext.getByRole('heading', { name: runtime.seed.taskTitle }),
+  ).toBeVisible()
+  await expect(
+    taskContext.getByRole('spinbutton', { name: '任务进度' }),
+  ).toHaveValue('80')
 })

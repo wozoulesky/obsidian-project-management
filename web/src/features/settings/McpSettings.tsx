@@ -61,7 +61,7 @@ export function McpSettings() {
       className="settings-card settings-card--wide"
     >
       <header>
-        <h2 id="mcp-settings-title">MCP</h2>
+        <h3 id="mcp-settings-title">连接与令牌</h3>
         <p>本机 Streamable HTTP 端点和访问令牌。令牌明文不会持久化。</p>
       </header>
       <dl className="settings-facts settings-facts--inline">
@@ -118,33 +118,39 @@ export function McpSettings() {
         </div>
       )}
 
-      <div className="settings-token-list" aria-label="访问令牌">
-        {tokens.data?.length === 0 && <p>尚未签发访问令牌。</p>}
-        {tokens.data?.map((token) => (
-          <article key={token.id}>
-            <div>
-              <strong>{token.name}</strong>
-              <small>
-                创建于 {displayTime(token.createdAt)} · 最近使用 {
-                  displayTime(token.lastUsedAt)
-                }
-              </small>
-            </div>
-            {token.revokedAt
-              ? <span>已撤销</span>
-              : (
-                  <button
-                    className="button button--ghost"
-                    disabled={revoke.isPending}
-                    onClick={() => void revokeToken(token.id, token.version)}
-                    type="button"
-                  >
-                    撤销
-                  </button>
-                )}
-          </article>
-        ))}
-      </div>
+      <details aria-label="已签发令牌" className="settings-disclosure">
+        <summary>
+          <span>已签发令牌</span>
+          <small>{tokens.data?.length ?? 0} 个</small>
+        </summary>
+        <div className="settings-token-list" aria-label="访问令牌">
+          {tokens.data?.length === 0 && <p>尚未签发访问令牌。</p>}
+          {tokens.data?.map((token) => (
+            <article key={token.id}>
+              <div>
+                <strong>{token.name}</strong>
+                <small>
+                  创建于 {displayTime(token.createdAt)} · 最近使用 {
+                    displayTime(token.lastUsedAt)
+                  }
+                </small>
+              </div>
+              {token.revokedAt
+                ? <span>已撤销</span>
+                : (
+                    <button
+                      className="button button--ghost"
+                      disabled={revoke.isPending}
+                      onClick={() => void revokeToken(token.id, token.version)}
+                      type="button"
+                    >
+                      撤销
+                    </button>
+                  )}
+            </article>
+          ))}
+        </div>
+      </details>
       {status && <p role="status">{status}</p>}
       {error && <p role="alert">{error}</p>}
     </section>

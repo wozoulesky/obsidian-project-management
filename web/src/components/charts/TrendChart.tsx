@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 
 import type { TrendPoint } from '../../data/domain'
 import { EChart } from './EChart'
+import { useAppearanceTokens } from './useAppearanceTokens'
 
 export type TrendChartProps = {
   points: TrendPoint[]
@@ -11,6 +12,13 @@ export type TrendChartProps = {
 type TooltipDatum = {
   value?: Partial<TrendPoint>
 }
+
+const chartColorTokens = {
+  grid: { fallback: '#66716a', property: '--chart-grid' },
+  primary: { fallback: '#37f58a', property: '--chart-primary' },
+  text: { fallback: '#8d9791', property: '--chart-text' },
+  warning: { fallback: '#eeb66b', property: '--chart-warning' },
+} as const
 
 function tooltipFormatter(params: unknown): string {
   const first = Array.isArray(params) ? params[0] : params
@@ -29,6 +37,7 @@ function tooltipFormatter(params: unknown): string {
 
 export function TrendChart({ points }: TrendChartProps) {
   const latestPoint = points.at(-1)
+  const colors = useAppearanceTokens(chartColorTokens)
   const option = useMemo<EChartsCoreOption>(
     () => ({
       animationDuration: 240,
@@ -48,7 +57,7 @@ export function TrendChart({ points }: TrendChartProps) {
       },
       legend: {
         bottom: 0,
-        textStyle: { color: '#6b7280' },
+        textStyle: { color: colors.text },
       },
       tooltip: {
         trigger: 'axis',
@@ -57,14 +66,14 @@ export function TrendChart({ points }: TrendChartProps) {
       },
       xAxis: {
         type: 'category',
-        axisLine: { lineStyle: { color: '#e1e5ea' } },
-        axisLabel: { color: '#6b7280' },
+        axisLine: { lineStyle: { color: colors.grid } },
+        axisLabel: { color: colors.text },
       },
       yAxis: {
         type: 'value',
         axisLine: { show: false },
-        axisLabel: { color: '#6b7280' },
-        splitLine: { lineStyle: { color: '#e1e5ea' } },
+        axisLabel: { color: colors.text },
+        splitLine: { lineStyle: { color: colors.grid } },
       },
       series: [
         {
@@ -72,21 +81,21 @@ export function TrendChart({ points }: TrendChartProps) {
           type: 'line',
           encode: { x: 'date', y: 'actual' },
           showSymbol: false,
-          lineStyle: { color: '#2f91f7', type: 'solid', width: 2 },
-          itemStyle: { color: '#2f91f7' },
-          areaStyle: { color: '#2f91f7', opacity: 0.12 },
+          lineStyle: { color: colors.primary, type: 'solid', width: 2 },
+          itemStyle: { color: colors.primary },
+          areaStyle: { color: colors.primary, opacity: 0.12 },
         },
         {
           name: '计划完成',
           type: 'line',
           encode: { x: 'date', y: 'planned' },
           showSymbol: false,
-          lineStyle: { color: '#6b7280', type: 'dashed', width: 2 },
-          itemStyle: { color: '#6b7280' },
+          lineStyle: { color: colors.warning, type: 'dashed', width: 2 },
+          itemStyle: { color: colors.warning },
         },
       ],
     }),
-    [points],
+    [colors, points],
   )
 
   return (

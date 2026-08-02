@@ -70,18 +70,12 @@ export function AppearanceSettings() {
 
   return (
     <section
-      aria-labelledby="appearance-settings-title"
+      aria-label="显示偏好"
       className="settings-card settings-card--wide"
     >
-      <header>
-        <h2 id="appearance-settings-title">外观</h2>
-        <p>
-          选择预设后立即预览；点击保存才会同步到服务端。未保存草稿仅在当前页面保留。
-        </p>
-      </header>
-      <div className="appearance-options">
+      <div className="appearance-options settings-control-grid">
         {choices.map((choice) => (
-          <fieldset key={choice.key}>
+          <fieldset className="settings-control-row" key={choice.key}>
             <legend>{choice.legend}</legend>
             <div className="appearance-options__group">
               {choice.values.map(({ value, label }) => (

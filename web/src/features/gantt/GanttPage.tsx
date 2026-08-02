@@ -6,13 +6,16 @@ import {
   type UIEvent,
 } from 'react'
 
-import { EntityInspector } from '../../components/data/EntityInspector'
 import {
   EmptyState,
   ErrorState,
   LoadingState,
   RefreshState,
 } from '../../components/data/DataState'
+import { MetricGrid } from '../../components/layout/MetricGrid'
+import { PageHeader } from '../../components/layout/PageHeader'
+import { GlassPanel } from '../../components/ui/GlassPanel'
+import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import type { Task } from '../../data/domain'
 import {
   useGanttTasks,
@@ -30,6 +33,8 @@ import {
   type GanttRange,
   type GanttVisibleRow,
 } from './GanttTimeline'
+import { GanttContext } from './GanttContext'
+import './gantt-glass.css'
 
 const AS_OF = '2026-07-28'
 const ROW_HEIGHT = '2.75rem'
@@ -41,11 +46,11 @@ const FALLBACK_VISIBLE_ROWS = Math.ceil(
   FALLBACK_VIEWPORT_HEIGHT / ROW_HEIGHT_PX,
 )
 const EMPTY_TASKS: Task[] = []
-const scaleLabels = {
-  day: '日',
-  week: '周',
-  month: '月',
-} as const satisfies Record<GanttScale, string>
+const scaleOptions = [
+  { label: '日', value: 'day' },
+  { label: '周', value: 'week' },
+  { label: '月', value: 'month' },
+] as const satisfies ReadonlyArray<{ label: string; value: GanttScale }>
 
 interface PendingProposal extends GanttTaskDates {
   kind: DateProposalKind
@@ -98,6 +103,27 @@ function ganttRange(
   }
 }
 
+function ganttMetrics(tasks: readonly Task[]) {
+  return [
+    { key: 'planned', label: '计划任务', value: tasks.length },
+    {
+      key: 'active',
+      label: '进行中',
+      value: tasks.filter((task) => task.status === 'in_progress').length,
+    },
+    {
+      key: 'done',
+      label: '已完成',
+      value: tasks.filter((task) => task.status === 'done').length,
+    },
+    {
+      key: 'overdue',
+      label: '逾期',
+      value: tasks.filter((task) => task.status === 'overdue').length,
+    },
+  ]
+}
+
 function groupRows(
   tasks: readonly Task[],
   collapsedMilestones: ReadonlySet<string>,
@@ -148,53 +174,6 @@ function proposalSummary(task: Task, proposal: PendingProposal): string {
   )}–${formatChineseDate(proposal.dueDate)}`
 }
 
-function GanttTaskInspector({
-  onClose,
-  returnFocusId,
-  task,
-}: {
-  onClose: () => void
-  returnFocusId: string
-  task: Task
-}) {
-  return (
-    <EntityInspector
-      fallbackFocusId="gantt-page-heading"
-      onClose={onClose}
-      returnFocusId={returnFocusId}
-      title={task.title}
-    >
-      <div className="gantt-inspector">
-        <dl>
-          <div>
-            <dt>编号</dt>
-            <dd>{task.code}</dd>
-          </div>
-          <div>
-            <dt>负责人</dt>
-            <dd>{task.assignee.name}</dd>
-          </div>
-          <div>
-            <dt>排期</dt>
-            <dd>
-              {task.startDate}–{task.dueDate}
-            </dd>
-          </div>
-          <div>
-            <dt>进度</dt>
-            <dd>{task.progress}%</dd>
-          </div>
-          <div>
-            <dt>里程碑</dt>
-            <dd>{task.milestoneId}</dd>
-          </div>
-        </dl>
-        <p>{task.description}</p>
-      </div>
-    </EntityInspector>
-  )
-}
-
 export function GanttPage() {
   const tasksQuery = useGanttTasks()
   const updateDates = useUpdateTaskDates()
@@ -204,9 +183,6 @@ export function GanttPage() {
   )
   const [taskTreeCollapsed, setTaskTreeCollapsed] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
-  const [selectedTaskTriggerId, setSelectedTaskTriggerId] = useState<
-    string | null
-  >(null)
   const [proposal, setProposal] = useState<PendingProposal | null>(null)
   const [rowWindow, setRowWindow] = useState({
     end: FALLBACK_VISIBLE_ROWS + ROW_OVERSCAN,
@@ -222,6 +198,7 @@ export function GanttPage() {
     [collapsedMilestones, tasks],
   )
   const range = useMemo(() => ganttRange(tasks, scale), [scale, tasks])
+  const metrics = ganttMetrics(tasks)
   const shouldVirtualize = visibleRows.length > VIRTUALIZE_AFTER
   const windowStart = shouldVirtualize
     ? Math.min(rowWindow.start, Math.max(0, visibleRows.length - 1))
@@ -234,8 +211,15 @@ export function GanttPage() {
     () => new Map(visibleRows.map((row, index) => [row.id, index])),
     [visibleRows],
   )
+  const defaultTask =
+    tasks.find(
+      (task) =>
+        parseIsoDate(task.startDate) !== null &&
+        parseIsoDate(task.dueDate) !== null,
+    ) ?? tasks[0] ?? null
   const selectedTask =
-    tasks.find((task) => task.id === selectedTaskId) ?? null
+    tasks.find((task) => task.id === selectedTaskId) ?? defaultTask
+  const effectiveSelectedTaskId = selectedTask?.id ?? null
   const proposalTask =
     tasks.find((task) => task.id === proposal?.taskId) ?? null
 
@@ -360,44 +344,68 @@ export function GanttPage() {
         isError={tasksQuery.isError}
         isFetching={tasksQuery.isFetching}
       />
-      <header className="gantt-page__header">
-        <div>
-          <p className="gantt-page__eyebrow">PLAN / DEPENDENCY</p>
-          <h1 id="gantt-page-heading" tabIndex={-1}>
-            项目排期
-          </h1>
-          <p data-testid="gantt-range">
-            {range.start}–{range.end}
-          </p>
-        </div>
-        <div className="gantt-page__controls">
-          <div aria-label="时间轴刻度" className="gantt-scale">
-            {(Object.keys(scaleLabels) as GanttScale[]).map((value) => (
-              <button
-                aria-pressed={scale === value}
-                key={value}
-                onClick={() => setScale(value)}
-                type="button"
-              >
-                {scaleLabels[value]}
-              </button>
-            ))}
+      <PageHeader
+        actions={(
+          <div className="gantt-page__controls">
+            <SegmentedControl
+              ariaLabel="时间轴刻度"
+              onChange={(value) => setScale(value as GanttScale)}
+              options={scaleOptions}
+              value={scale}
+            />
+            <button
+              aria-expanded={!taskTreeCollapsed}
+              className="button button--ghost gantt-task-tree-toggle"
+              onClick={() => setTaskTreeCollapsed((current) => !current)}
+              type="button"
+            >
+              {taskTreeCollapsed ? '展开任务树' : '折叠任务树'}
+            </button>
           </div>
-          <button
-            aria-expanded={!taskTreeCollapsed}
-            className="button button--ghost gantt-task-tree-toggle"
-            onClick={() => setTaskTreeCollapsed((current) => !current)}
-            type="button"
-          >
-            {taskTreeCollapsed ? '展开任务树' : '折叠任务树'}
-          </button>
-        </div>
-      </header>
+        )}
+        eyebrow="PLAN / DEPENDENCY"
+        subtitle={(
+          <span className="gantt-page__subtitle">
+            <span>校准任务范围、依赖、进度与截止风险</span>
+            <span data-testid="gantt-range">
+              {range.start}–{range.end}
+            </span>
+          </span>
+        )}
+        title={(
+          <span id="gantt-page-heading" tabIndex={-1}>
+            甘特排程
+          </span>
+        )}
+      />
 
-      {tasks.length === 0 ? (
-        <EmptyState title="当前项目暂无排期任务" />
-      ) : (
-        <div className="gantt-page__workspace data-grid-with-inspector">
+      <MetricGrid ariaLabel="甘特关键指标" className="gantt-metrics">
+        {metrics.map((metric) => (
+          <GlassPanel
+            as="div"
+            className={`gantt-metric gantt-metric--${metric.key}`}
+            data-metric={metric.label}
+            key={metric.key}
+          >
+            <span>{metric.label}</span>
+            <strong data-testid="gantt-metric-value">{metric.value}</strong>
+          </GlassPanel>
+        ))}
+      </MetricGrid>
+
+      <ul aria-label="排期状态图例" className="gantt-legend">
+        <li><span className="gantt-legend__swatch gantt-legend__swatch--active" />进行中</li>
+        <li><span className="gantt-legend__swatch gantt-legend__swatch--overdue" />逾期</li>
+        <li><span className="gantt-legend__swatch gantt-legend__swatch--done" />已完成</li>
+        <li><span className="gantt-legend__swatch gantt-legend__swatch--pending" />待开始</li>
+      </ul>
+
+      <div className="gantt-signature" data-testid="gantt-signature">
+        <GlassPanel ariaLabel="甘特排程工作区" className="gantt-stage">
+          {tasks.length === 0 ? (
+            <EmptyState title="当前项目暂无排期任务" />
+          ) : (
+          <div className="gantt-page__workspace">
           <div
             aria-label="甘特图排期滚动区域"
             className="gantt-scroll-region"
@@ -466,7 +474,9 @@ export function GanttPage() {
                     ) : (
                       <div
                         className={`gantt-task-tree__row${
-                          selectedTaskId === row.task.id ? ' is-selected' : ''
+                          effectiveSelectedTaskId === row.task.id
+                            ? ' is-selected'
+                            : ''
                         }`}
                         data-row-id={row.id}
                         key={row.id}
@@ -484,25 +494,32 @@ export function GanttPage() {
                         }
                       >
                         <button
-                          aria-expanded={selectedTaskId === row.task.id}
+                          aria-controls="gantt-task-context"
+                          aria-describedby={`gantt-tree-description-${row.task.id}`}
                           aria-label={`查看 ${row.task.title}`}
+                          aria-pressed={
+                            effectiveSelectedTaskId === row.task.id
+                          }
                           className="gantt-task-tree__task gantt-task-tree__content"
                           id={`gantt-task-trigger-${row.task.id}`}
-                          onClick={(event) => {
-                            setSelectedTaskTriggerId(event.currentTarget.id)
-                            setSelectedTaskId((current) =>
-                              current === row.task.id ? null : row.task.id,
-                            )
-                          }}
+                          onClick={() => setSelectedTaskId(row.task.id)}
                           type="button"
                         >
                           <span>
                             <small>{row.task.code}</small>
-                            <strong>{row.task.title}</strong>
+                            <strong title={row.task.title}>{row.task.title}</strong>
                           </span>
                           <span>
-                            <small>{row.task.assignee.name}</small>
+                            <small title={row.task.assignee.name}>
+                              {row.task.assignee.name}
+                            </small>
                             <strong>{row.task.progress}%</strong>
+                          </span>
+                          <span
+                            className="visually-hidden"
+                            id={`gantt-tree-description-${row.task.id}`}
+                          >
+                            负责人 {row.task.assignee.name}，进度 {row.task.progress}%
                           </span>
                         </button>
                       </div>
@@ -518,17 +535,14 @@ export function GanttPage() {
                   setProposal(null)
                 }}
                 onPropose={createProposal}
-                onSelectTask={(taskId, triggerId) => {
-                  setSelectedTaskTriggerId(triggerId)
-                  setSelectedTaskId(taskId)
-                }}
+                onSelectTask={(taskId) => setSelectedTaskId(taskId)}
                 range={range}
                 allRows={visibleRows}
                 rowHeight={ROW_HEIGHT_PX}
                 rowStart={windowStart}
                 rows={renderedRows}
                 scale={scale}
-                selectedTaskId={selectedTaskId}
+                selectedTaskId={effectiveSelectedTaskId}
                 totalRows={visibleRows.length}
                 viewportEnd={
                   shouldVirtualize ? rowWindow.viewportEnd : visibleRows.length
@@ -539,15 +553,11 @@ export function GanttPage() {
             </div>
           </div>
 
-          {selectedTask && selectedTaskTriggerId ? (
-            <GanttTaskInspector
-              onClose={() => setSelectedTaskId(null)}
-              returnFocusId={selectedTaskTriggerId}
-              task={selectedTask}
-            />
-          ) : null}
-        </div>
-      )}
+          </div>
+          )}
+        </GlassPanel>
+        <GanttContext task={selectedTask} />
+      </div>
 
       {proposal && proposalTask ? (
         <section

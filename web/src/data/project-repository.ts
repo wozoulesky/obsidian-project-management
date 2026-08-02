@@ -148,6 +148,7 @@ export type SkillConfigSnippet = {
 
 export interface ProjectRepository {
   listActors(): Promise<Actor[]>
+  getCurrentActor(): Promise<Actor>
   createHuman(input: CreateHumanActorInput): Promise<Actor>
   updateActor(actorId: string, input: UpdateActorInput): Promise<Actor>
   deactivateActor(actorId: string, version: number): Promise<Actor>
@@ -167,6 +168,7 @@ export interface ProjectRepository {
     projectId: string,
     days?: 7 | 30 | 90,
   ): Promise<DashboardSnapshot>
+  getWorkspaceDashboard(days?: 7 | 30 | 90): Promise<DashboardSnapshot>
   listTasks(projectId: string): Promise<Task[]>
   updateTaskProgress(taskId: string, input: TaskProgressInput): Promise<Task>
   updateTaskDates(taskId: string, input: TaskDateInput): Promise<Task>

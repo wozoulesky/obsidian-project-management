@@ -8,7 +8,9 @@ import type { PersistedAppSettings } from '@project-os/contracts'
 import {
   createContext,
   createElement,
+  useCallback,
   useContext,
+  useState,
   type ReactNode,
 } from 'react'
 
@@ -40,7 +42,10 @@ export {
 type ProjectRepositoryContextValue = {
   repository: ProjectRepository
   projectId: string
+  selectProject: (projectId: string) => void
 }
+
+export const workspaceProjectStorageKey = 'project-os:workspace-project'
 
 const ProjectRepositoryContext =
   createContext<ProjectRepositoryContextValue | null>(null)
@@ -49,12 +54,29 @@ export function ProjectRepositoryProvider({
   children,
   repository,
   projectId,
-}: ProjectRepositoryContextValue & { children: ReactNode }) {
+}: Omit<ProjectRepositoryContextValue, 'selectProject'> & {
+  children: ReactNode
+}) {
   const parent = useContext(ProjectRepositoryContext)
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId)
+  const selectProject = useCallback((nextProjectId: string) => {
+    setSelectedProjectId(nextProjectId)
+    try {
+      sessionStorage.setItem(workspaceProjectStorageKey, nextProjectId)
+    } catch {
+      // Some browser privacy modes deny storage access; selection still works.
+    }
+  }, [])
   if (parent !== null) return children
   return createElement(
     ProjectRepositoryContext.Provider,
-    { value: { repository, projectId } },
+    {
+      value: {
+        repository,
+        projectId: selectedProjectId,
+        selectProject,
+      },
+    },
     children,
   )
 }
@@ -63,11 +85,13 @@ export function useProjectRepository() {
   return useContext(ProjectRepositoryContext) ?? {
     repository: projectRepository,
     projectId,
+    selectProject: () => undefined,
   }
 }
 
 export const projectQueryKeys = {
   actors: ['actors'] as const,
+  currentActor: ['actors', 'current'] as const,
   activities: ['activities'] as const,
   allTasks: ['tasks', 'all'] as const,
   projects: ['projects'] as const,
@@ -82,6 +106,12 @@ export const projectQueryKeys = {
     ['dashboard', selectedProjectId] as const,
   dashboardFor: (selectedProjectId: string, days: 7 | 30 | 90) =>
     ['dashboard', selectedProjectId, days] as const,
+  workspaceDashboardPrefix: [
+    'dashboard',
+    { scope: 'workspace' },
+  ] as const,
+  workspaceDashboardFor: (days: 7 | 30 | 90) =>
+    ['dashboard', { scope: 'workspace' }, days] as const,
   tasksFor: (selectedProjectId: string) =>
     ['tasks', selectedProjectId] as const,
   requirementsFor: (selectedProjectId: string) =>
@@ -153,6 +183,7 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.gantt,
     projectQueryKeys.requirements,
     projectQueryKeys.dashboardPrefix,
+    projectQueryKeys.workspaceDashboardPrefix,
   ],
   actorMutation: [
     projectQueryKeys.actors,
@@ -166,10 +197,12 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.allTasks,
     projectQueryKeys.gantt,
     projectQueryKeys.dashboardPrefix,
+    projectQueryKeys.workspaceDashboardPrefix,
   ],
   requirementStatus: [
     projectQueryKeys.requirements,
     projectQueryKeys.dashboardPrefix,
+    projectQueryKeys.workspaceDashboardPrefix,
   ],
   defectConversion: [
     projectQueryKeys.tasks,
@@ -177,6 +210,7 @@ export const mutationInvalidationKeys = {
     projectQueryKeys.gantt,
     projectQueryKeys.defects,
     projectQueryKeys.dashboardPrefix,
+    projectQueryKeys.workspaceDashboardPrefix,
   ],
 } as const
 
@@ -256,6 +290,22 @@ export function useActors() {
   return useQuery({
     queryKey: projectQueryKeys.actors,
     queryFn: () => context.repository.listActors(),
+  })
+}
+
+export function useWorkspaceDashboard(days: 7 | 30 | 90 = 30) {
+  const { repository } = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.workspaceDashboardFor(days),
+    queryFn: () => repository.getWorkspaceDashboard(days),
+  })
+}
+
+export function useCurrentActor() {
+  const context = useProjectRepository()
+  return useQuery({
+    queryKey: projectQueryKeys.currentActor,
+    queryFn: () => context.repository.getCurrentActor(),
   })
 }
 
@@ -401,6 +451,7 @@ export function useUpdateTaskProgress() {
           projectQueryKeys.ganttFor(selectedProjectId),
           projectQueryKeys.requirementsFor(selectedProjectId),
           projectQueryKeys.dashboardPrefixFor(selectedProjectId),
+          projectQueryKeys.workspaceDashboardPrefix,
           projectQueryKeys.projectFor(selectedProjectId),
           projectQueryKeys.projects,
           projectQueryKeys.activities,
@@ -427,6 +478,7 @@ export function useUpdateTaskDates() {
         projectQueryKeys.allTasks,
         projectQueryKeys.ganttFor(context.projectId),
         projectQueryKeys.dashboardPrefixFor(context.projectId),
+        projectQueryKeys.workspaceDashboardPrefix,
       ])
     },
   })
@@ -457,6 +509,7 @@ export function useUpdateRequirementStatus() {
         [
           projectQueryKeys.requirementsFor(context.projectId),
           projectQueryKeys.dashboardPrefixFor(context.projectId),
+          projectQueryKeys.workspaceDashboardPrefix,
         ],
       )
     },
@@ -486,6 +539,7 @@ export function useCreateTaskFromDefect() {
           projectQueryKeys.ganttFor(context.projectId),
           projectQueryKeys.defectsFor(context.projectId),
           projectQueryKeys.dashboardPrefixFor(context.projectId),
+          projectQueryKeys.workspaceDashboardPrefix,
         ],
       )
     },

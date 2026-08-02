@@ -75,6 +75,10 @@ export function EChart({
   }, [])
 
   useEffect(() => {
+    const chart = chartRef.current
+    const container = containerRef.current
+    if (!chart || !container) return
+
     const resolvedOption = prefersReducedMotion
       ? ({
           ...option,
@@ -83,7 +87,11 @@ export function EChart({
           animationDurationUpdate: 0,
         } as EChartsCoreOption)
       : option
-    chartRef.current?.setOption(resolvedOption, { notMerge: true })
+    chart.setOption(resolvedOption, { notMerge: true })
+    chart.resize({
+      width: container.clientWidth,
+      height: container.clientHeight,
+    })
   }, [option, prefersReducedMotion])
 
   return (

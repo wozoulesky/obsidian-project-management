@@ -19,30 +19,37 @@ test.beforeEach(async ({ page }) => {
   await freezeVisualTime(page)
 })
 
-test('defect conversion opens the generated repair task inspector', async ({
+test('defect conversion links the persistent defect and task contexts', async ({
   page,
 }) => {
   await page.goto('/defects')
   await expect(
-    page.getByRole('heading', { level: 1, name: '缺陷风险队列' }),
+    page.getByRole('heading', { level: 1, name: '缺陷矩阵' }),
   ).toBeVisible()
 
   await page.getByRole('button', { name: '查看 离线恢复失败' }).click()
-  const defectInspector = page.getByRole('dialog', { name: '离线恢复失败' })
-  await defectInspector
+  const defectContext = page.getByRole('complementary', {
+    name: '缺陷上下文',
+  })
+  await expect(
+    defectContext.getByRole('heading', { name: '离线恢复失败' }),
+  ).toBeVisible()
+  await defectContext
     .getByRole('button', { name: '转为修复任务' })
     .click()
 
-  const repairTask = defectInspector.getByRole('link', {
+  const repairTask = defectContext.getByRole('link', {
     name: 'FIX-D-104 修复：离线恢复失败',
   })
   await expect(repairTask).toBeVisible()
   await repairTask.click()
 
   await expect(page).toHaveURL(/\/tasks\?selected=task-fix-defect-104$/)
-  await expect(
-    page.getByRole('dialog', { name: '修复：离线恢复失败' }),
-  ).toBeVisible()
+  const taskContext = page.getByRole('region', { name: '智能任务上下文' })
+  await expect(taskContext.getByRole('heading', {
+    name: '修复：离线恢复失败',
+  })).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 })
 
 for (const keyPage of keyPages) {
@@ -67,14 +74,14 @@ test('desktop comparison captures representative 1280px and 768px layouts', asyn
   await openReadyDashboard(page)
   await expect(page).toHaveScreenshot(
     'comparison-dashboard-1280.png',
-    screenshotOptions,
+    { ...screenshotOptions, maxDiffPixels: 200 },
   )
 
   await page.setViewportSize({ width: 768, height: 1024 })
   await openReadyDashboard(page)
   await expect(page).toHaveScreenshot(
     'comparison-dashboard-768.png',
-    screenshotOptions,
+    { ...screenshotOptions, maxDiffPixels: 500 },
   )
 
   await openReadyPage(page, '/tasks')

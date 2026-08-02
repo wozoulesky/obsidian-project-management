@@ -291,6 +291,15 @@ export const actorRoutes: AppRouteModule = {
       sendSuccess(response, actor, 201)
     })
 
+    router.get('/actors/current', (_request, response) => {
+      const context = getContext()
+      const actor = callService(
+        persistedActorSchema,
+        () => context.services.actors.get(context.localActorId),
+      )
+      sendSuccess(response, actor)
+    })
+
     router.get('/actors/:id', (request, response) => {
       const { id } = actorIdParamsSchema.parse(request.params)
       const context = getContext()

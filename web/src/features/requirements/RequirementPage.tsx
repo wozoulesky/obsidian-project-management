@@ -16,10 +16,8 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type FormEvent,
 } from 'react'
 
-import { EntityInspector } from '../../components/data/EntityInspector'
 import {
   EmptyState,
   ErrorState,
@@ -27,7 +25,8 @@ import {
   RefreshState,
 } from '../../components/data/DataState'
 import { Badge } from '../../components/ui/Badge'
-import { Button } from '../../components/ui/Button'
+import { MetricGrid } from '../../components/layout/MetricGrid'
+import { PageHeader } from '../../components/layout/PageHeader'
 import type {
   Requirement,
   RequirementStatus,
@@ -36,6 +35,7 @@ import {
   useRequirements,
   useUpdateRequirementStatus,
 } from '../../data/query-hooks'
+import './requirements-glass.css'
 
 const boardStates = [
   { status: 'reviewed', label: '已评审' },
@@ -48,6 +48,22 @@ const boardStates = [
 
 const boardStatusSet = new Set<RequirementStatus>(
   boardStates.map(({ status }) => status),
+)
+
+const pipelineStates = [
+  { status: 'draft', label: '收集', draggable: false },
+  { status: 'reviewed', label: '已评审', draggable: true },
+  { status: 'developing', label: '开发中', draggable: true },
+  { status: 'delivered', label: '已交付', draggable: true },
+  { status: 'accepted', label: '已验收', draggable: false },
+] as const satisfies ReadonlyArray<{
+  status: RequirementStatus
+  label: string
+  draggable: boolean
+}>
+
+const pipelineStatusSet = new Set<RequirementStatus>(
+  pipelineStates.map(({ status }) => status),
 )
 
 const statusLabels: Record<RequirementStatus, string> = {
@@ -142,9 +158,10 @@ const requirementKeyboardCoordinates: KeyboardCoordinateGetter = (
 export function createRequirementAnnouncements(
   requirements: Requirement[],
 ): Announcements {
-  const getTitle = (id: UniqueIdentifier) =>
+  const getRequirement = (id: UniqueIdentifier) =>
     requirements.find((requirement) => requirement.id === String(id))
-      ?.title ?? '当前需求'
+  const getTitle = (id: UniqueIdentifier) =>
+    getRequirement(id)?.title ?? '当前需求'
   const getStatusLabel = (id: UniqueIdentifier | undefined) => {
     const status = id ? String(id) as RequirementStatus : null
     return status && boardStatusSet.has(status)
@@ -157,14 +174,16 @@ export function createRequirementAnnouncements(
     onDragOver: ({ active, over }) => {
       const label = getStatusLabel(over?.id)
       return label
-        ? `需求「${getTitle(active.id)}」已移动到${label}列。`
+        ? `需求「${getTitle(active.id)}」正在移向${label}列。`
         : `需求「${getTitle(active.id)}」未位于有效生命周期列。`
     },
     onDragEnd: ({ active, over }) => {
       const label = getStatusLabel(over?.id)
-      return label
-        ? `已将需求「${getTitle(active.id)}」放入${label}列。`
-        : `需求「${getTitle(active.id)}」未发生状态变更。`
+      const requirement = getRequirement(active.id)
+      const status = over?.id ? String(over.id) : null
+      return label && requirement?.status !== status
+        ? `已提交将需求「${getTitle(active.id)}」移动至${label}列的请求，等待状态更新结果。`
+        : `需求「${getTitle(active.id)}」未提交状态变更请求。`
     },
     onDragCancel: ({ active }) =>
       `已取消移动需求「${getTitle(active.id)}」。`,
@@ -273,7 +292,7 @@ function DraggableRequirementCard({
 
   return (
     <article
-      className={`requirement-card${isDragging ? ' is-dragging' : ''}`}
+      className={`requirement-card${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}`}
       ref={setNodeRef}
       style={style}
     >
@@ -306,7 +325,7 @@ function StaticRequirementCard({
   selected: boolean
 }) {
   return (
-    <article className="requirement-card">
+    <article className={`requirement-card${selected ? ' is-selected' : ''}`}>
       <RequirementCardBody
         onSelect={onSelect}
         requirement={requirement}
@@ -317,6 +336,7 @@ function StaticRequirementCard({
 }
 
 function RequirementColumn({
+  draggable,
   dragDisabled,
   label,
   onSelect,
@@ -324,14 +344,18 @@ function RequirementColumn({
   selectedRequirementId,
   status,
 }: {
+  draggable: boolean
   dragDisabled: boolean
   label: string
   onSelect: (id: string) => void
   requirements: Requirement[]
   selectedRequirementId: string | null
-  status: BoardStatus
+  status: RequirementStatus
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id: status })
+  const { isOver, setNodeRef } = useDroppable({
+    disabled: !draggable,
+    id: status,
+  })
 
   return (
     <section
@@ -348,9 +372,16 @@ function RequirementColumn({
         {requirements.length === 0 ? (
           <p className="requirement-column__empty">暂无需求</p>
         ) : (
-          requirements.map((requirement) => (
+          requirements.map((requirement) => draggable ? (
             <DraggableRequirementCard
               disabled={dragDisabled}
+              key={requirement.id}
+              onSelect={onSelect}
+              requirement={requirement}
+              selected={selectedRequirementId === requirement.id}
+            />
+          ) : (
+            <StaticRequirementCard
               key={requirement.id}
               onSelect={onSelect}
               requirement={requirement}
@@ -363,150 +394,108 @@ function RequirementColumn({
   )
 }
 
-function RequirementInspectorFields({
-  commitStatus,
-  isStatusPending,
+function RequirementContext({
   requirement,
 }: {
-  commitStatus: CommitStatus
-  isStatusPending: boolean
-  requirement: Requirement
+  requirement: Requirement | null
 }) {
-  const [status, setStatus] = useState<RequirementStatus>(requirement.status)
-  const [formError, setFormError] = useState('')
-  const linkedTaskTotal = requirement.linkedTaskIds.length
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setFormError('')
-    commitStatus(
-      requirement.id,
-      status,
-      {
-        onError: (error) => {
-          setFormError(
-            error.message || '需求状态保存失败，请稍后重试。',
-          )
-        },
-      },
-    )
-  }
+  const linkedTaskTotal = requirement?.linkedTaskIds.length ?? 0
 
   return (
-    <div className="requirement-inspector">
-      <dl className="requirement-inspector__details">
-        <div>
-          <dt>编号</dt>
-          <dd>{requirement.code}</dd>
-        </div>
-        <div>
-          <dt>优先级</dt>
-          <dd>{requirement.priority}</dd>
-        </div>
-      </dl>
-
-      {canSuggestDelivery(requirement) ? (
-        <p className="requirement-inspector__suggestion">
-          关联任务完成后可流转至已交付
-        </p>
-      ) : null}
-
-      <section className="requirement-inspector__section">
-        <h3>验收标准</h3>
-        {requirement.acceptanceCriteria.length > 0 ? (
-          <ul>
-            {requirement.acceptanceCriteria.map((criterion) => (
-              <li key={criterion}>{criterion}</li>
-            ))}
-          </ul>
-        ) : (
-          <p>暂无验收标准</p>
-        )}
-      </section>
-
-      <section className="requirement-inspector__section">
-        <h3>关联任务进度</h3>
-        <p>
-          {requirement.completedTaskCount}/{linkedTaskTotal} 任务已完成
-        </p>
-        {linkedTaskTotal > 0 ? (
-          <progress
-            aria-label="关联任务完成比例"
-            max={linkedTaskTotal}
-            value={requirement.completedTaskCount}
-          />
-        ) : null}
-        {linkedTaskTotal > 0 ? (
-          <p className="requirement-inspector__task-ids">
-            {requirement.linkedTaskIds.join('、')}
-          </p>
-        ) : null}
-      </section>
-
-      <section className="requirement-inspector__section">
-        <h3>活动历史</h3>
-        <p>暂无相关活动</p>
-      </section>
-
-      <form
-        className="requirement-inspector__form"
-        onSubmit={handleSubmit}
-      >
-        <label>
-          需求状态
-          <select
-            onChange={(event) => {
-              setStatus(event.target.value as RequirementStatus)
-              setFormError('')
-            }}
-            value={status}
-          >
-            {Object.entries(statusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {formError ? <p role="alert">{formError}</p> : null}
-        <Button
-          aria-label="保存需求状态"
-          disabled={isStatusPending}
-          type="submit"
-          variant="primary"
-        >
-          {isStatusPending ? '正在保存…' : '保存状态'}
-        </Button>
-      </form>
-    </div>
-  )
-}
-
-function RequirementInspector({
-  commitStatus,
-  isStatusPending,
-  onClose,
-  requirement,
-}: {
-  commitStatus: CommitStatus
-  isStatusPending: boolean
-  onClose: () => void
-  requirement: Requirement
-}) {
-  return (
-    <EntityInspector
-      fallbackFocusId="requirement-page-heading"
-      onClose={onClose}
-      returnFocusId={`requirement-trigger-${requirement.id}`}
-      title={requirement.title}
+    <aside
+      aria-label="需求上下文"
+      className="requirement-context"
     >
-      <RequirementInspectorFields
-        commitStatus={commitStatus}
-        isStatusPending={isStatusPending}
-        key={`${requirement.id}-${requirement.status}`}
-        requirement={requirement}
-      />
-    </EntityInspector>
+      <header className="requirement-context__header">
+        <div>
+          <small>REQUIREMENT CONTEXT</small>
+          <h2>{requirement?.title ?? '需求上下文'}</h2>
+        </div>
+        <Badge tone={requirement?.priority === 'P0' ? 'critical' : 'neutral'}>
+          {requirement ? statusLabels[requirement.status] : '无选择'}
+        </Badge>
+      </header>
+
+      {requirement ? (
+        <div className="requirement-context__body">
+          <dl className="requirement-context__details">
+            <div>
+              <dt>编号</dt>
+              <dd>{requirement.code}</dd>
+            </div>
+            <div>
+              <dt>状态</dt>
+              <dd>{statusLabels[requirement.status]}</dd>
+            </div>
+            <div>
+              <dt>优先级</dt>
+              <dd>{requirement.priority}</dd>
+            </div>
+            <div>
+              <dt>关联任务</dt>
+              <dd>{requirement.completedTaskCount} / {linkedTaskTotal} 已完成</dd>
+            </div>
+          </dl>
+
+          <section
+            aria-label="需求描述"
+            className="requirement-context__description"
+          >
+            <h3>描述</h3>
+            <p>{requirement.description?.trim() || '暂无需求描述'}</p>
+          </section>
+
+          {canSuggestDelivery(requirement) ? (
+            <p className="requirement-context__suggestion">
+              关联任务完成后可流转至已交付
+            </p>
+          ) : null}
+
+          <section className="requirement-context__section">
+            <h3>关联任务 ID</h3>
+            {linkedTaskTotal > 0 ? (
+              <ul
+                aria-label="关联任务 ID"
+                className="requirement-context__task-list"
+              >
+                {requirement.linkedTaskIds.map((taskId) => (
+                  <li key={taskId}>
+                    <code title={taskId}>{taskId}</code>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>暂无关联任务</p>
+            )}
+            {linkedTaskTotal > 0 ? (
+              <progress
+                aria-label="关联任务完成比例"
+                max={linkedTaskTotal}
+                value={requirement.completedTaskCount}
+              />
+            ) : null}
+          </section>
+
+          <section className="requirement-context__section">
+            <h3>验收标准</h3>
+            {requirement.acceptanceCriteria.length > 0 ? (
+              <ul>
+                {requirement.acceptanceCriteria.map((criterion) => (
+                  <li key={criterion}>{criterion}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>暂无验收标准</p>
+            )}
+          </section>
+        </div>
+      ) : (
+        <div className="requirement-context__empty">
+          <strong>暂无需求上下文</strong>
+          <p>当前筛选范围没有可检查的需求。</p>
+        </div>
+      )}
+    </aside>
   )
 }
 
@@ -519,6 +508,7 @@ export function RequirementPage() {
   const [terminalFilter, setTerminalFilter] =
     useState<TerminalFilter>('board')
   const [dragError, setDragError] = useState('')
+  const [dragFeedback, setDragFeedback] = useState('')
   const [isStatusPending, setIsStatusPending] = useState(false)
   const statusPendingRef = useRef(false)
   const sensors = useSensors(
@@ -585,7 +575,7 @@ export function RequirementPage() {
   const visibleRequirements =
     terminalFilter === 'board'
       ? requirements.filter((requirement) =>
-          boardStatusSet.has(requirement.status),
+          pipelineStatusSet.has(requirement.status),
         )
       : requirements.filter(
           (requirement) => requirement.status === terminalFilter,
@@ -593,12 +583,15 @@ export function RequirementPage() {
   const selectedRequirement =
     visibleRequirements.find(
       (requirement) => requirement.id === selectedRequirementId,
-    ) ?? null
-  const draftCount = requirements.filter(
-    (requirement) => requirement.status === 'draft',
+    ) ?? visibleRequirements[0] ?? null
+  const reviewedCount = requirements.filter(
+    (requirement) => requirement.status === 'reviewed',
   ).length
-  const acceptedCount = requirements.filter(
-    (requirement) => requirement.status === 'accepted',
+  const developingCount = requirements.filter(
+    (requirement) => requirement.status === 'developing',
+  ).length
+  const deliveredCount = requirements.filter(
+    (requirement) => requirement.status === 'delivered',
   ).length
 
   return (
@@ -609,15 +602,9 @@ export function RequirementPage() {
         isError={requirementsQuery.isError}
         isFetching={requirementsQuery.isFetching}
       />
-      <header className="requirement-page__header">
-        <div>
-          <p className="requirement-page__eyebrow">计划 / 需求</p>
-          <h1 id="requirement-page-heading" tabIndex={-1}>
-            需求生命周期
-          </h1>
-        </div>
-        <div className="requirement-page__controls">
-          <span className="requirement-page__compact-count">草稿 {draftCount}</span>
+      <PageHeader
+        actions={(
+          <div className="requirement-page__controls">
           <label>
             终态筛选
             <select
@@ -627,23 +614,60 @@ export function RequirementPage() {
               }}
               value={terminalFilter}
             >
-              <option value="board">默认三列</option>
+              <option value="board">五阶段管线</option>
               <option value="rejected">已拒绝</option>
               <option value="shelved">已搁置</option>
             </select>
           </label>
-        </div>
-      </header>
+          </div>
+        )}
+        eyebrow="计划 / 需求"
+        subtitle="从收集到验收追踪真实需求状态，异常终态保留独立筛选。"
+        title={(
+          <span id="requirement-page-heading" tabIndex={-1}>
+            需求管线
+          </span>
+        )}
+      />
 
-      <p className="requirement-page__summary">
-        <span>{`共 ${requirements.length} 项`}</span>
-        <span>{`已验收 ${acceptedCount}`}</span>
-      </p>
+      <MetricGrid ariaLabel="需求管线指标" className="requirement-metrics">
+        <article className="metric-card">
+          <span className="metric-card__label">需求总数</span>
+          <strong className="metric-value">{requirements.length}</strong>
+        </article>
+        <article className="metric-card">
+          <span className="metric-card__label">已评审</span>
+          <strong className="metric-value">{reviewedCount}</strong>
+        </article>
+        <article className="metric-card">
+          <span className="metric-card__label">开发中</span>
+          <strong className="metric-value">{developingCount}</strong>
+        </article>
+        <article className="metric-card">
+          <span className="metric-card__label">已交付</span>
+          <strong className="metric-value">{deliveredCount}</strong>
+        </article>
+      </MetricGrid>
 
-      <div className="data-grid-with-inspector requirement-page__workspace">
-        <div className="requirement-page__content">
+      <div
+        className="requirement-page__workspace"
+        data-layout="pipeline-context"
+        data-testid="requirement-layout"
+      >
+        <section
+          aria-labelledby="requirement-pipeline-title"
+          className="requirement-page__content"
+        >
+          <header className="requirement-page__stage-heading">
+            <div>
+              <small>LIFECYCLE PIPELINE</small>
+              <h2 id="requirement-pipeline-title">需求生命周期管线</h2>
+            </div>
+            <span>收集 → 已评审 → 开发中 → 已交付 → 已验收</span>
+          </header>
+
           {requirements.length === 0 ? (
-          <EmptyState title="当前项目暂无需求" />
+            <EmptyState title="当前项目暂无需求" />
           ) : terminalFilter === 'board' ? (
             <DndContext
               accessibility={{
@@ -654,7 +678,11 @@ export function RequirementPage() {
                 if (statusPendingRef.current) {
                   return
                 }
+                const draggedRequirement = requirements.find(
+                  (requirement) => requirement.id === String(active.id),
+                )
                 setDragError('')
+                setDragFeedback('')
                 applyRequirementDrop(
                   requirements,
                   active.id,
@@ -668,6 +696,21 @@ export function RequirementPage() {
                           error.message ||
                             '需求状态更新失败，请稍后重试。',
                         )
+                        setDragFeedback(
+                          `需求「${draggedRequirement?.title ?? '当前需求'}」更新失败，仍为${
+                            draggedRequirement
+                              ? statusLabels[draggedRequirement.status]
+                              : '原状态'
+                          }。`,
+                        )
+                      },
+                      onSuccess: () => {
+                        setSelectedRequirementId(input.requirementId)
+                        setDragFeedback(
+                          `需求「${draggedRequirement?.title ?? '当前需求'}」已更新为${
+                            statusLabels[input.status]
+                          }。`,
+                        )
                       },
                     },
                   ),
@@ -675,20 +718,33 @@ export function RequirementPage() {
               }}
               sensors={sensors}
             >
-              <div className="requirement-board">
-                {boardStates.map(({ label, status }) => (
-                  <RequirementColumn
-                    dragDisabled={isStatusPending}
-                    key={status}
-                    label={label}
-                    onSelect={setSelectedRequirementId}
-                    requirements={requirements.filter(
-                      (requirement) => requirement.status === status,
-                    )}
-                    selectedRequirementId={selectedRequirementId}
-                    status={status}
-                  />
-                ))}
+              {visibleRequirements.length === 0 ? (
+                <p className="requirement-page__empty">
+                  当前五阶段管线暂无需求。
+                </p>
+              ) : null}
+              <div
+                aria-label="需求生命周期五列管线，可横向滚动"
+                className="requirement-page__board-scroll"
+                role="region"
+                tabIndex={0}
+              >
+                <div className="requirement-board">
+                  {pipelineStates.map(({ draggable, label, status }) => (
+                    <RequirementColumn
+                      draggable={draggable}
+                      dragDisabled={isStatusPending}
+                      key={status}
+                      label={label}
+                      onSelect={setSelectedRequirementId}
+                      requirements={requirements.filter(
+                        (requirement) => requirement.status === status,
+                      )}
+                      selectedRequirementId={selectedRequirement?.id ?? null}
+                      status={status}
+                    />
+                  ))}
+                </div>
               </div>
             </DndContext>
           ) : (
@@ -697,7 +753,8 @@ export function RequirementPage() {
               className="requirement-terminal-list"
             >
               <h2>
-                {statusLabels[terminalFilter]} <span>{visibleRequirements.length}</span>
+                {statusLabels[terminalFilter]}
+                {' '}<span>{visibleRequirements.length}</span>
               </h2>
               {visibleRequirements.length > 0 ? (
                 <div className="requirement-terminal-list__cards">
@@ -706,7 +763,7 @@ export function RequirementPage() {
                       key={requirement.id}
                       onSelect={setSelectedRequirementId}
                       requirement={requirement}
-                      selected={selectedRequirementId === requirement.id}
+                      selected={selectedRequirement?.id === requirement.id}
                     />
                   ))}
                 </div>
@@ -718,15 +775,16 @@ export function RequirementPage() {
             </section>
           )}
           {dragError ? <p role="alert">{dragError}</p> : null}
-        </div>
-        {selectedRequirement ? (
-          <RequirementInspector
-            commitStatus={commitStatus}
-            isStatusPending={isStatusPending}
-            onClose={() => setSelectedRequirementId(null)}
-            requirement={selectedRequirement}
-          />
-        ) : null}
+          <p
+            aria-label="需求状态更新反馈"
+            aria-live="polite"
+            className="sr-only"
+            role="status"
+          >
+            {dragFeedback}
+          </p>
+        </section>
+        <RequirementContext requirement={selectedRequirement} />
       </div>
     </section>
   )

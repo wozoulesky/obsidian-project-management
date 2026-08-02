@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  ProjectRepositoryProvider,
+  projectId,
   projectQueryKeys,
   projectRepository,
   useProjectDeliverables,
@@ -13,9 +15,14 @@ import {
   useCreateProject,
   useCreateTask,
   useCreateTaskFromDefect,
+  useCurrentActor,
+  useDashboard,
+  useProjectRepository,
+  useTasks,
   useUpdateRequirementStatus,
   useUpdateTaskDates,
   useUpdateTaskProgress,
+  useWorkspaceDashboard,
 } from './query-hooks'
 
 function createHarness() {
@@ -26,6 +33,7 @@ function createHarness() {
     projectQueryKeys.tasks,
     projectQueryKeys.gantt,
     projectQueryKeys.dashboard(7),
+    projectQueryKeys.workspaceDashboardFor(7),
     projectQueryKeys.requirements,
     projectQueryKeys.defects,
     projectQueryKeys.allTasks,
@@ -61,6 +69,9 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.tasks)).toBe(true)
     expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.workspaceDashboardFor(7))).toBe(
+      true,
+    )
     expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
   })
 
@@ -83,6 +94,9 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.projects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.actors)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.workspaceDashboardFor(7))).toBe(
+      true,
+    )
     expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
   })
 
@@ -109,6 +123,9 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
     expect(isInvalidated(projectQueryKeys.ganttFor('atlas'))).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.workspaceDashboardFor(7))).toBe(
+      true,
+    )
     expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: projectQueryKeys.projectFor('atlas'),
@@ -129,6 +146,9 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.tasks)).toBe(true)
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.workspaceDashboardFor(7))).toBe(
+      true,
+    )
     expect(isInvalidated(projectQueryKeys.requirements)).toBe(true)
     expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
   })
@@ -174,6 +194,9 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.dashboardFor('borealis', 7))).toBe(
       true,
     )
+    expect(isInvalidated(projectQueryKeys.workspaceDashboardFor(7))).toBe(
+      true,
+    )
     expect(isInvalidated(projectQueryKeys.projectFor('borealis'))).toBe(true)
     expect(isInvalidated(projectQueryKeys.projects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.activities)).toBe(true)
@@ -194,6 +217,9 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.tasks)).toBe(true)
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.workspaceDashboardFor(7))).toBe(
+      true,
+    )
     expect(isInvalidated(projectQueryKeys.allTasks)).toBe(true)
   })
 
@@ -212,6 +238,9 @@ describe('repository query invalidation', () => {
 
     expect(isInvalidated(projectQueryKeys.requirements)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.workspaceDashboardFor(7))).toBe(
+      true,
+    )
   })
 
   it('invalidates task, gantt, and defect views after conversion', async () => {
@@ -224,6 +253,103 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.defects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+    expect(isInvalidated(projectQueryKeys.workspaceDashboardFor(7))).toBe(
+      true,
+    )
+  })
+})
+
+describe('workspace dashboard query', () => {
+  it('uses a cache key and repository call independent from project scope', async () => {
+    const { queryClient, wrapper } = createHarness()
+    const workspaceSnapshot = await projectRepository.getDashboard('atlas', 7)
+    const workspaceDashboard = vi
+      .spyOn(projectRepository, 'getWorkspaceDashboard')
+      .mockResolvedValue(workspaceSnapshot)
+    const projectDashboard = vi.spyOn(projectRepository, 'getDashboard')
+      .mockResolvedValue(workspaceSnapshot)
+
+    const workspace = renderHook(() => useWorkspaceDashboard(7), { wrapper })
+    const project = renderHook(() => useDashboard(7), { wrapper })
+
+    await waitFor(() => expect(workspace.result.current.data).toBeDefined())
+    await waitFor(() => expect(project.result.current.data).toBeDefined())
+
+    expect(workspaceDashboard).toHaveBeenCalledWith(7)
+    expect(projectDashboard).toHaveBeenCalledWith(projectId, 7)
+    expect(projectQueryKeys.workspaceDashboardFor(7)).not.toEqual(
+      projectQueryKeys.dashboardFor('workspace', 7),
+    )
+    expect(queryClient.getQueryData(
+      projectQueryKeys.workspaceDashboardFor(7),
+    )).toEqual(workspaceSnapshot)
+  })
+})
+
+describe('workspace project scope', () => {
+  it('refetches tasks into a separate cache when the project changes', async () => {
+    sessionStorage.removeItem('project-os:workspace-project')
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const listTasks = vi.spyOn(projectRepository, 'listTasks')
+      .mockImplementation(async (selectedProjectId) => ([{
+        id: `${selectedProjectId}-task`,
+      }] as Awaited<ReturnType<typeof projectRepository.listTasks>>))
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <ProjectRepositoryProvider
+          repository={projectRepository}
+          projectId="project_default"
+        >
+          {children}
+        </ProjectRepositoryProvider>
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => ({
+      repository: useProjectRepository(),
+      tasks: useTasks(),
+    }), { wrapper })
+
+    await waitFor(() => expect(result.current.tasks.data).toEqual([{
+      id: 'project_default-task',
+    }]))
+
+    act(() => result.current.repository.selectProject('atlas'))
+
+    await waitFor(() => expect(result.current.tasks.data).toEqual([{
+      id: 'atlas-task',
+    }]))
+    expect(listTasks).toHaveBeenNthCalledWith(1, 'project_default')
+    expect(listTasks).toHaveBeenNthCalledWith(2, 'atlas')
+    expect(queryClient.getQueryData(
+      projectQueryKeys.tasksFor('project_default'),
+    )).toEqual([{ id: 'project_default-task' }])
+    expect(queryClient.getQueryData(projectQueryKeys.tasksFor('atlas')))
+      .toEqual([{ id: 'atlas-task' }])
+    expect(sessionStorage.getItem('project-os:workspace-project'))
+      .toBe('atlas')
+  })
+})
+
+describe('current actor query', () => {
+  it('uses a stable key and returns the configured mock owner', async () => {
+    const { queryClient, wrapper } = createHarness()
+    const owner = await projectRepository.getCurrentActor()
+
+    const { result } = renderHook(() => useCurrentActor(), { wrapper })
+
+    await waitFor(() => expect(result.current.data).toEqual(owner))
+
+    expect(projectQueryKeys.currentActor).toEqual(['actors', 'current'])
+    expect(owner).toMatchObject({
+      id: 'human-lin',
+      name: 'Lin',
+      kind: 'human',
+    })
+    expect(queryClient.getQueryData(projectQueryKeys.currentActor))
+      .toEqual(result.current.data)
   })
 })
 

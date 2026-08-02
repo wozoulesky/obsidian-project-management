@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 
 import type { TaskStatus } from '../../data/domain'
 import { EChart } from './EChart'
+import { useAppearanceTokens } from './useAppearanceTokens'
 
 export type TaskStatusCounts = Record<TaskStatus, number>
 
@@ -11,40 +12,25 @@ export type StatusDonutProps = {
   counts: TaskStatusCounts
 }
 
-const tokenColorFallbacks = {
-  border: '#e1e5ea',
-  critical: '#d9533f',
-  primary: '#2f91f7',
-  success: '#43be76',
+const statusColorTokens = {
+  critical: { fallback: '#ff7868', property: '--chart-critical' },
+  grid: { fallback: '#66716a', property: '--chart-grid' },
+  primary: { fallback: '#37f58a', property: '--chart-primary' },
+  success: { fallback: '#72dfa0', property: '--chart-success' },
+  text: { fallback: '#8d9791', property: '--chart-text' },
+  textPrimary: { fallback: '#f3f7f4', property: '--text-primary' },
 } as const
 
 const statusPresentation: ReadonlyArray<{
   key: TaskStatus
   label: string
-  token: keyof typeof tokenColorFallbacks
+  token: keyof typeof statusColorTokens
 }> = [
-  { key: 'not_started', label: '未开始', token: 'border' },
+  { key: 'not_started', label: '未开始', token: 'grid' },
   { key: 'in_progress', label: '进行中', token: 'primary' },
   { key: 'done', label: '已完成', token: 'success' },
   { key: 'overdue', label: '已延期', token: 'critical' },
 ]
-
-function resolveTokenColor(
-  token: keyof typeof tokenColorFallbacks,
-): string {
-  if (
-    typeof document === 'undefined' ||
-    typeof getComputedStyle === 'undefined'
-  ) {
-    return tokenColorFallbacks[token]
-  }
-
-  return (
-    getComputedStyle(document.documentElement)
-      .getPropertyValue(`--${token}`)
-      .trim() || tokenColorFallbacks[token]
-  )
-}
 
 export function StatusDonut({
   completionRate,
@@ -53,10 +39,10 @@ export function StatusDonut({
   const normalizedRate = Number.isFinite(completionRate)
     ? Math.min(100, Math.max(0, Math.round(completionRate)))
     : 0
+  const tokenColors = useAppearanceTokens(statusColorTokens)
   const colors = useMemo(
-    () =>
-      statusPresentation.map(({ token }) => resolveTokenColor(token)),
-    [],
+    () => statusPresentation.map(({ token }) => tokenColors[token]),
+    [tokenColors],
   )
   const option = useMemo<EChartsCoreOption>(
     () => ({
@@ -67,12 +53,12 @@ export function StatusDonut({
         left: 'center',
         top: '34%',
         textStyle: {
-          color: '#171b20',
+          color: tokenColors.textPrimary,
           fontSize: 22,
           fontWeight: 750,
         },
         subtextStyle: {
-          color: '#6b7280',
+          color: tokenColors.text,
           fontSize: 12,
         },
       },
@@ -95,7 +81,7 @@ export function StatusDonut({
         },
       ],
     }),
-    [colors, counts, normalizedRate],
+    [colors, counts, normalizedRate, tokenColors],
   )
 
   return (

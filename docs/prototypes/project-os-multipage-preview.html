@@ -1,0 +1,4611 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <title>Project OS · 多页面视觉预览</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #030504;
+        --surface: rgba(18, 22, 20, 0.74);
+        --surface-raised: rgba(28, 33, 30, 0.82);
+        --line: rgba(226, 240, 233, 0.16);
+        --line-bright: rgba(245, 255, 250, 0.34);
+        --text: #f3f7f4;
+        --muted: #8d9791;
+        --green: #37f58a;
+        --green-deep: #10b965;
+        --red: #ff5c61;
+        --amber: #ffb45c;
+        --radius-panel: 20px;
+        --radius-card: 14px;
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.52);
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 320px;
+        background: var(--bg);
+        scroll-behavior: smooth;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        overflow-x: hidden;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 78% 8%, rgba(55, 245, 138, 0.08), transparent 28rem),
+          linear-gradient(145deg, #020403 0%, #070b09 50%, #030504 100%);
+        font-family:
+          Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--green);
+        outline-offset: 3px;
+      }
+
+      .sr-only {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+
+      .skip-link {
+        position: fixed;
+        z-index: 100;
+        top: 12px;
+        left: 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--green);
+        border-radius: 10px;
+        color: var(--text);
+        background: #0b110e;
+        transform: translateY(-160%);
+        transition: transform 160ms ease;
+      }
+
+      .skip-link:focus {
+        transform: translateY(0);
+      }
+
+      .ambient {
+        position: fixed;
+        z-index: -1;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: linear-gradient(to bottom, black, transparent 92%);
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .side-rail {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        width: 220px;
+        height: 100vh;
+        padding: 24px 16px 16px;
+        border-right: 1px solid var(--line);
+        background: rgba(4, 7, 5, 0.8);
+        box-shadow: 16px 0 42px rgba(0, 0, 0, 0.22);
+        backdrop-filter: blur(24px);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-height: 42px;
+        padding: 0 8px 20px;
+      }
+
+      .brand-mark {
+        position: relative;
+        display: grid;
+        width: 32px;
+        height: 32px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid rgba(55, 245, 138, 0.48);
+        border-radius: 11px;
+        color: var(--green);
+        background: linear-gradient(145deg, rgba(55, 245, 138, 0.14), rgba(10, 15, 12, 0.82));
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.18), 0 0 20px rgba(55, 245, 138, 0.12);
+        font-size: 17px;
+        font-weight: 750;
+      }
+
+      .brand-copy strong,
+      .brand-copy span {
+        display: block;
+      }
+
+      .brand-copy strong {
+        letter-spacing: 0.02em;
+      }
+
+      .brand-copy span {
+        margin-top: 1px;
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .offline-notice {
+        margin: 0 8px 14px;
+        padding: 7px 9px;
+        border: 1px solid rgba(226, 240, 233, 0.14);
+        border-radius: 9px;
+        color: #b7c0ba;
+        background: rgba(255, 255, 255, 0.028);
+        font-size: 9px;
+        line-height: 1.4;
+      }
+
+      .rail-scroll {
+        min-height: 0;
+        flex: 1;
+        overflow-y: auto;
+        scrollbar-width: thin;
+      }
+
+      .nav-group + .nav-group {
+        margin-top: 17px;
+      }
+
+      .nav-label {
+        margin: 0 9px 7px;
+        color: #68716c;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+      }
+
+      .nav-list {
+        display: grid;
+        gap: 3px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .nav-link {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 38px;
+        padding: 8px 10px;
+        overflow: hidden;
+        border: 1px solid transparent;
+        border-radius: 11px;
+        color: #9ca6a0;
+        text-decoration: none;
+        transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+      }
+
+      .nav-link::after {
+        position: absolute;
+        top: 10px;
+        right: -1px;
+        bottom: 10px;
+        width: 2px;
+        border-radius: 2px;
+        background: var(--green);
+        box-shadow: 0 0 12px var(--green);
+        content: "";
+        opacity: 0;
+      }
+
+      .nav-link:hover {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .nav-link.is-active {
+        border-color: rgba(55, 245, 138, 0.16);
+        color: var(--text);
+        background: linear-gradient(90deg, rgba(55, 245, 138, 0.11), rgba(255, 255, 255, 0.025));
+      }
+
+      .nav-link.is-active::after {
+        opacity: 1;
+      }
+
+      .nav-icon {
+        width: 18px;
+        color: currentColor;
+        text-align: center;
+        font-size: 12px;
+      }
+
+      .rail-footer {
+        display: grid;
+        gap: 8px;
+        padding-top: 12px;
+      }
+
+      .workspace-card,
+      .user-card {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.026);
+      }
+
+      .workspace-card::before,
+      .user-avatar {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 9px;
+        color: var(--green);
+        background: rgba(55, 245, 138, 0.1);
+      }
+
+      .workspace-card::before {
+        content: "⌁";
+      }
+
+      .user-avatar {
+        border-radius: 50%;
+        color: var(--text);
+        background: linear-gradient(145deg, #37423c, #171d19);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .rail-card-copy {
+        min-width: 0;
+      }
+
+      .rail-card-copy span,
+      .rail-card-copy strong {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rail-card-copy span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .rail-card-copy strong {
+        margin-top: 1px;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .page-main {
+        min-width: 0;
+        padding: 26px clamp(20px, 3.2vw, 48px) 44px;
+      }
+
+      [data-page-root] {
+        width: min(1180px, 100%);
+        margin: 0 auto;
+      }
+
+      .page-view {
+        animation: page-in 260ms ease both;
+      }
+
+      @keyframes page-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+      }
+
+      .page-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 22px;
+      }
+
+      .page-kicker {
+        margin: 0 0 6px;
+        color: var(--green);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.19em;
+        text-transform: uppercase;
+      }
+
+      .page-header h1 {
+        margin: 0;
+        font-size: clamp(28px, 3vw, 42px);
+        font-weight: 680;
+        letter-spacing: -0.045em;
+        line-height: 1.08;
+      }
+
+      .page-description {
+        max-width: 640px;
+        margin: 9px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .primary-action,
+      .secondary-action {
+        min-height: 38px;
+        padding: 8px 14px;
+        border-radius: 11px;
+        cursor: pointer;
+      }
+
+      .primary-action {
+        border: 1px solid rgba(55, 245, 138, 0.52);
+        color: var(--text);
+        background: linear-gradient(145deg, rgba(30, 44, 36, 0.94), rgba(8, 13, 10, 0.94));
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.13), 0 0 22px rgba(55, 245, 138, 0.09);
+        font-weight: 650;
+      }
+
+      .secondary-action {
+        border: 1px solid var(--line);
+        color: #cbd3ce;
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 11px;
+        margin-bottom: 14px;
+      }
+
+      .metric-card,
+      .glass-panel,
+      .context-panel,
+      .signature-stage {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: linear-gradient(145deg, rgba(28, 33, 30, 0.72), var(--surface));
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.075), var(--shadow);
+        backdrop-filter: blur(22px);
+      }
+
+      .metric-card::before,
+      .glass-panel::before,
+      .context-panel::before,
+      .signature-stage::before {
+        position: absolute;
+        top: 0;
+        right: 12%;
+        left: 12%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--line-bright), transparent);
+        content: "";
+        opacity: 0.64;
+      }
+
+      .metric-card {
+        min-height: 98px;
+        padding: 16px;
+        border-radius: var(--radius-card);
+      }
+
+      .metric-label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .metric-row {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .metric-value {
+        font-size: 25px;
+        font-weight: 680;
+        letter-spacing: -0.04em;
+      }
+
+      .metric-trend {
+        color: var(--green);
+        font-size: 10px;
+      }
+
+      .glass-panel {
+        padding: 19px;
+        border-radius: var(--radius-panel);
+      }
+
+      .panel-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 15px;
+      }
+
+      .panel-heading h2,
+      .context-panel h2 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .panel-heading p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .segmented {
+        display: inline-flex;
+        gap: 3px;
+        padding: 3px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      .segmented button {
+        min-height: 27px;
+        padding: 4px 9px;
+        border: 0;
+        border-radius: 7px;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+        font-size: 10px;
+      }
+
+      .segmented button[aria-pressed="true"] {
+        color: var(--text);
+        background: rgba(55, 245, 138, 0.11);
+        box-shadow: inset 0 0 0 1px rgba(55, 245, 138, 0.2);
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 22px;
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: #b7c0ba;
+        background: rgba(255, 255, 255, 0.034);
+        font-size: 10px;
+        white-space: nowrap;
+      }
+
+      .status-badge::before {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+        content: "";
+        box-shadow: 0 0 7px currentColor;
+      }
+
+      .status-badge.is-live {
+        border-color: rgba(55, 245, 138, 0.22);
+        color: var(--green);
+      }
+
+      .status-badge.is-attention {
+        border-color: rgba(255, 180, 92, 0.24);
+        color: var(--amber);
+      }
+
+      .status-badge.is-risk {
+        border-color: rgba(255, 92, 97, 0.28);
+        color: var(--red);
+      }
+
+      .content-frame {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(245px, 0.72fr);
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .context-panel {
+        min-width: 0;
+        padding: 19px;
+        border-radius: var(--radius-panel);
+      }
+
+      .context-list {
+        display: grid;
+        gap: 0;
+        margin: 13px 0 0;
+      }
+
+      .context-list div {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(226, 240, 233, 0.09);
+      }
+
+      .context-list dt {
+        color: var(--muted);
+      }
+
+      .context-list dd {
+        margin: 0;
+        text-align: right;
+      }
+
+      .signature-stage {
+        min-height: 310px;
+        padding: 20px;
+        border-color: rgba(226, 240, 233, 0.2);
+        border-radius: var(--radius-panel);
+        background:
+          radial-gradient(circle at 74% 16%, rgba(55, 245, 138, 0.1), transparent 15rem),
+          linear-gradient(148deg, rgba(32, 38, 34, 0.78), rgba(9, 13, 11, 0.88));
+      }
+
+      .signature-stage::after {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.023) 1px, transparent 1px);
+        background-size: 100% 42px;
+        content: "";
+        mask-image: linear-gradient(90deg, transparent, black 18%, black 82%, transparent);
+      }
+
+      .signature-heading {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .signature-heading h2 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .signature-heading span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .signature-visual {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(98px, 1fr));
+        align-items: end;
+        gap: 10px;
+        min-width: 570px;
+        min-height: 224px;
+        padding: 28px 4px 4px;
+      }
+
+      .visual-item {
+        position: relative;
+        min-height: calc(72px + var(--level, 1) * 16px);
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 15px 28px rgba(0, 0, 0, 0.22);
+      }
+
+      .visual-item::before {
+        display: block;
+        width: 6px;
+        height: 6px;
+        margin-bottom: 26px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 13px rgba(55, 245, 138, 0.72);
+        content: "";
+      }
+
+      .visual-item.is-amber::before {
+        background: var(--amber);
+        box-shadow: 0 0 13px rgba(255, 180, 92, 0.5);
+      }
+
+      .visual-item.is-red::before {
+        background: var(--red);
+        box-shadow: 0 0 13px rgba(255, 92, 97, 0.52);
+      }
+
+      .visual-item strong,
+      .visual-item span {
+        display: block;
+      }
+
+      .visual-item strong {
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .visual-item span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .stage-scroll {
+        overflow-x: auto;
+        scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+        scrollbar-width: thin;
+      }
+
+      .empty-state {
+        display: grid;
+        min-height: 168px;
+        padding: 20px;
+        place-items: center;
+        border: 1px dashed rgba(226, 240, 233, 0.2);
+        border-radius: var(--radius-card);
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .empty-state strong {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text);
+      }
+
+      .overview-shell {
+        min-width: 0;
+      }
+
+      .overview-shell .metric-grid {
+        margin-bottom: 14px;
+      }
+
+      .dashboard-health-stage {
+        min-height: 286px;
+      }
+
+      .health-trend-layout {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(300px, 0.86fr) minmax(420px, 1.14fr);
+        gap: 24px;
+        min-width: 0;
+        padding-top: 20px;
+      }
+
+      .trend-summary {
+        min-width: 0;
+        padding: 16px;
+        border: 1px solid rgba(226, 240, 233, 0.11);
+        border-radius: var(--radius-card);
+        background: rgba(0, 0, 0, 0.14);
+      }
+
+      .trend-summary-head,
+      .project-card-head,
+      .actor-node-head,
+      .select-item-head,
+      .feed-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .trend-summary-head strong {
+        font-size: 13px;
+      }
+
+      .trend-summary-head span {
+        color: var(--green);
+        font-size: 10px;
+      }
+
+      .trend-bars {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(24px, 1fr));
+        align-items: end;
+        gap: 8px;
+        height: 145px;
+        margin-top: 13px;
+      }
+
+      .trend-column {
+        display: grid;
+        grid-template-rows: 1fr auto;
+        gap: 7px;
+        height: 100%;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 9px;
+        text-align: center;
+      }
+
+      .trend-bar-slot {
+        position: relative;
+        min-height: 0;
+        border-bottom: 1px solid rgba(226, 240, 233, 0.15);
+        background: linear-gradient(to top, rgba(255, 255, 255, 0.025), transparent);
+      }
+
+      .trend-bar {
+        position: absolute;
+        right: 18%;
+        bottom: 0;
+        left: 18%;
+        height: var(--trend-level);
+        min-height: 4px;
+        border-radius: 7px 7px 2px 2px;
+        background: linear-gradient(to top, rgba(16, 185, 101, 0.38), rgba(55, 245, 138, 0.9));
+        box-shadow: 0 0 16px rgba(55, 245, 138, 0.12);
+      }
+
+      .trend-bar::before {
+        position: absolute;
+        top: -13px;
+        right: 50%;
+        color: #b9c3bd;
+        content: attr(data-value);
+        font-size: 8px;
+        transform: translateX(50%);
+      }
+
+      .health-lanes {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .health-lane {
+        display: grid;
+        grid-template-columns: minmax(92px, 0.9fr) minmax(132px, 1.6fr) auto;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(226, 240, 233, 0.1);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.024);
+      }
+
+      .health-lane-name,
+      .project-card strong,
+      .actor-node strong,
+      .select-item strong,
+      .feed-row strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .health-lane-name {
+        font-size: 10px;
+      }
+
+      .progress-rail {
+        display: block;
+        width: 100%;
+        height: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      .progress-rail span {
+        display: block;
+        width: var(--progress);
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--green-deep), var(--green));
+      }
+
+      .is-attention .progress-rail span {
+        background: linear-gradient(90deg, rgba(255, 180, 92, 0.46), var(--amber));
+      }
+
+      .is-critical .progress-rail span {
+        background: linear-gradient(90deg, rgba(255, 92, 97, 0.5), var(--red));
+      }
+
+      .dashboard-detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.58fr) minmax(260px, 0.72fr);
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .dashboard-ops-grid,
+      .dashboard-feed-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .dashboard-feed-grid {
+        margin-top: 14px;
+      }
+
+      .dashboard-ops-grid .glass-panel,
+      .dashboard-feed-grid .glass-panel {
+        min-width: 0;
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.075), 0 16px 38px rgba(0, 0, 0, 0.28);
+      }
+
+      .select-list,
+      .compact-list {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .select-item {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        padding: 10px 11px;
+        border: 1px solid rgba(226, 240, 233, 0.11);
+        border-radius: 11px;
+        color: inherit;
+        background: rgba(255, 255, 255, 0.022);
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .select-item:hover,
+      .select-item[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.28);
+        background: rgba(55, 245, 138, 0.055);
+      }
+
+      .select-item.is-critical[aria-pressed="true"] {
+        border-color: rgba(255, 92, 97, 0.34);
+        background: rgba(255, 92, 97, 0.055);
+      }
+
+      .select-item-head strong {
+        font-size: 11px;
+      }
+
+      .select-item-meta,
+      .feed-row span {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .select-item-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px 10px;
+        margin-top: 5px;
+      }
+
+      .feed-row {
+        min-width: 0;
+        padding: 9px 0;
+        border-bottom: 1px solid rgba(226, 240, 233, 0.08);
+      }
+
+      .feed-row:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .feed-row-copy {
+        display: grid;
+        min-width: 0;
+      }
+
+      .feed-row strong {
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      .dashboard-context .context-list dd,
+      .project-summary .context-list dd,
+      .actor-summary .context-list dd {
+        max-width: 62%;
+        overflow-wrap: anywhere;
+      }
+
+      .portfolio-layout,
+      .actor-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.32fr);
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .portfolio-stage,
+      .actor-network-stage {
+        min-width: 0;
+      }
+
+      .portfolio-stage {
+        min-height: 430px;
+      }
+
+      .project-matrix-scroll {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+        scrollbar-width: thin;
+      }
+
+      .project-matrix {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(250px, 1fr));
+        gap: 11px;
+        min-width: 540px;
+        padding-top: 18px;
+      }
+
+      .project-card {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+        padding: 15px;
+        border: 1px solid rgba(226, 240, 233, 0.13);
+        border-radius: 13px;
+        color: inherit;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018));
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .project-card:hover,
+      .project-card[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.34);
+        background: linear-gradient(145deg, rgba(55, 245, 138, 0.085), rgba(255, 255, 255, 0.025));
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 12px 24px rgba(0, 0, 0, 0.22);
+      }
+
+      .project-card.is-critical[aria-pressed="true"] {
+        border-color: rgba(255, 92, 97, 0.4);
+      }
+
+      .project-card strong {
+        font-size: 13px;
+      }
+
+      .project-card-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin: 0;
+      }
+
+      .project-card-meta > span {
+        min-width: 0;
+      }
+
+      .project-meta-label,
+      .project-meta-value {
+        display: block;
+      }
+
+      .project-meta-label {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .project-meta-value {
+        margin-top: 2px;
+        overflow: hidden;
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .progress-copy {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .actor-network-stage {
+        min-height: 452px;
+      }
+
+      .network-scroll {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+        scrollbar-width: thin;
+      }
+
+      .actor-network-canvas {
+        position: relative;
+        min-width: 650px;
+        height: 356px;
+        margin-top: 12px;
+      }
+
+      .network-connectors {
+        position: absolute;
+        z-index: 0;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+      }
+
+      .network-connectors line {
+        stroke: rgba(226, 240, 233, 0.23);
+        stroke-width: 0.42;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .network-connectors line.is-primary {
+        stroke: rgba(55, 245, 138, 0.42);
+      }
+
+      .actor-node {
+        position: absolute;
+        z-index: 2;
+        top: var(--node-y);
+        left: var(--node-x);
+        display: grid;
+        width: 142px;
+        min-height: 84px;
+        padding: 11px;
+        border: 1px solid rgba(226, 240, 233, 0.15);
+        border-radius: 13px;
+        color: inherit;
+        background: linear-gradient(145deg, rgba(34, 41, 37, 0.96), rgba(11, 15, 13, 0.96));
+        box-shadow: 0 13px 28px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+        text-align: left;
+        transform: translate(-50%, -50%);
+      }
+
+      .actor-node:hover,
+      .actor-node[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.42);
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 0 24px rgba(55, 245, 138, 0.08);
+      }
+
+      .actor-node strong {
+        font-size: 11px;
+      }
+
+      .actor-node small {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .actor-node .progress-rail {
+        margin-top: 8px;
+      }
+
+      .skill-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 14px;
+      }
+
+      .skill-chip {
+        padding: 4px 8px;
+        border: 1px solid rgba(55, 245, 138, 0.16);
+        border-radius: 999px;
+        color: #bfc9c3;
+        background: rgba(55, 245, 138, 0.045);
+        font-size: 9px;
+      }
+
+      .summary-note {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 10px;
+        overflow-wrap: anywhere;
+      }
+
+      .project-matrix > .empty-state,
+      .actor-network-canvas > .empty-state {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+
+      .actor-network-canvas > .empty-state {
+        position: absolute;
+        inset: 62px 20px auto;
+      }
+
+      .execution-shell,
+      .detail-layout,
+      .task-workspace,
+      .gantt-layout,
+      .requirement-layout,
+      .defect-layout {
+        min-width: 0;
+      }
+
+      .detail-layout,
+      .gantt-layout,
+      .requirement-layout,
+      .defect-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr);
+        gap: 14px;
+      }
+
+      .milestone-stage {
+        min-height: 300px;
+      }
+
+      .milestone-track-scroll,
+      .pipeline-scroll,
+      .defect-matrix-scroll,
+      .gantt-scroll,
+      .task-fan-scroll,
+      .delivery-timeline-scroll {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+        scrollbar-width: thin;
+      }
+
+      .milestone-track {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(132px, 1fr));
+        gap: 8px;
+        min-width: 760px;
+        padding: 56px 8px 12px;
+      }
+
+      .milestone-track::before {
+        position: absolute;
+        top: 82px;
+        right: 7%;
+        left: 7%;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(226, 240, 233, 0.18), rgba(55, 245, 138, 0.48), rgba(226, 240, 233, 0.18));
+        content: "";
+      }
+
+      .milestone-button {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        min-height: 126px;
+        padding: 44px 12px 12px;
+        border: 1px solid rgba(226, 240, 233, 0.13);
+        border-radius: 13px;
+        color: inherit;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .milestone-button::before {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        width: 12px;
+        height: 12px;
+        border: 2px solid #78847d;
+        border-radius: 50%;
+        background: #111713;
+        content: "";
+        transform: translateX(-50%);
+      }
+
+      .milestone-button[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.42);
+        background: linear-gradient(145deg, rgba(55, 245, 138, 0.09), rgba(255, 255, 255, 0.022));
+        box-shadow: 0 0 26px rgba(55, 245, 138, 0.08);
+      }
+
+      .milestone-button[aria-pressed="true"]::before {
+        border-color: var(--green);
+        background: var(--green);
+        box-shadow: 0 0 16px rgba(55, 245, 138, 0.66);
+      }
+
+      .milestone-button strong,
+      .milestone-button span,
+      .milestone-button time {
+        display: block;
+      }
+
+      .milestone-button strong {
+        font-size: 11px;
+      }
+
+      .milestone-button span,
+      .milestone-button time {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .project-brief-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .record-list {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .record-list li {
+        min-width: 0;
+        padding: 9px 0;
+        border-bottom: 1px solid rgba(226, 240, 233, 0.08);
+      }
+
+      .record-list li:last-child {
+        border-bottom: 0;
+      }
+
+      .record-list strong,
+      .record-list span,
+      .record-list small {
+        display: block;
+        overflow-wrap: anywhere;
+      }
+
+      .record-list strong {
+        font-size: 10px;
+      }
+
+      .record-list span,
+      .record-list small {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .task-workspace {
+        display: grid;
+        grid-template-columns: minmax(210px, 0.46fr) minmax(0, 1fr) minmax(250px, 0.5fr);
+        gap: 14px;
+      }
+
+      .task-list-panel,
+      .task-fan-stage,
+      .task-context {
+        min-width: 0;
+        min-height: 350px;
+      }
+
+      .task-list-scroll {
+        max-height: 284px;
+        overflow-y: auto;
+        scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+        scrollbar-width: thin;
+      }
+
+      .task-list-items,
+      .delivery-timeline {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .task-list-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 6px;
+        border-top: 1px solid rgba(226, 240, 233, 0.08);
+      }
+
+      .task-list-item:first-child {
+        border-top: 0;
+      }
+
+      .task-row-button {
+        min-width: 0;
+        padding: 10px 4px;
+        border: 0;
+        border-radius: 9px;
+        color: inherit;
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .task-row-button[aria-pressed="true"] {
+        color: var(--green);
+        background: linear-gradient(90deg, rgba(55, 245, 138, 0.075), transparent);
+      }
+
+      .task-row-code,
+      .task-row-button strong,
+      .task-row-button small {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .task-row-code,
+      .task-row-button small {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .task-row-button strong {
+        margin: 3px 0;
+        font-size: 11px;
+      }
+
+      .task-detail-button {
+        min-width: 44px;
+        min-height: 32px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.026);
+        cursor: pointer;
+        font-size: 9px;
+      }
+
+      .task-fan-stage {
+        padding: 18px;
+        background:
+          radial-gradient(ellipse at 50% 72%, rgba(55, 245, 138, 0.06), transparent 42%),
+          linear-gradient(148deg, rgba(32, 38, 34, 0.8), rgba(9, 13, 11, 0.9));
+      }
+
+      .task-fan-scroll {
+        overflow-y: hidden;
+      }
+
+      .task-fan-canvas {
+        display: grid;
+        grid-auto-columns: 160px;
+        grid-auto-flow: column;
+        align-items: center;
+        gap: 12px;
+        position: relative;
+        min-width: max-content;
+        min-height: 292px;
+        padding: 22px 12px 38px;
+        perspective: 1050px;
+        perspective-origin: 50% 45%;
+        transform-style: preserve-3d;
+      }
+
+      .task-fan-canvas::before {
+        position: absolute;
+        right: 15%;
+        bottom: 12px;
+        left: 15%;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.62);
+        content: "";
+        filter: blur(14px);
+        pointer-events: none;
+        transform: rotateX(66deg);
+      }
+
+      .task-fan-card {
+        --fan-lift: 0px;
+        --fan-tilt: 0deg;
+        --fan-roll: 0deg;
+        --fan-scale: 1;
+        position: relative;
+        z-index: 1;
+        width: 160px;
+        min-height: 205px;
+        padding: 42px 14px 14px;
+        overflow: hidden;
+        border: 1px solid var(--line-bright);
+        border-radius: 14px;
+        clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+        color: inherit;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(25, 31, 27, 0.95));
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.16), 0 20px 34px rgba(0, 0, 0, 0.5);
+        cursor: pointer;
+        text-align: left;
+        transform: translateY(var(--fan-lift)) scale(var(--fan-scale));
+        transform-origin: 50% 88%;
+        transition: transform 220ms ease, border-color 180ms ease, box-shadow 180ms ease;
+      }
+
+      .task-fan-card:nth-child(1),
+      .task-fan-card:nth-child(6) {
+        --fan-lift: 12px;
+        --fan-scale: 0.97;
+      }
+
+      .task-fan-card:nth-child(2),
+      .task-fan-card:nth-child(5) {
+        --fan-lift: 5px;
+        --fan-scale: 0.985;
+      }
+
+      .task-fan-card:nth-child(1) {
+        --fan-tilt: 6deg;
+        --fan-roll: -1.2deg;
+      }
+
+      .task-fan-card:nth-child(2) {
+        --fan-tilt: 3.5deg;
+        --fan-roll: -0.7deg;
+      }
+
+      .task-fan-card:nth-child(3) {
+        --fan-tilt: 1.2deg;
+        --fan-roll: -0.2deg;
+      }
+
+      .task-fan-card:nth-child(4) {
+        --fan-tilt: -1.2deg;
+        --fan-roll: 0.2deg;
+      }
+
+      .task-fan-card:nth-child(5) {
+        --fan-tilt: -3.5deg;
+        --fan-roll: 0.7deg;
+      }
+
+      .task-fan-card:nth-child(6) {
+        --fan-tilt: -6deg;
+        --fan-roll: 1.2deg;
+      }
+
+      .task-fan-card[aria-pressed="true"] {
+        z-index: 2;
+        border-color: rgba(55, 245, 138, 0.86);
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(55, 245, 138, 0.24), 0 0 36px rgba(55, 245, 138, 0.32), 0 24px 38px rgba(0, 0, 0, 0.58);
+        transform: translateY(calc(var(--fan-lift) - 10px)) scale(1.02);
+      }
+
+      .task-fan-card:focus-visible {
+        outline: 2px solid var(--green);
+        outline-offset: -3px;
+      }
+
+      .task-fan-card::before {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 2;
+        width: 18px;
+        height: 18px;
+        border-bottom: 1px solid var(--line-bright);
+        border-left: 1px solid var(--line-bright);
+        background: linear-gradient(225deg, rgba(255, 255, 255, 0.18), rgba(7, 9, 8, 0.7) 55%);
+        content: "";
+      }
+
+      .task-fan-card::after {
+        position: absolute;
+        z-index: 0;
+        inset: -8%;
+        background: linear-gradient(105deg, rgba(255, 255, 255, 0.13), transparent 36%, rgba(0, 0, 0, 0.18));
+        content: "";
+        pointer-events: none;
+        transform: perspective(420px) rotateY(var(--fan-tilt)) rotateZ(var(--fan-roll));
+        transform-origin: 50% 80%;
+      }
+
+      .task-fan-card > small,
+      .task-fan-card > strong,
+      .task-fan-card > span {
+        position: relative;
+        z-index: 1;
+        display: block;
+        overflow-wrap: anywhere;
+      }
+
+      .task-fan-card > small {
+        color: var(--muted);
+        font-size: 8px;
+        letter-spacing: 0.05em;
+      }
+
+      .task-fan-card > strong {
+        margin: 8px 0 13px;
+        font-size: 11px;
+      }
+
+      .task-fan-card > span {
+        margin-top: 4px;
+        color: #b9c2bc;
+        font-size: 9px;
+      }
+
+      .task-context .context-list dd {
+        max-width: 61%;
+        overflow-wrap: anywhere;
+      }
+
+      .task-context-description,
+      .task-advice {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .task-advice {
+        padding: 10px;
+        border: 1px solid rgba(55, 245, 138, 0.14);
+        border-radius: 10px;
+        background: rgba(55, 245, 138, 0.045);
+      }
+
+      .task-context-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .delivery-timeline-panel {
+        min-width: 0;
+        margin-top: 14px;
+      }
+
+      .delivery-timeline {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(var(--timeline-count), minmax(118px, 1fr));
+        min-width: 700px;
+        padding: 14px 0 2px;
+      }
+
+      .delivery-timeline::before {
+        position: absolute;
+        top: 35px;
+        right: 6%;
+        left: 6%;
+        height: 1px;
+        background: var(--line-bright);
+        content: "";
+      }
+
+      .delivery-timeline li {
+        position: relative;
+        min-width: 0;
+        padding: 0 10px;
+      }
+
+      .timeline-task-button {
+        display: block;
+        width: 100%;
+        min-height: 76px;
+        padding: 30px 7px 7px;
+        border: 0;
+        border-radius: 9px;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .timeline-task-button::before {
+        position: absolute;
+        top: 17px;
+        left: 16px;
+        width: 9px;
+        height: 9px;
+        border: 1px solid var(--line-bright);
+        border-radius: 50%;
+        background: #79847e;
+        content: "";
+      }
+
+      .timeline-task-button[aria-pressed="true"] {
+        color: var(--text);
+        background: rgba(55, 245, 138, 0.05);
+      }
+
+      .timeline-task-button[aria-pressed="true"]::before {
+        border-color: var(--green);
+        background: var(--green);
+        box-shadow: 0 0 12px rgba(55, 245, 138, 0.58);
+      }
+
+      .timeline-task-button strong,
+      .timeline-task-button time {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .timeline-task-button strong {
+        font-size: 9px;
+      }
+
+      .timeline-task-button time {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .gantt-stage {
+        min-height: 492px;
+      }
+
+      .gantt-canvas {
+        position: relative;
+        min-height: var(--gantt-height);
+        margin-top: 14px;
+        border: 1px solid rgba(226, 240, 233, 0.1);
+        border-radius: 13px;
+        background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px calc(100% / var(--gantt-columns)));
+      }
+
+      .gantt-scale {
+        position: relative;
+        height: 46px;
+        border-bottom: 1px solid rgba(226, 240, 233, 0.12);
+      }
+
+      .gantt-scale span {
+        position: absolute;
+        top: 13px;
+        left: var(--scale-left);
+        color: var(--muted);
+        font-size: 9px;
+        transform: translateX(-50%);
+        white-space: nowrap;
+      }
+
+      .gantt-row {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: repeat(var(--gantt-columns), minmax(0, 1fr));
+        align-items: center;
+        height: 54px;
+        border-bottom: 1px solid rgba(226, 240, 233, 0.075);
+      }
+
+      .gantt-row:last-child {
+        border-bottom: 0;
+      }
+
+      .gantt-bar {
+        grid-column: var(--bar-start) / span var(--bar-span);
+        min-width: 64px;
+        min-height: 32px;
+        padding: 7px 9px;
+        overflow: hidden;
+        border: 1px solid rgba(226, 240, 233, 0.34);
+        border-radius: 9px;
+        color: #101512;
+        background: linear-gradient(90deg, #707b74, #b9c3bd);
+        box-shadow: none;
+        cursor: pointer;
+        text-align: left;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .gantt-bar.is-compact {
+        padding-inline: 4px;
+        font-size: 11px;
+      }
+
+      .gantt-bar.is-in-progress {
+        border-color: rgba(55, 245, 138, 0.44);
+        color: #031108;
+        background: linear-gradient(90deg, var(--green-deep), var(--green));
+        box-shadow: 0 0 16px rgba(55, 245, 138, 0.16);
+      }
+
+      .gantt-bar.is-neutral {
+        border-color: rgba(226, 240, 233, 0.34);
+        color: #101512;
+        background: linear-gradient(90deg, #707b74, #b9c3bd);
+        box-shadow: none;
+      }
+
+      .gantt-bar.is-complete {
+        border-color: rgba(226, 240, 233, 0.45);
+        color: #101512;
+        background: linear-gradient(90deg, #7d8881, #d7dfda);
+        box-shadow: none;
+      }
+
+      .gantt-bar.is-overdue {
+        border-color: rgba(255, 92, 97, 0.76);
+        color: #fff;
+        background: linear-gradient(90deg, #a92732, var(--red));
+        box-shadow: 0 0 16px rgba(255, 92, 97, 0.16);
+      }
+
+      .gantt-bar[aria-pressed="true"] {
+        outline: 2px solid var(--text);
+        outline-offset: 2px;
+      }
+
+      .gantt-connectors {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .gantt-connectors path {
+        fill: none;
+        stroke: rgba(226, 240, 233, 0.42);
+        stroke-width: 1.35;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .gantt-today {
+        position: absolute;
+        z-index: 3;
+        top: 0;
+        bottom: 0;
+        left: var(--today-left);
+        width: 1px;
+        background: var(--green);
+        box-shadow: 0 0 10px rgba(55, 245, 138, 0.68);
+        pointer-events: none;
+      }
+
+      .gantt-today span {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        color: var(--green);
+        font-size: 8px;
+        white-space: nowrap;
+      }
+
+      .dependency-summary {
+        margin: 12px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .gantt-inspector .context-list dd,
+      .requirement-context .context-list dd,
+      .defect-context .context-list dd {
+        max-width: 60%;
+        overflow-wrap: anywhere;
+      }
+
+      .requirement-stage,
+      .defect-stage {
+        min-height: 470px;
+      }
+
+      .requirement-pipeline {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(174px, 1fr));
+        gap: 9px;
+        min-width: 930px;
+        padding-top: 15px;
+      }
+
+      .requirement-column {
+        min-width: 0;
+        min-height: 330px;
+        padding: 10px;
+        border: 1px solid rgba(226, 240, 233, 0.1);
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.12);
+      }
+
+      .requirement-column h3 {
+        margin: 0 0 10px;
+        color: #c4ccc7;
+        font-size: 10px;
+      }
+
+      .requirement-column ol {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .requirement-card {
+        display: block;
+        width: 100%;
+        min-height: 104px;
+        padding: 11px;
+        border: 1px solid rgba(226, 240, 233, 0.14);
+        border-radius: 11px;
+        color: inherit;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .requirement-card[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.48);
+        background: rgba(55, 245, 138, 0.06);
+        box-shadow: 0 0 20px rgba(55, 245, 138, 0.08);
+      }
+
+      .requirement-card small,
+      .requirement-card strong,
+      .requirement-card span {
+        display: block;
+      }
+
+      .requirement-card small,
+      .requirement-card span {
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .requirement-card strong {
+        margin: 6px 0 10px;
+        font-size: 10px;
+      }
+
+      .requirement-column-empty {
+        min-height: 118px;
+        padding: 14px;
+        border: 1px dashed rgba(226, 240, 233, 0.14);
+        border-radius: 10px;
+        color: var(--muted);
+        font-size: 9px;
+        text-align: center;
+      }
+
+      .criteria-list,
+      .linked-list,
+      .reproduction-list {
+        margin: 12px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .criteria-list li + li,
+      .linked-list li + li,
+      .reproduction-list li + li {
+        margin-top: 5px;
+      }
+
+      .defect-matrix-table {
+        width: 100%;
+        min-width: 650px;
+        border-collapse: separate;
+        border-spacing: 7px;
+      }
+
+      .defect-matrix-table caption {
+        color: var(--muted);
+        font-size: 9px;
+        text-align: left;
+      }
+
+      .defect-matrix-table th {
+        padding: 6px;
+        color: var(--muted);
+        font-size: 9px;
+        font-weight: 600;
+      }
+
+      .defect-matrix-table td {
+        width: 29%;
+        min-width: 0;
+        height: 74px;
+        padding: 7px;
+        border: 1px solid rgba(226, 240, 233, 0.1);
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.14);
+        vertical-align: top;
+      }
+
+      .defect-cell-list {
+        display: grid;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .defect-button {
+        display: block;
+        width: 100%;
+        min-height: 42px;
+        padding: 8px;
+        border: 1px solid rgba(226, 240, 233, 0.18);
+        border-radius: 8px;
+        color: #cbd2ce;
+        background: rgba(255, 255, 255, 0.035);
+        cursor: pointer;
+        font-size: 8px;
+        text-align: left;
+      }
+
+      .defect-button.severity-blocker,
+      .defect-button.severity-critical {
+        border-color: rgba(255, 92, 97, 0.44);
+        color: #ffd7d9;
+        background: rgba(255, 92, 97, 0.075);
+      }
+
+      .defect-button.severity-high {
+        border-color: rgba(255, 180, 92, 0.38);
+        color: #ffe0b9;
+        background: rgba(255, 180, 92, 0.06);
+      }
+
+      .defect-button[aria-pressed="true"] {
+        outline: 2px solid var(--green);
+        outline-offset: 2px;
+      }
+
+      .defect-cell-empty {
+        color: #69736d;
+        font-size: 8px;
+      }
+
+      .triage-queue {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(226, 240, 233, 0.1);
+      }
+
+      .triage-queue h3 {
+        margin: 0 0 8px;
+        font-size: 10px;
+      }
+
+      .triage-queue ol {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .triage-queue .defect-button {
+        min-height: 54px;
+      }
+
+      .settings-shell,
+      .settings-layout,
+      .settings-detail {
+        min-width: 0;
+      }
+
+      .settings-layout {
+        display: grid;
+        grid-template-columns: minmax(180px, 0.3fr) minmax(0, 1fr);
+        align-items: start;
+        gap: 14px;
+      }
+
+      .settings-category-panel {
+        padding: 12px;
+      }
+
+      .settings-category-list {
+        display: grid;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .settings-category-list button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        min-height: 42px;
+        padding: 9px 11px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .settings-category-list button::after {
+        color: #68716c;
+        content: "›";
+      }
+
+      .settings-category-list button:hover,
+      .settings-category-list button[aria-pressed="true"] {
+        border-color: rgba(55, 245, 138, 0.2);
+        color: var(--text);
+        background: rgba(55, 245, 138, 0.07);
+      }
+
+      .settings-category-list button[aria-pressed="true"]::after {
+        color: var(--green);
+      }
+
+      .settings-detail {
+        min-height: 430px;
+      }
+
+      .settings-form {
+        display: grid;
+        gap: 18px;
+      }
+
+      .settings-form fieldset {
+        display: grid;
+        gap: 14px;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .settings-form legend {
+        margin-bottom: 13px;
+        color: #cbd3ce;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .settings-control {
+        display: grid;
+        grid-template-columns: minmax(130px, 0.4fr) minmax(0, 1fr);
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+        padding: 12px 0;
+        border-top: 1px solid rgba(226, 240, 233, 0.09);
+      }
+
+      .settings-control > label,
+      .settings-checkbox span {
+        color: #cbd3ce;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .settings-control input[type="text"],
+      .settings-control select {
+        width: 100%;
+        min-width: 0;
+        min-height: 40px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.24);
+      }
+
+      .settings-control select option {
+        color: #111713;
+        background: #f3f7f4;
+      }
+
+      .settings-checkbox {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        cursor: pointer;
+      }
+
+      .settings-checkbox input {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 auto;
+        margin: 1px 0 0;
+        accent-color: var(--green-deep);
+      }
+
+      .settings-checkbox-detail {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+      }
+
+      .settings-checkbox-detail > small {
+        margin-left: 27px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .settings-checkbox-row {
+        display: grid;
+        gap: 11px;
+        min-width: 0;
+      }
+
+      .settings-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-top: 2px;
+      }
+
+      .settings-preview-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      @media (max-width: 1180px) {
+        .task-workspace {
+          grid-template-columns: minmax(210px, 0.44fr) minmax(0, 1fr);
+        }
+
+        .task-context {
+          grid-column: 1 / -1;
+          min-height: auto;
+        }
+      }
+
+      .toast {
+        position: fixed;
+        z-index: 50;
+        right: 20px;
+        bottom: 20px;
+        max-width: min(360px, calc(100vw - 40px));
+        padding: 11px 14px;
+        border: 1px solid var(--line-bright);
+        border-radius: 11px;
+        color: var(--text);
+        background: rgba(15, 20, 17, 0.96);
+        box-shadow: var(--shadow);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition: opacity 160ms ease, transform 160ms ease;
+      }
+
+      .toast.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 1080px) {
+        .metric-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .content-frame {
+          grid-template-columns: 1fr;
+        }
+
+        .health-trend-layout,
+        .dashboard-detail-grid,
+        .portfolio-layout,
+        .actor-layout,
+        .detail-layout,
+        .gantt-layout,
+        .requirement-layout,
+        .defect-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .dashboard-context,
+        .project-summary,
+        .actor-summary {
+          min-height: auto;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .app-shell {
+          display: block;
+        }
+
+        .side-rail {
+          position: relative;
+          width: 100%;
+          height: auto;
+          padding: 14px 14px 10px;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .brand {
+          padding-bottom: 10px;
+        }
+
+        .offline-notice {
+          width: max-content;
+          max-width: 100%;
+          margin: 0 0 10px;
+          white-space: nowrap;
+        }
+
+        .rail-scroll {
+          overflow-x: auto;
+          overflow-y: hidden;
+        }
+
+        .rail-scroll > nav,
+        .nav-list {
+          display: flex;
+        }
+
+        .rail-scroll > nav {
+          width: max-content;
+          min-width: 100%;
+        }
+
+        .nav-group,
+        .nav-group + .nav-group {
+          flex: 0 0 auto;
+          margin: 0 12px 0 0;
+        }
+
+        .nav-label,
+        .rail-footer {
+          display: none;
+        }
+
+        .nav-list {
+          gap: 5px;
+        }
+
+        .nav-link {
+          min-height: 35px;
+          white-space: nowrap;
+        }
+
+        .nav-link::after {
+          top: auto;
+          right: 10px;
+          bottom: 0;
+          left: 10px;
+          width: auto;
+          height: 2px;
+        }
+
+        .page-main {
+          padding: 24px 16px 36px;
+        }
+
+        .page-header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .header-actions {
+          justify-content: flex-start;
+        }
+
+        .dashboard-ops-grid,
+        .dashboard-feed-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .health-trend-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .health-lane {
+          grid-template-columns: minmax(90px, 0.9fr) minmax(120px, 1.4fr) auto;
+        }
+
+        .project-matrix {
+          grid-template-columns: 1fr;
+          min-width: 0;
+        }
+
+        .project-brief-grid,
+        .task-workspace,
+        .settings-layout,
+        .triage-queue ol {
+          grid-template-columns: 1fr;
+        }
+
+        .settings-category-panel {
+          overflow: hidden;
+        }
+
+        .settings-category-list {
+          display: flex;
+          overflow-x: auto;
+          scrollbar-color: rgba(55, 245, 138, 0.34) transparent;
+          scrollbar-width: thin;
+        }
+
+        .settings-category-list li {
+          flex: 0 0 auto;
+        }
+
+        .settings-category-list button {
+          min-width: 108px;
+          white-space: nowrap;
+        }
+
+        .task-context {
+          grid-column: auto;
+        }
+
+        .task-list-panel,
+        .task-fan-stage,
+        .task-context {
+          min-height: auto;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .metric-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .metric-card {
+          min-height: 86px;
+        }
+
+        .signature-stage {
+          padding: 16px;
+        }
+
+        .glass-panel,
+        .context-panel {
+          padding: 16px;
+        }
+
+        .signature-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .health-lane {
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .health-lane .progress-rail {
+          grid-column: 1 / -1;
+          grid-row: 2;
+        }
+
+        .trend-summary {
+          padding: 12px;
+        }
+
+        .trend-bars {
+          gap: 4px;
+        }
+
+        .project-card-meta {
+          grid-template-columns: 1fr;
+        }
+
+        .settings-control {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+
+        .settings-actions {
+          justify-content: stretch;
+        }
+
+        .settings-actions button {
+          flex: 1 1 148px;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .task-fan-canvas {
+          display: grid;
+          grid-auto-columns: minmax(156px, 72%);
+          grid-auto-flow: column;
+          gap: 10px;
+          min-width: max-content;
+          min-height: 230px;
+          padding: 6px 4px 14px;
+          perspective: none;
+          scroll-snap-type: x mandatory;
+        }
+
+        .task-fan-canvas::before {
+          display: none;
+        }
+
+        .task-fan-card,
+        .task-fan-card[aria-pressed="true"] {
+          position: relative;
+          top: auto;
+          left: auto;
+          z-index: auto;
+          width: auto;
+          min-height: 204px;
+          transform: none;
+          scroll-snap-align: center;
+        }
+
+        .task-fan-scroll {
+          scroll-snap-type: x mandatory;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+
+        .page-view,
+        .toast {
+          transform: none;
+        }
+
+        .task-fan-canvas {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(145px, 1fr));
+          gap: 8px;
+          min-width: 470px;
+          min-height: auto;
+          padding: 6px;
+          perspective: none;
+        }
+
+        .task-fan-canvas::before {
+          display: none;
+        }
+
+        .task-fan-card,
+        .task-fan-card[aria-pressed="true"] {
+          position: relative;
+          top: auto;
+          left: auto;
+          z-index: auto;
+          width: auto;
+          min-height: 165px;
+          padding: 36px 11px 11px;
+          transform: none;
+        }
+
+        .task-fan-card::after {
+          transform: none;
+        }
+
+        .network-connectors,
+        .actor-node {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <div class="ambient" aria-hidden="true"></div>
+    <div class="app-shell">
+      <aside class="side-rail" aria-label="主导航">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">P</div>
+          <div class="brand-copy">
+            <strong>Project OS</strong>
+            <span>Delivery system</span>
+          </div>
+        </div>
+        <p class="offline-notice" role="note">离线演示数据 · 不连接服务</p>
+
+        <div class="rail-scroll">
+          <nav aria-label="页面导航">
+            <section class="nav-group" aria-labelledby="nav-overview">
+              <h2 class="nav-label" id="nav-overview">概览</h2>
+              <ul class="nav-list">
+                <li><a class="nav-link" href="#dashboard" data-route="dashboard"><span class="nav-icon" aria-hidden="true">◫</span>全局驾驶舱</a></li>
+                <li><a class="nav-link" href="#projects" data-route="projects"><span class="nav-icon" aria-hidden="true">◇</span>项目矩阵</a></li>
+                <li><a class="nav-link" href="#actors" data-route="actors"><span class="nav-icon" aria-hidden="true">◎</span>协作者网络</a></li>
+              </ul>
+            </section>
+
+            <section class="nav-group" aria-labelledby="nav-delivery">
+              <h2 class="nav-label" id="nav-delivery">交付</h2>
+              <ul class="nav-list">
+                <li><a class="nav-link" href="#project-detail" data-route="project-detail"><span class="nav-icon" aria-hidden="true">⌁</span>项目详情</a></li>
+                <li><a class="nav-link" href="#tasks" data-route="tasks"><span class="nav-icon" aria-hidden="true">✓</span>任务控制台</a></li>
+                <li><a class="nav-link" href="#gantt" data-route="gantt"><span class="nav-icon" aria-hidden="true">—</span>甘特排程</a></li>
+              </ul>
+            </section>
+
+            <section class="nav-group" aria-labelledby="nav-quality">
+              <h2 class="nav-label" id="nav-quality">质量</h2>
+              <ul class="nav-list">
+                <li><a class="nav-link" href="#requirements" data-route="requirements"><span class="nav-icon" aria-hidden="true">△</span>需求管线</a></li>
+                <li><a class="nav-link" href="#defects" data-route="defects"><span class="nav-icon" aria-hidden="true">!</span>缺陷矩阵</a></li>
+              </ul>
+            </section>
+
+            <section class="nav-group" aria-labelledby="nav-system">
+              <h2 class="nav-label" id="nav-system">系统</h2>
+              <ul class="nav-list">
+                <li><a class="nav-link" href="#settings" data-route="settings"><span class="nav-icon" aria-hidden="true">⚙</span>设置中心</a></li>
+              </ul>
+            </section>
+          </nav>
+        </div>
+
+        <div class="rail-footer">
+          <div class="workspace-card">
+            <div class="rail-card-copy">
+              <span>Workspace / Project</span>
+              <strong>Project OS Core</strong>
+            </div>
+          </div>
+          <div class="user-card">
+            <div class="user-avatar" aria-hidden="true">LO</div>
+            <div class="rail-card-copy">
+              <span>当前负责人</span>
+              <strong>Local Owner</strong>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="page-main" id="main-content" tabindex="-1">
+        <div data-page-root></div>
+      </main>
+    </div>
+    <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <script>
+      const routeOrder = ['dashboard','projects','project-detail','actors','tasks','gantt','requirements','defects','settings']
+
+      const pageTitles = {
+        dashboard: '全局驾驶舱',
+        projects: '项目矩阵',
+        'project-detail': '项目详情',
+        actors: '协作者网络',
+        tasks: '任务控制台',
+        gantt: '甘特排程',
+        requirements: '需求管线',
+        defects: '缺陷矩阵',
+        settings: '设置中心',
+      }
+
+      const pageRoot = document.querySelector('[data-page-root]')
+      const mainContent = document.querySelector('#main-content')
+      const railScroll = document.querySelector('.rail-scroll')
+      const toast = document.querySelector('.toast')
+      let toastTimer = 0
+      let toastClearTimer = 0
+      let lastRenderedRoute = null
+
+      const pageRenderers = {
+        dashboard: renderDashboard,
+        projects: renderProjects,
+        'project-detail': renderProjectDetail,
+        actors: renderActors,
+        tasks: renderTasks,
+        gantt: renderGantt,
+        requirements: renderRequirements,
+        defects: renderDefects,
+        settings: renderSettings,
+      }
+
+      const pageShells = {
+        dashboard: {
+          description: '项目健康、协作状态与交付风险的统一观测面。',
+          action: '创建项目',
+          stage: '项目健康度轨道',
+          stageMeta: '全局 · 演示快照',
+          metrics: [['活跃项目', '08', '+2 本周'], ['交付中', '14', '72% 正常'], ['待处理风险', '05', '2 项紧急'], ['协作者样例', '12', '4 个 Agent']],
+          items: [['Project OS', '健康 92%', 5, ''], ['MCP 接入', '关注 68%', 3, 'is-amber'], ['移动验收', '健康 84%', 4, ''], ['发布流程', '风险 42%', 2, 'is-red'], ['知识网络', '健康 76%', 3, '']],
+          context: [['工作区', 'Project OS Core'], ['关键风险', '2 项需决策'], ['下次交付', '今天 18:00']],
+        },
+        projects: {
+          description: '横向比较项目进度、负责人、目标日期与风险暴露。',
+          action: '新建项目',
+          stage: '玻璃项目矩阵',
+          stageMeta: '8 个项目 · 3 个视角',
+          metrics: [['项目总数', '08', '+1 本月'], ['正常', '05', '62.5%'], ['需关注', '02', '趋势持平'], ['高风险', '01', '需介入']],
+          items: [['OS v1.2', '72% · Lin', 4, ''], ['MCP 矩阵', '48% · Agent', 3, 'is-amber'], ['移动验收', '64% · Chen', 4, ''], ['发布自动化', '36% · QA', 2, 'is-red'], ['研究索引', '81% · Lin', 5, '']],
+          context: [['当前筛选', '全部项目'], ['平均进度', '63%'], ['近期截止', '3 个项目']],
+        },
+        'project-detail': {
+          description: '聚焦单一项目的阶段进度、当前任务与交付接力。',
+          action: '记录进展',
+          stage: '阶段里程碑轨道',
+          stageMeta: 'Project OS v1.2',
+          metrics: [['总体进度', '72%', '+6%'], ['开放任务', '14', '5 项进行中'], ['交付物', '09', '7 项通过'], ['风险', '02', '均有负责人']],
+          items: [['定义', '已完成', 2, ''], ['设计', '已完成', 3, ''], ['实现', '进行中', 5, ''], ['验证', '待开始', 3, 'is-amber'], ['发布', '待开始', 2, '']],
+          context: [['负责人', 'Lin + dev-agent'], ['当前阶段', '实现'], ['目标日期', '2026-08-31']],
+        },
+        actors: {
+          description: '观察人类与 Agent 的负载、技能和协作关系。',
+          action: '邀请协作者',
+          stage: '人机协作者网络',
+          stageMeta: '12 个节点 · 19 条连接',
+          metrics: [['协作者', '12', '8 人 / 4 Agent'], ['样例活跃', '09', '75%'], ['平均负载', '61%', '可调度'], ['待交接', '03', '1 项紧急']],
+          items: [['Lin', '产品 · 在线', 4, ''], ['dev-agent', '编码 · 运行中', 5, ''], ['Chen', '设计 · 专注', 3, ''], ['qa-agent', '测试 · 待命', 2, 'is-amber'], ['Ops', '发布 · 在线', 4, '']],
+          context: [['当前网络', 'Project OS Core'], ['高负载', 'dev-agent 76%'], ['协作密度', '健康']],
+        },
+        tasks: {
+          description: '把优先级、执行状态、上下文和交付证据放在一个操作面。',
+          action: '创建任务',
+          stage: '任务控制台卡组',
+          stageMeta: '今日 · 6 个关键任务',
+          metrics: [['今日待办', '08', '3 项高优'], ['进行中', '05', '2 项协作'], ['已完成', '12', '+4 今日'], ['逾期', '02', '需处理']],
+          items: [['POS-081', 'Shell 实现', 5, ''], ['POS-083', '路由契约', 4, ''], ['POS-087', '视觉校准', 3, 'is-amber'], ['POS-092', '响应式', 3, ''], ['POS-094', '回归验证', 2, 'is-red']],
+          context: [['当前视图', '我的任务'], ['交付范围', '今日'], ['下一检查点', '16:30']],
+        },
+        gantt: {
+          description: '在深色时间轴中校准范围、依赖、进度与截止风险。',
+          action: '调整排程',
+          stage: '深色甘特时间轴',
+          stageMeta: '8 月 · 周视图',
+          metrics: [['计划任务', '24', '5 个阶段'], ['进行中', '07', '29%'], ['已完成', '11', '46%'], ['逾期', '02', '8%']],
+          items: [['基础架构', '08.01—08.05', 3, ''], ['核心页面', '08.04—08.12', 5, ''], ['交互联调', '08.10—08.17', 4, ''], ['验收修复', '08.16—08.22', 3, 'is-amber'], ['发布准备', '08.22—08.25', 2, '']],
+          context: [['缩放范围', '周'], ['关键路径', '5 个任务'], ['今日偏差', '+0.5 天']],
+        },
+        requirements: {
+          description: '让需求从收集到交付的状态、责任与追踪关系可见。',
+          action: '录入需求',
+          stage: '需求生命周期管线',
+          stageMeta: '5 个阶段 · 18 条需求',
+          metrics: [['需求总数', '18', '+3 本周'], ['评审中', '04', '2 项阻塞'], ['开发中', '06', '33%'], ['已交付', '05', '验收通过']],
+          items: [['收集', '3 条需求', 2, ''], ['评审', '4 条需求', 3, 'is-amber'], ['已批准', '2 条需求', 2, ''], ['开发中', '6 条需求', 5, ''], ['已交付', '5 条需求', 4, '']],
+          context: [['本周新增', '3 条'], ['待澄清', 'REQ-041'], ['追踪覆盖', '92%']],
+        },
+        defects: {
+          description: '按严重度与影响面组织缺陷，快速锁定阻塞与回归风险。',
+          action: '报告缺陷',
+          stage: '风险分级影响矩阵',
+          stageMeta: '12 个开放缺陷',
+          metrics: [['开放缺陷', '12', '-3 本周'], ['严重', '02', '均已认领'], ['修复中', '05', '42%'], ['待验证', '03', 'QA 队列']],
+          items: [['Blocker', '1 · 发布阻塞', 5, 'is-red'], ['Critical', '1 · 核心路径', 4, 'is-red'], ['Major', '4 · 体验影响', 3, 'is-amber'], ['Minor', '5 · 局部问题', 2, ''], ['Trivial', '1 · 低影响', 1, '']],
+          context: [['最高优先级', 'BUG-118'], ['影响版本', 'v1.2 RC1'], ['修复负责人', 'dev-agent']],
+        },
+        settings: {
+          description: '配置外观、数据连接、MCP 与 Skills，不产生真实持久化。',
+          action: '保存预览',
+          stage: '系统配置工作区',
+          stageMeta: '本地预览模式',
+          metrics: [['外观方案', '01', '深色玻璃'], ['数据源', '03', '2 个样例'], ['MCP 服务', '04', '3 个样例'], ['Skills', '16', '12 个启用']],
+          items: [['外观', '主题与密度', 3, ''], ['数据', '导入与快照', 2, ''], ['MCP', '连接与权限', 4, ''], ['Skills', '能力与范围', 3, ''], ['审计', '只读记录', 2, '']],
+          context: [['运行模式', '离线原型'], ['存储状态', '不会写入'], ['最近检查', '刚刚']],
+        },
+      }
+
+      const projects = [
+        { id:'project-os', name:'Project OS v1.2', owner:'Lin', progress:72, health:'正常', risk:2, due:'2026-08-31' },
+        { id:'mcp-bridge', name:'MCP 接入矩阵', owner:'dev-agent', progress:48, health:'关注', risk:4, due:'2026-09-12' },
+        { id:'mobile-review', name:'移动端体验验收', owner:'Chen', progress:64, health:'正常', risk:1, due:'2026-08-20' },
+        { id:'release-flow', name:'发布流程自动化', owner:'qa-agent', progress:36, health:'高风险', risk:5, due:'2026-08-18' },
+      ]
+
+      const actors = [
+        { id:'lin', name:'Lin', type:'human', status:'在线', load:68, skills:['产品','架构'] },
+        { id:'chen', name:'Chen', type:'human', status:'专注', load:54, skills:['设计','前端'] },
+        { id:'dev-agent', name:'dev-agent', type:'agent', status:'运行中', load:76, skills:['编码','重构'] },
+        { id:'qa-agent', name:'qa-agent', type:'agent', status:'待命', load:32, skills:['测试','验收'] },
+      ]
+
+      const healthTrend = [
+        { id:'health-01', label:'07.26', value:69 },
+        { id:'health-02', label:'07.27', value:71 },
+        { id:'health-03', label:'07.28', value:70 },
+        { id:'health-04', label:'07.29', value:74 },
+        { id:'health-05', label:'07.30', value:73 },
+        { id:'health-06', label:'07.31', value:76 },
+        { id:'health-07', label:'08.01', value:78 },
+      ]
+
+      const riskQueue = [
+        { id:'risk-01', projectId:'release-flow', severity:'危急', title:'回滚验证尚未闭环', owner:'qa-agent', due:'2026-08-18', detail:'发布流程缺少最后一轮回滚证据，需在候选版本冻结前完成。' },
+        { id:'risk-02', projectId:'mcp-bridge', severity:'关注', title:'接入矩阵覆盖不足', owner:'dev-agent', due:'2026-08-14', detail:'两个外部能力仍缺少权限降级路径与失败态说明。' },
+        { id:'risk-03', projectId:'project-os', severity:'关注', title:'跨页面焦点回归待验证', owner:'Lin', due:'2026-08-09', detail:'键盘用户的路由与局部重渲染焦点需要完成一次回归。' },
+      ]
+
+      const tasks = [
+        { id:'task-001', code:'POS-2026-081', title:'需求评审会', description:'确认执行与质量页面的范围、验收证据和跨页面状态语义。', owner:'Lin', projectId:'project-os', project:'Project OS v1.2', start:'2026-08-10', due:'2026-08-24', status:'进行中', priority:'高', progress:72, scope:['all','mine','involved'], dependencies:[], tags:['需求评审','关键路径'] },
+        { id:'task-002', code:'POS-2026-084', title:'执行页面联调', description:'联调任务、甘特与项目详情的选择、筛选和焦点恢复。', owner:'Brandon', projectId:'project-os', project:'Project OS v1.2', start:'2026-08-18', due:'2026-08-28', status:'进行中', priority:'高', progress:58, scope:['all','involved'], dependencies:['task-001'], tags:['前端','联调'] },
+        { id:'task-003', code:'POS-2026-076', title:'共享壳层基线', description:'冻结共享路由、导航和无障碍壳层，供后续页面复用。', owner:'Lin', projectId:'project-os', project:'Project OS v1.2', start:'2026-08-01', due:'2026-08-12', status:'已完成', priority:'中', progress:100, scope:['all','mine'], dependencies:[], tags:['架构','无障碍'] },
+        { id:'task-004', code:'UX-2026-119', title:'窄屏交互验收', description:'验证 390px 与 600px 下局部滚动、触控目标和文本可读性。', owner:'Qiao', projectId:'mobile-review', project:'移动端体验验收', start:'2026-08-11', due:'2026-08-16', status:'逾期', priority:'高', progress:64, scope:['all','involved'], dependencies:['task-003'], tags:['响应式','验收'] },
+        { id:'task-005', code:'REL-2026-031', title:'候选版本检查', description:'汇总交付物、缺陷门禁和回滚入口，形成候选版本检查清单。', owner:'Yun', projectId:'release-flow', project:'发布流程自动化', start:'2026-08-24', due:'2026-08-30', status:'待处理', priority:'中', progress:18, scope:['all','mine'], dependencies:['task-001','task-002'], tags:['发布','检查清单'] },
+        { id:'task-006', code:'QA-2026-052', title:'无障碍回归', description:'复核键盘焦点、命名区域、状态播报和 reduced-motion 呈现。', owner:'Mei', projectId:'project-os', project:'Project OS v1.2', start:'2026-08-14', due:'2026-08-22', status:'进行中', priority:'中', progress:46, scope:['all','mine','involved'], dependencies:['task-003'], tags:['WCAG','回归'] },
+      ]
+
+      const requirements = [
+        { id:'requirement-001', code:'REQ-2026-041', title:'跨页面执行态可追踪', status:'评审', owner:'Lin', priority:'高', taskIds:['task-001'], acceptanceCriteria:['里程碑、任务与质量对象均可通过稳定 ID 选择','选择后上下文与播报同步更新'], changeRisk:'中' },
+        { id:'requirement-002', code:'REQ-2026-042', title:'任务工作台共享壳适配', status:'开发中', owner:'Brandon', priority:'高', taskIds:['task-002','task-006'], acceptanceCriteria:['默认展示六张任务扇形卡','筛选、范围与完成反馈不写入持久存储'], changeRisk:'高' },
+        { id:'requirement-003', code:'REQ-2026-043', title:'共享路由可访问基线', status:'已交付', owner:'Lin', priority:'高', taskIds:['task-003'], acceptanceCriteria:['路由往返保留正确 aria-current','页面标题在哈希路由后获得焦点'], changeRisk:'低' },
+        { id:'requirement-004', code:'REQ-2026-044', title:'窄屏局部滚动边界', status:'已批准', owner:'Qiao', priority:'中', taskIds:['task-004'], acceptanceCriteria:['390px 与 600px 无文档级横向溢出','复杂图形仅在自身容器横向滚动'], changeRisk:'中' },
+        { id:'requirement-005', code:'REQ-2026-045', title:'候选版本质量门禁', status:'收集', owner:'Yun', priority:'中', taskIds:['task-005'], acceptanceCriteria:['Blocker 与 Critical 有明确负责人','交付物和回滚入口可追踪'], changeRisk:'高' },
+      ]
+
+      const defects = [
+        { id:'defect-001', code:'BUG-2026-118', title:'窄屏甘特条越出文档', severity:'Blocker', impact:'高', status:'处理中', owner:'Qiao', version:'v1.2 RC1', requirementId:'requirement-004', steps:['将视口调整到 390px','打开甘特排程','横向滚动局部时间线并观察页面边界'] },
+        { id:'defect-002', code:'BUG-2026-121', title:'任务完成反馈暗示已保存', severity:'Critical', impact:'高', status:'待确认', owner:'Lin', version:'v1.2 RC1', projectId:'project-os', steps:['打开任务控制台','点击标记完成','检查提示文案是否说明仅为预览内存态'] },
+        { id:'defect-003', code:'BUG-2026-124', title:'需求断链缺少回退文本', severity:'高', impact:'中', status:'待处理', owner:'Brandon', version:'v1.2 Beta 3', requirementId:'requirement-002', steps:['构造不存在的 task ID','选择对应需求','检查关联任务区域'] },
+        { id:'defect-004', code:'BUG-2026-126', title:'路由返回后焦点丢失', severity:'中', impact:'高', status:'回归中', owner:'Mei', version:'v1.2 Beta 3', requirementId:'requirement-003', steps:['键盘进入质量页面','切换路由后返回','检查页面标题与局部控件焦点'] },
+        { id:'defect-005', code:'BUG-2026-129', title:'交付列表空态间距不一致', severity:'低', impact:'低', status:'待处理', owner:'Yun', version:'v1.2 Beta 2', projectId:'project-os', steps:['清空交付演示数据','打开项目详情','检查空态是否占据完整内容区域'] },
+      ]
+
+      const milestones = [
+        { id:'milestone-001', phase:'定义', name:'范围确认', date:'2026-08-05', status:'已完成', summary:'锁定九页信息架构与共享视觉基线。', owner:'Lin', risk:'低' },
+        { id:'milestone-002', phase:'设计', name:'视觉签核', date:'2026-08-12', status:'已完成', summary:'确认黑银绿系统与每页独特 signature。', owner:'Chen', risk:'低' },
+        { id:'milestone-003', phase:'实现', name:'执行页联调', date:'2026-08-24', status:'进行中', summary:'完成项目、任务、甘特、需求和缺陷页面交互。', owner:'Brandon', risk:'中' },
+        { id:'milestone-004', phase:'验证', name:'质量回归', date:'2026-08-28', status:'待开始', summary:'覆盖窄屏、键盘、坏引用和 reduced-motion。', owner:'Mei', risk:'中' },
+        { id:'milestone-005', phase:'发布', name:'候选版本', date:'2026-08-31', status:'待开始', summary:'归档证据并完成候选版本门禁。', owner:'Yun', risk:'高' },
+      ]
+
+      const deliverables = [
+        { id:'deliverable-01', projectId:'mobile-review', name:'390px 验收快照', status:'已通过', time:'今天 10:40', owner:'Qiao' },
+        { id:'deliverable-02', projectId:'project-os', name:'信息架构签核', status:'已归档', time:'昨天 18:15', owner:'Lin' },
+        { id:'deliverable-03', projectId:'mcp-bridge', name:'能力兼容性清单', status:'评审中', time:'昨天 15:30', owner:'dev-agent' },
+        { id:'deliverable-04', projectId:'project-os', name:'执行与质量页交互原型', status:'制作中', time:'今天 16:30', owner:'Brandon' },
+      ]
+
+      const handoffs = [
+        { id:'handoff-001', projectId:'project-os', from:'Chen', to:'Brandon', time:'今天 09:20', summary:'视觉 token、断点边界与五页 signature 已确认。', status:'已接收' },
+        { id:'handoff-002', projectId:'project-os', from:'Brandon', to:'Mei', time:'今天 15:10', summary:'执行页面进入交互与无障碍回归阶段。', status:'待确认' },
+        { id:'handoff-003', projectId:'release-flow', from:'Yun', to:'qa-agent', time:'昨天 17:45', summary:'候选版本检查清单等待缺陷门禁结果。', status:'已接收' },
+      ]
+
+      const activityRecords = [
+        { id:'activity-01', actorId:'chen', projectId:'mobile-review', text:'Chen 完成移动端对比验收', time:'12 分钟前' },
+        { id:'activity-02', actorId:'dev-agent', projectId:'mcp-bridge', text:'dev-agent 更新权限降级说明', time:'36 分钟前' },
+        { id:'activity-03', actorId:'lin', projectId:'project-os', text:'Lin 确认 v1.2 信息架构', time:'1 小时前' },
+        { id:'activity-04', actorId:'qa-agent', projectId:'release-flow', text:'qa-agent 提交回滚检查清单', time:'2 小时前' },
+      ]
+
+      const actorNodePositions = Object.freeze({
+        lin: { x: 22, y: 32 },
+        chen: { x: 76, y: 28 },
+        'dev-agent': { x: 42, y: 74 },
+        'qa-agent': { x: 78, y: 74 },
+      })
+
+      const actorConnections = [
+        { from:'lin', to:'chen', primary:false },
+        { from:'lin', to:'dev-agent', primary:true },
+        { from:'chen', to:'dev-agent', primary:false },
+        { from:'chen', to:'qa-agent', primary:true },
+        { from:'dev-agent', to:'qa-agent', primary:false },
+      ]
+
+      const previewState = {
+        dashboardSelection:'risk-01',
+        projectFilter:'all',
+        selectedProjectId:'project-os',
+        actorFilter:'all',
+        selectedActorId:'lin',
+        selectedMilestoneId:milestones[0]?.id ?? null,
+        taskScope:'all',
+        selectedTaskId:'task-001',
+        taskRange:'month',
+        ganttRange:'month',
+        selectedGanttTaskId:'task-001',
+        selectedRequirementId:requirements[0]?.id ?? null,
+        selectedDefectId:defects[0]?.id ?? null,
+        settingsSection:'appearance',
+        completedTaskIds:new Set(),
+      }
+
+      const projectFilterValues = new Set(['all', 'healthy', 'attention', 'risk'])
+      const actorFilterValues = new Set(['all', 'human', 'agent'])
+      const taskScopeValues = new Set(['all', 'mine', 'involved'])
+      const rangeValues = new Set(['week', 'month', 'quarter'])
+      const projectFilterLabels = new Map([['all', '全部'], ['healthy', '正常'], ['attention', '关注'], ['risk', '高风险']])
+      const actorFilterLabels = new Map([['all', '全部'], ['human', '人类'], ['agent', 'Agent']])
+      const taskScopeLabels = new Map([['all', '全部'], ['mine', '我的'], ['involved', '我参与的']])
+      const rangeLabels = new Map([['week', '本周'], ['month', '本月'], ['quarter', '本季度']])
+      const DEMO_REFERENCE_DATE = '2026-08-22'
+
+      const htmlEscapes = Object.freeze({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })
+      const visualToneClasses = new Set(['', 'is-amber', 'is-red'])
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (character) => htmlEscapes[character])
+      }
+
+      function safeVisualTone(tone) {
+        return visualToneClasses.has(tone) ? tone : ''
+      }
+
+      function clampVisualLevel(level) {
+        const numericLevel = Number(level)
+        return Number.isFinite(numericLevel)
+          ? Math.min(5, Math.max(1, Math.round(numericLevel)))
+          : 1
+      }
+
+      function elementFromHTML(markup) {
+        const template = document.createElement('template')
+        template.innerHTML = markup.trim()
+        return template.content.firstElementChild
+      }
+
+      function renderMetricCards(metrics) {
+        return metrics.map(([label, value, trend]) => `
+          <article class="metric-card">
+            <div class="metric-label">${escapeHtml(label)}</div>
+            <div class="metric-row">
+              <strong class="metric-value">${escapeHtml(value)}</strong>
+              <span class="metric-trend">${escapeHtml(trend)}</span>
+            </div>
+          </article>
+        `).join('')
+      }
+
+      function renderVisualItems(items) {
+        return items.map(([name, detail, level, tone]) => {
+          const safeTone = safeVisualTone(tone)
+          const safeLevel = clampVisualLevel(level)
+          return `
+            <div class="visual-item ${safeTone}" style="--level: ${safeLevel}">
+              <strong>${escapeHtml(name)}</strong>
+              <span>${escapeHtml(detail)}</span>
+            </div>
+          `
+        }).join('')
+      }
+
+      function renderContextRows(rows) {
+        return rows.map(([label, value]) => `
+          <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
+        `).join('')
+      }
+
+      function renderPageShell(route) {
+        const data = pageShells[route]
+        const safeRoute = escapeHtml(route)
+        const safeTitle = escapeHtml(pageTitles[route])
+        const safeDescription = escapeHtml(data.description)
+        const safeAction = escapeHtml(data.action)
+        const safeStage = escapeHtml(data.stage)
+        const safeStageMeta = escapeHtml(data.stageMeta)
+        return elementFromHTML(`
+          <section class="page-view" data-page="${safeRoute}" aria-labelledby="${safeRoute}-title">
+            <header class="page-header">
+              <div>
+                <p class="page-kicker">Project OS / ${escapeHtml(String(route).replace('-', ' '))}</p>
+                <h1 id="${safeRoute}-title" tabindex="-1">${safeTitle}</h1>
+                <p class="page-description">${safeDescription}</p>
+              </div>
+              <div class="header-actions">
+                <button class="secondary-action" type="button" data-prototype-action="筛选">筛选视图</button>
+                <button class="primary-action" type="button" data-prototype-action="${safeAction}">${safeAction}</button>
+              </div>
+            </header>
+
+            <div class="metric-grid" aria-label="关键指标">
+              ${renderMetricCards(data.metrics)}
+            </div>
+
+            <section class="signature-stage" aria-labelledby="${safeRoute}-signature-title">
+              <div class="signature-heading">
+                <h2 id="${safeRoute}-signature-title">${safeStage}</h2>
+                <span>${safeStageMeta}</span>
+              </div>
+              <div class="stage-scroll" tabindex="0" aria-label="${safeStage}可视化区域">
+                <div class="signature-visual">
+                  ${renderVisualItems(data.items)}
+                </div>
+              </div>
+            </section>
+
+            <div class="content-frame">
+              <section class="glass-panel" aria-labelledby="${safeRoute}-workspace-title">
+                <div class="panel-heading">
+                  <div>
+                    <h2 id="${safeRoute}-workspace-title">核心工作区</h2>
+                    <p>后续任务将在此替换为可交互业务内容</p>
+                  </div>
+                  <div class="segmented" aria-label="预览范围">
+                    <button type="button" aria-pressed="true">当前</button>
+                    <button type="button" aria-pressed="false">全部</button>
+                  </div>
+                </div>
+                <div class="empty-state">
+                  <div>
+                    <strong>${safeStage}已就位</strong>
+                    页面业务数据与代表性交互将在后续实现任务中展示。
+                  </div>
+                </div>
+              </section>
+
+              <aside class="context-panel" aria-labelledby="${safeRoute}-context-title">
+                <div class="panel-heading">
+                  <h2 id="${safeRoute}-context-title">上下文摘要</h2>
+                  <span class="status-badge ${route === 'defects' ? 'is-risk' : ''}">${route === 'settings' ? '预览' : '静态样例'}</span>
+                </div>
+                <dl class="context-list">${renderContextRows(data.context)}</dl>
+              </aside>
+            </div>
+          </section>
+        `)
+      }
+
+      function clampPercent(value) {
+        const numericValue = Number(value)
+        return Number.isFinite(numericValue)
+          ? Math.min(100, Math.max(0, Math.round(numericValue)))
+          : 0
+      }
+
+      function safeAverage(values) {
+        const finiteValues = values.map(Number).filter(Number.isFinite)
+        if (!finiteValues.length) return 0
+        return Math.round(finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length)
+      }
+
+      function resolveActorPosition(actorId, index = 0) {
+        const configuredPosition = actorNodePositions[actorId]
+        const hasValidCoordinates = Number.isFinite(Number(configuredPosition?.x))
+          && Number.isFinite(Number(configuredPosition?.y))
+        if (hasValidCoordinates) {
+          return {
+            x: clampPercent(configuredPosition.x),
+            y: clampPercent(configuredPosition.y),
+          }
+        }
+
+        const fallbackPositions = [
+          { x: 18, y: 20 },
+          { x: 50, y: 20 },
+          { x: 82, y: 20 },
+          { x: 26, y: 76 },
+          { x: 58, y: 76 },
+          { x: 86, y: 76 },
+        ]
+        return fallbackPositions[index % fallbackPositions.length]
+      }
+
+      function projectToneClass(project) {
+        if (project.health === '高风险') return 'is-critical'
+        if (project.health === '关注') return 'is-attention'
+        return ''
+      }
+
+      function actorTypeLabel(type) {
+        if (type === 'human') return '人类'
+        if (type === 'agent') return 'Agent'
+        return '未知'
+      }
+
+      function actorStatusTone(status) {
+        return ['在线', '专注', '运行中'].includes(status) ? 'is-live' : ''
+      }
+
+      function statusBadgeTone(value) {
+        if (value === '高风险' || value === '危急') return 'is-risk'
+        if (value === '关注' || value === '评审中') return 'is-attention'
+        if (value === '正常') return 'is-live'
+        return ''
+      }
+
+      function projectMatchesFilter(project, filter) {
+        if (filter === 'healthy') return project.health === '正常'
+        if (filter === 'attention') return project.health === '关注'
+        if (filter === 'risk') return project.health === '高风险'
+        return true
+      }
+
+      function renderOverviewHeader(route, description, actionLabel) {
+        const safeRoute = escapeHtml(route)
+        const safeTitle = escapeHtml(pageTitles[route])
+        const safeDescription = escapeHtml(description)
+        const safeAction = escapeHtml(actionLabel)
+        return `
+          <header class="page-header">
+            <div>
+              <p class="page-kicker">Project OS / ${safeRoute}</p>
+              <h1 id="${safeRoute}-title" tabindex="-1">${safeTitle}</h1>
+              <p class="page-description">${safeDescription}</p>
+            </div>
+            <div class="header-actions">
+              <button class="secondary-action" type="button" data-prototype-action="导出快照">导出快照</button>
+              <button class="primary-action" type="button" data-prototype-action="${safeAction}">${safeAction}</button>
+            </div>
+          </header>
+        `
+      }
+
+      function renderDashboardContext(projectItems, actorItems, riskItems, activityItems) {
+        let selectedRisk = riskItems.find((risk) => risk.id === previewState.dashboardSelection)
+        let selectedActor = actorItems.find((actor) => actor.id === previewState.dashboardSelection)
+
+        if (!selectedRisk && !selectedActor) {
+          selectedRisk = riskItems[0] || null
+          selectedActor = selectedRisk ? null : actorItems[0] || null
+          previewState.dashboardSelection = selectedRisk?.id ?? selectedActor?.id ?? null
+        }
+
+        if (selectedActor) {
+          const ownedProjects = projectItems.filter((project) => project.owner === selectedActor.name)
+          const recentActivity = activityItems.find((activity) => activity.actorId === selectedActor.id)
+          return {
+            title: selectedActor.name,
+            badge: selectedActor.status,
+            badgeClass: actorStatusTone(selectedActor.status),
+            rows: [
+              ['类型', selectedActor.type === 'human' ? '人类协作者' : actorTypeLabel(selectedActor.type)],
+              ['当前负载', `${clampPercent(selectedActor.load)}%`],
+              ['技能', selectedActor.skills.join(' · ') || '暂无'],
+              ['负责项目', ownedProjects.map((project) => project.name).join('、') || '暂无'],
+            ],
+            note: recentActivity?.text || '暂无最近活动',
+          }
+        }
+
+        if (!selectedRisk) return null
+
+        const project = projectItems.find((item) => item.id === selectedRisk.projectId)
+        return {
+          title: selectedRisk.title,
+          badge: selectedRisk.severity,
+          badgeClass: statusBadgeTone(selectedRisk.severity),
+          rows: [
+            ['项目', project?.name || '未知项目'],
+            ['负责人', selectedRisk.owner],
+            ['要求日期', selectedRisk.due],
+            ['风险级别', selectedRisk.severity],
+          ],
+          note: selectedRisk.detail,
+        }
+      }
+
+      function renderDashboard() {
+        const projectItems = safeRecords(projects)
+        const actorItems = safeRecords(actors)
+        const riskItems = safeRecords(riskQueue)
+        const healthItems = safeRecords(healthTrend)
+        const deliverableItems = safeRecords(deliverables)
+        const activityItems = safeRecords(activityRecords)
+        const metrics = [
+          ['项目总数', String(projectItems.length).padStart(2, '0'), '演示范围'],
+          ['进行中', String(projectItems.filter((project) => project.progress > 0 && project.progress < 100).length).padStart(2, '0'), '演示快照'],
+          ['待处理风险', String(riskItems.length).padStart(2, '0'), `${riskItems.filter((risk) => risk.severity === '危急').length} 项危急`],
+          ['活跃协作者', String(actorItems.filter((actor) => actor.status !== '待命' && actor.status !== '未知').length).padStart(2, '0'), `${actorItems.length} 位样例`],
+        ]
+        const context = renderDashboardContext(projectItems, actorItems, riskItems, activityItems)
+        const averageHealth = safeAverage(healthItems.map((item) => item.value))
+        const previousHealth = healthItems.at(-2)?.value ?? averageHealth
+        const latestHealth = healthItems.at(-1)?.value ?? averageHealth
+
+        const trendMarkup = healthItems.map((point) => {
+          const safeValue = clampPercent(point.value)
+          return `
+            <div class="trend-column">
+              <div class="trend-bar-slot">
+                <span class="trend-bar" style="--trend-level: ${safeValue}%" data-value="${safeValue}"></span>
+              </div>
+              <span>${escapeHtml(point.label)}</span>
+            </div>
+          `
+        }).join('')
+
+        const healthLanes = projectItems.map((project) => {
+          const safeProgress = clampPercent(project.progress)
+          const toneClass = projectToneClass(project)
+          return `
+            <div class="health-lane ${toneClass}">
+              <span class="health-lane-name" title="${escapeHtml(project.name)}">${escapeHtml(project.name)}</span>
+              <span class="progress-rail" aria-hidden="true"><span style="--progress: ${safeProgress}%"></span></span>
+              <span class="status-badge ${statusBadgeTone(project.health)}">${escapeHtml(project.health)} · ${safeProgress}%</span>
+            </div>
+          `
+        }).join('')
+
+        const riskMarkup = riskItems.map((risk) => `
+          <li>
+            <button class="select-item ${risk.severity === '危急' ? 'is-critical' : 'is-attention'}" type="button"
+              data-dashboard-select="${escapeHtml(risk.id)}" data-focus-key="dashboard-risk-${escapeHtml(risk.id)}" aria-pressed="${previewState.dashboardSelection === risk.id}">
+              <span class="select-item-head">
+                <strong>${escapeHtml(risk.title)}</strong>
+                <span class="status-badge ${statusBadgeTone(risk.severity)}">${escapeHtml(risk.severity)}</span>
+              </span>
+              <span class="select-item-meta"><span>${escapeHtml(risk.owner)}</span><span>${escapeHtml(risk.due)}</span></span>
+            </button>
+          </li>
+        `).join('')
+
+        const actorMarkup = actorItems.map((actor) => {
+          const actorProjects = projectItems.filter((project) => project.owner === actor.name)
+          return `
+            <li>
+              <button class="select-item" type="button" data-dashboard-select="${escapeHtml(actor.id)}" data-focus-key="dashboard-actor-${escapeHtml(actor.id)}"
+                aria-pressed="${previewState.dashboardSelection === actor.id}">
+                <span class="select-item-head">
+                  <strong>${escapeHtml(actor.name)}</strong>
+                  <span class="status-badge ${actorStatusTone(actor.status)}">${escapeHtml(actor.status)}</span>
+                </span>
+                <span class="select-item-meta"><span>${clampPercent(actor.load)}% 负载</span><span>${actorProjects.length} 个项目</span></span>
+              </button>
+            </li>
+          `
+        }).join('')
+
+        const deliverableMarkup = deliverableItems.map((deliverable) => {
+          const project = projectItems.find((item) => item.id === deliverable.projectId)
+          return `
+            <li class="feed-row">
+              <span class="feed-row-copy"><strong>${escapeHtml(deliverable.name)}</strong><span>${escapeHtml(project?.name || '未知项目')}</span></span>
+              <span>${escapeHtml(deliverable.status)} · ${escapeHtml(deliverable.time)}</span>
+            </li>
+          `
+        }).join('')
+
+        const activityMarkup = activityItems.slice(0, 3).map((activity) => `
+          <li class="feed-row">
+            <span class="feed-row-copy"><strong>${escapeHtml(activity.text)}</strong><span>${escapeHtml(activity.time)}</span></span>
+          </li>
+        `).join('')
+
+        const dashboardContextMarkup = context ? `
+          <section class="context-panel dashboard-context" data-dashboard-context aria-labelledby="dashboard-context-title">
+            <div class="panel-heading"><h2 id="dashboard-context-title">${escapeHtml(context.title)}</h2><span class="status-badge ${context.badgeClass}">${escapeHtml(context.badge)}</span></div>
+            <dl class="context-list">${renderContextRows(context.rows)}</dl>
+            <p class="summary-note">${escapeHtml(context.note)}</p>
+          </section>
+        ` : `
+          <section class="context-panel dashboard-context" data-dashboard-context aria-labelledby="dashboard-context-title">
+            <h2 id="dashboard-context-title">上下文摘要</h2>
+            <div class="empty-state" data-dashboard-empty><div><strong>暂无风险或协作者</strong>有演示数据后可在这里查看选择上下文。</div></div>
+          </section>
+        `
+
+        return elementFromHTML(`
+          <section class="page-view overview-shell" data-page="dashboard" aria-labelledby="dashboard-title">
+            ${renderOverviewHeader('dashboard', '项目健康、协作状态与交付风险', '创建项目')}
+            <div class="metric-grid" aria-label="全局驾驶舱关键指标">${renderMetricCards(metrics)}</div>
+
+            <section class="signature-stage dashboard-health-stage" aria-labelledby="dashboard-signature-title">
+              <div class="signature-heading">
+                <h2 id="dashboard-signature-title">健康趋势</h2>
+                <span>最近 7 天 · 确定性演示快照</span>
+              </div>
+              <div class="health-trend-layout">
+                <div class="trend-summary" aria-label="七日健康趋势柱状图">
+                  <div class="trend-summary-head"><strong>组合健康指数 ${averageHealth}</strong><span>${latestHealth >= previousHealth ? '向好' : '回落'} ${Math.abs(latestHealth - previousHealth)} 点</span></div>
+                  ${trendMarkup ? `<div class="trend-bars">${trendMarkup}</div>` : '<div class="empty-state" data-dashboard-empty><div><strong>暂无健康趋势</strong>尚未收到趋势快照。</div></div>'}
+                </div>
+                <div class="health-lanes" aria-label="项目健康轨道">${healthLanes || '<div class="empty-state" data-dashboard-empty><div><strong>暂无项目健康数据</strong>创建项目后显示健康轨道。</div></div>'}</div>
+              </div>
+            </section>
+
+            <div class="dashboard-detail-grid">
+              <div class="dashboard-ops-grid">
+                <section class="glass-panel" aria-labelledby="risk-queue-title">
+                  <div class="panel-heading"><div><h2 id="risk-queue-title">风险队列</h2><p>选择风险查看上下文</p></div><span class="status-badge ${riskItems.length ? 'is-risk' : ''}">${riskItems.length ? `${riskItems.length} 项` : '暂无风险'}</span></div>
+                  <ul class="select-list">${riskMarkup || '<li class="empty-state" data-dashboard-empty><div><strong>风险队列为空</strong>当前没有待处理风险。</div></li>'}</ul>
+                </section>
+                <section class="glass-panel" aria-labelledby="actor-presence-title">
+                  <div class="panel-heading"><div><h2 id="actor-presence-title">协作者样例状态</h2><p>人类与 Agent 演示负载</p></div><span class="status-badge">${actorItems.length ? '静态样例' : '暂无样例'}</span></div>
+                  <ul class="select-list">${actorMarkup || '<li class="empty-state" data-dashboard-empty><div><strong>暂无协作者</strong>邀请成员或 Agent 后显示状态。</div></li>'}</ul>
+                </section>
+              </div>
+              ${dashboardContextMarkup}
+            </div>
+
+            <div class="dashboard-feed-grid">
+              <section class="glass-panel" aria-labelledby="deliverables-title"><div class="panel-heading"><div><h2 id="deliverables-title">最近交付物</h2><p>验收与评审状态</p></div></div><ul class="compact-list">${deliverableMarkup || '<li class="empty-state"><div><strong>暂无交付物</strong>交付记录将在这里出现。</div></li>'}</ul></section>
+              <section class="glass-panel" aria-labelledby="activity-title"><div class="panel-heading"><div><h2 id="activity-title">活动流</h2><p>跨项目协作记录</p></div></div><ul class="compact-list">${activityMarkup || '<li class="empty-state"><div><strong>暂无活动</strong>协作记录将在这里出现。</div></li>'}</ul></section>
+            </div>
+          </section>
+        `)
+      }
+
+      function renderProjects() {
+        const projectItems = safeRecords(projects)
+        const activityItems = safeRecords(activityRecords)
+        const deliverableItems = safeRecords(deliverables)
+        const filterOptions = [
+          ['all', '全部'],
+          ['healthy', '正常'],
+          ['attention', '关注'],
+          ['risk', '高风险'],
+        ]
+        const visibleProjects = projectItems.filter((project) => projectMatchesFilter(project, previewState.projectFilter))
+        if (!visibleProjects.some((project) => project.id === previewState.selectedProjectId)) {
+          previewState.selectedProjectId = visibleProjects[0]?.id ?? null
+        }
+        const selectedProject = visibleProjects.find((project) => project.id === previewState.selectedProjectId) ?? null
+        const averageProgress = safeAverage(projectItems.map((project) => project.progress))
+        const metrics = [
+          ['项目总数', String(projectItems.length).padStart(2, '0'), '组合范围'],
+          ['正常', String(projectItems.filter((project) => project.health === '正常').length).padStart(2, '0'), '节奏稳定'],
+          ['需关注', String(projectItems.filter((project) => project.health === '关注').length).padStart(2, '0'), '主动跟进'],
+          ['高风险', String(projectItems.filter((project) => project.health === '高风险').length).padStart(2, '0'), '立即介入'],
+        ]
+
+        const filters = filterOptions.map(([value, label]) => `
+          <button type="button" data-project-filter="${escapeHtml(value)}" data-focus-key="projects-filter-${escapeHtml(value)}" aria-pressed="${previewState.projectFilter === value}">${escapeHtml(label)}</button>
+        `).join('')
+
+        const cards = visibleProjects.map((project) => {
+          const safeProgress = clampPercent(project.progress)
+          const toneClass = projectToneClass(project)
+          return `
+            <button class="project-card ${toneClass}" type="button" data-project-id="${escapeHtml(project.id)}" data-focus-key="projects-card-${escapeHtml(project.id)}"
+              aria-pressed="${selectedProject?.id === project.id}" aria-label="查看 ${escapeHtml(project.name)} 摘要">
+              <span class="project-card-head"><strong title="${escapeHtml(project.name)}">${escapeHtml(project.name)}</strong><span class="status-badge ${statusBadgeTone(project.health)}">${escapeHtml(project.health)}</span></span>
+              <span>
+                <span class="progress-copy"><span>交付进度</span><strong>${safeProgress}%</strong></span>
+                <span class="progress-rail" aria-hidden="true"><span style="--progress: ${safeProgress}%"></span></span>
+              </span>
+              <span class="project-card-meta">
+                <span><span class="project-meta-label">负责人</span><span class="project-meta-value">${escapeHtml(project.owner)}</span></span>
+                <span><span class="project-meta-label">开放风险</span><span class="project-meta-value">${escapeHtml(project.risk)} 项</span></span>
+                <span><span class="project-meta-label">目标日期</span><span class="project-meta-value">${escapeHtml(project.due)}</span></span>
+                <span><span class="project-meta-label">组合差异</span><span class="project-meta-value">${safeProgress - averageProgress >= 0 ? '+' : ''}${safeProgress - averageProgress}%</span></span>
+              </span>
+            </button>
+          `
+        }).join('')
+
+        const selectedActivity = selectedProject
+          ? activityItems.find((activity) => activity.projectId === selectedProject.id)
+          : null
+        const selectedDeliverable = selectedProject
+          ? deliverableItems.find((deliverable) => deliverable.projectId === selectedProject.id)
+          : null
+        const projectSummaryRows = selectedProject ? [
+          ['负责人', selectedProject.owner],
+          ['进度', `${clampPercent(selectedProject.progress)}%`],
+          ['健康状态', selectedProject.health],
+          ['开放风险', `${selectedProject.risk} 项`],
+          ['目标日期', selectedProject.due],
+          ['最近交付物', selectedDeliverable?.name || '暂无'],
+        ] : []
+        const projectSummaryMarkup = selectedProject ? `
+          <section class="context-panel project-summary" aria-labelledby="project-summary-title">
+            <div class="panel-heading"><h2 id="project-summary-title">${escapeHtml(selectedProject.name)}</h2><span class="status-badge ${statusBadgeTone(selectedProject.health)}">${escapeHtml(selectedProject.health)}</span></div>
+            <dl class="context-list">${renderContextRows(projectSummaryRows)}</dl>
+            <p class="summary-note">${escapeHtml(selectedActivity?.text || '暂无最近活动')}</p>
+          </section>
+        ` : `
+          <section class="context-panel project-summary" aria-labelledby="project-summary-title">
+            <h2 id="project-summary-title">项目摘要</h2>
+            <div class="empty-state" data-project-summary-empty><div><strong>暂无可选项目</strong>调整筛选或创建项目后查看摘要。</div></div>
+          </section>
+        `
+
+        return elementFromHTML(`
+          <section class="page-view overview-shell" data-page="projects" aria-labelledby="projects-title">
+            ${renderOverviewHeader('projects', '横向比较项目进度、负责人、目标日期与风险暴露', '新建项目')}
+            <div class="metric-grid" aria-label="项目组合关键指标">${renderMetricCards(metrics)}</div>
+            <div class="portfolio-layout">
+              <section class="signature-stage portfolio-stage" aria-labelledby="projects-signature-title">
+                <div class="signature-heading">
+                  <div><h2 id="projects-signature-title">玻璃项目矩阵</h2><span>${visibleProjects.length} / ${projectItems.length} 个项目</span></div>
+                  <div class="segmented" role="group" aria-label="项目健康筛选">${filters}</div>
+                </div>
+                <div class="project-matrix-scroll" tabindex="0" aria-label="项目矩阵，可在窄屏横向滚动">
+                  <div class="project-matrix">${cards || '<div class="empty-state" data-project-empty><div><strong>没有匹配项目</strong>请切换健康筛选。</div></div>'}</div>
+                </div>
+              </section>
+              ${projectSummaryMarkup}
+            </div>
+          </section>
+        `)
+      }
+
+      function safeStringList(collection) {
+        return Array.isArray(collection) ? collection.filter((item) => typeof item === 'string' && item) : []
+      }
+
+      function safeText(value, fallback) {
+        return typeof value === 'string' && value.trim() ? value : fallback
+      }
+
+      function safeNumber(value, fallback = 0) {
+        return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+      }
+
+      function normalizeExecutionRecord(item, kind) {
+        if (kind === 'project') return {
+          ...item,
+          name:safeText(item.name, '未命名项目'),
+          owner:safeText(item.owner, '未指派'),
+          progress:safeNumber(item.progress),
+          health:safeText(item.health, '未知'),
+          risk:Math.max(0, Math.round(safeNumber(item.risk))),
+          due:safeText(item.due, '日期未知'),
+        }
+        if (kind === 'actor') return {
+          ...item,
+          name:safeText(item.name, '未命名协作者'),
+          type:item.type === 'human' || item.type === 'agent' ? item.type : 'unknown',
+          status:safeText(item.status, '未知'),
+          load:safeNumber(item.load),
+          skills:safeStringList(item.skills),
+        }
+        if (kind === 'risk') return {
+          ...item,
+          projectId:safeText(item.projectId, ''),
+          severity:safeText(item.severity, '未知'),
+          title:safeText(item.title, '未命名风险'),
+          owner:safeText(item.owner, '未指派'),
+          due:safeText(item.due, '日期未知'),
+          detail:safeText(item.detail, '暂无风险说明'),
+        }
+        if (kind === 'health') return {
+          ...item,
+          label:safeText(item.label, '未知日期'),
+          value:safeNumber(item.value),
+        }
+        if (kind === 'activity') return {
+          ...item,
+          actorId:safeText(item.actorId, ''),
+          projectId:safeText(item.projectId, ''),
+          text:safeText(item.text, '暂无活动说明'),
+          time:safeText(item.time, '时间未知'),
+        }
+        if (kind === 'task') return {
+          ...item,
+          code:safeText(item.code, 'TASK-UNKNOWN'),
+          title:safeText(item.title, '未命名任务'),
+          description:safeText(item.description, '暂无任务说明'),
+          owner:safeText(item.owner, '未指派'),
+          projectId:safeText(item.projectId, ''),
+          project:safeText(item.project, '未知项目'),
+          start:safeText(item.start, '日期未知'),
+          due:safeText(item.due, '日期未知'),
+          status:safeText(item.status, '待处理'),
+          priority:safeText(item.priority, '未知'),
+          progress:safeNumber(item.progress),
+          scope:safeStringList(item.scope),
+          dependencies:safeStringList(item.dependencies),
+          tags:safeStringList(item.tags),
+        }
+        if (kind === 'requirement') return {
+          ...item,
+          code:safeText(item.code, 'REQ-UNKNOWN'),
+          title:safeText(item.title, '未命名需求'),
+          status:safeText(item.status, '收集'),
+          owner:safeText(item.owner, '未指派'),
+          priority:safeText(item.priority, '未知'),
+          taskIds:safeStringList(item.taskIds),
+          acceptanceCriteria:safeStringList(item.acceptanceCriteria),
+          changeRisk:safeText(item.changeRisk, '未知'),
+        }
+        if (kind === 'defect') return {
+          ...item,
+          code:safeText(item.code, 'BUG-UNKNOWN'),
+          title:safeText(item.title, '未命名缺陷'),
+          severity:safeText(item.severity, '未知'),
+          impact:safeText(item.impact, '未知'),
+          status:safeText(item.status, '待分诊'),
+          owner:safeText(item.owner, '未指派'),
+          version:safeText(item.version, '未知版本'),
+          requirementId:safeText(item.requirementId, ''),
+          projectId:safeText(item.projectId, ''),
+          steps:safeStringList(item.steps),
+        }
+        if (kind === 'milestone') return {
+          ...item,
+          phase:safeText(item.phase, '未知阶段'),
+          name:safeText(item.name, '未命名里程碑'),
+          date:safeText(item.date, '日期未知'),
+          status:safeText(item.status, '未知'),
+          summary:safeText(item.summary, '暂无里程碑说明'),
+          owner:safeText(item.owner, '未指派'),
+          risk:safeText(item.risk, '未知'),
+        }
+        if (kind === 'deliverable') return {
+          ...item,
+          projectId:safeText(item.projectId, ''),
+          name:safeText(item.name, '未命名交付物'),
+          status:safeText(item.status, '未知'),
+          time:safeText(item.time, '时间未知'),
+          owner:safeText(item.owner, '未指派'),
+        }
+        if (kind === 'handoff') return {
+          ...item,
+          projectId:safeText(item.projectId, ''),
+          from:safeText(item.from, '未知交接方'),
+          to:safeText(item.to, '未知接收方'),
+          time:safeText(item.time, '时间未知'),
+          summary:safeText(item.summary, '暂无交接说明'),
+          status:safeText(item.status, '未知'),
+        }
+        return { ...item }
+      }
+
+      function safeRecords(collection) {
+        if (!Array.isArray(collection)) return []
+        const recordKind = collection === projects ? 'project'
+          : collection === actors ? 'actor'
+          : collection === riskQueue ? 'risk'
+          : collection === healthTrend ? 'health'
+          : collection === activityRecords ? 'activity'
+          : collection === tasks ? 'task'
+          : collection === requirements ? 'requirement'
+          : collection === defects ? 'defect'
+          : collection === milestones ? 'milestone'
+          : collection === deliverables ? 'deliverable'
+          : collection === handoffs ? 'handoff'
+          : 'generic'
+        return collection
+          .filter((item) => item && typeof item === 'object' && typeof item.id === 'string' && item.id)
+          .map((item) => normalizeExecutionRecord(item, recordKind))
+      }
+
+      function normalizeRecordSelection(stateKey, records) {
+        const safeItems = safeRecords(records)
+        if (!safeItems.some((item) => item.id === previewState[stateKey])) {
+          previewState[stateKey] = safeItems[0]?.id ?? null
+        }
+        return safeItems.find((item) => item.id === previewState[stateKey]) ?? null
+      }
+
+      function effectiveTaskStatus(task) {
+        return previewState.completedTaskIds instanceof Set && previewState.completedTaskIds.has(task?.id)
+          ? '已完成'
+          : String(task?.status || '待处理')
+      }
+
+      function executionStatusTone(status) {
+        if (status === '进行中') return 'is-live'
+        if (status === '逾期' || status === 'Blocker' || status === 'Critical') return 'is-risk'
+        if (status === '待处理' || status === '待开始' || status === '高') return 'is-attention'
+        return ''
+      }
+
+      function parseDemoDate(value) {
+        if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(value)) return null
+        const [year, month, day] = value.slice(0, 10).split('-').map(Number)
+        const date = new Date(Date.UTC(year, month - 1, day))
+        return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+          ? date
+          : null
+      }
+
+      function formatDemoDate(date) {
+        return date instanceof Date && Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '日期未知'
+      }
+
+      function dayDifference(from, to) {
+        return Math.round((to.getTime() - from.getTime()) / 86400000)
+      }
+
+      function executionRange(range) {
+        const reference = parseDemoDate(DEMO_REFERENCE_DATE) || new Date(Date.UTC(2026, 7, 22))
+        const safeRange = rangeValues.has(range) ? range : 'month'
+        let start
+        let end
+        if (safeRange === 'week') {
+          start = new Date(reference)
+          start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7))
+          end = new Date(start)
+          end.setUTCDate(end.getUTCDate() + 6)
+        } else if (safeRange === 'quarter') {
+          const quarterMonth = Math.floor(reference.getUTCMonth() / 3) * 3
+          start = new Date(Date.UTC(reference.getUTCFullYear(), quarterMonth, 1))
+          end = new Date(Date.UTC(reference.getUTCFullYear(), quarterMonth + 3, 0))
+        } else {
+          start = new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth(), 1))
+          end = new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth() + 1, 0))
+        }
+        return { range:safeRange, start, end, days:dayDifference(start, end) + 1 }
+      }
+
+      function taskOverlapsRange(task, config) {
+        const start = parseDemoDate(task?.start)
+        const due = parseDemoDate(task?.due)
+        return Boolean(start && due && start <= config.end && due >= config.start)
+      }
+
+      function taskMatchesScope(task, scope) {
+        if (scope === 'all') return true
+        return safeStringList(task?.scope).includes(scope)
+      }
+
+      function recordListMarkup(records, renderRecord, emptyTitle, emptyCopy) {
+        const safeItems = safeRecords(records)
+        return safeItems.length
+          ? `<ul class="record-list">${safeItems.map(renderRecord).join('')}</ul>`
+          : `<div class="empty-state"><div><strong>${escapeHtml(emptyTitle)}</strong>${escapeHtml(emptyCopy)}</div></div>`
+      }
+
+      function renderProjectDetail() {
+        const milestoneItems = safeRecords(milestones)
+        const selectedMilestone = normalizeRecordSelection('selectedMilestoneId', milestoneItems)
+        const project = safeRecords(projects).find((item) => item.id === 'project-os') ?? null
+        const projectTasks = safeRecords(tasks).filter((task) => task.projectId === 'project-os')
+        const openTasks = projectTasks.filter((task) => effectiveTaskStatus(task) !== '已完成')
+        const projectDeliverables = safeRecords(deliverables).filter((item) => item.projectId === 'project-os')
+        const projectHandoffs = safeRecords(handoffs).filter((item) => item.projectId === 'project-os')
+        const latestHandoff = projectHandoffs.find((item) => item.id === 'handoff-002') ?? projectHandoffs[0] ?? null
+        const projectRisks = safeRecords(riskQueue).filter((risk) => risk.projectId === 'project-os')
+        const completedMilestones = milestoneItems.filter((item) => item.status === '已完成').length
+        const metrics = [
+          ['总体进度', `${clampPercent(project?.progress)}%`, project ? 'Project OS v1.2' : '暂无项目'],
+          ['开放任务', String(openTasks.length).padStart(2, '0'), `${projectTasks.length} 项总计`],
+          ['里程碑', String(milestoneItems.length).padStart(2, '0'), `${completedMilestones} 项完成`],
+          ['交付物', String(projectDeliverables.length).padStart(2, '0'), `${projectDeliverables.filter((item) => item.status === '制作中').length} 项制作中`],
+        ]
+        const trackMarkup = milestoneItems.length ? milestoneItems.map((milestone) => `
+          <button class="milestone-button" type="button" data-milestone-id="${escapeHtml(milestone.id)}" data-focus-key="project-detail-milestone-${escapeHtml(milestone.id)}" aria-pressed="${selectedMilestone?.id === milestone.id}" aria-label="查看里程碑 ${escapeHtml(milestone.name)}">
+            <span>${escapeHtml(milestone.phase)}</span>
+            <strong>${escapeHtml(milestone.name)}</strong>
+            <time datetime="${escapeHtml(milestone.date)}">${escapeHtml(milestone.date)}</time>
+            <span>${escapeHtml(milestone.status)}</span>
+          </button>
+        `).join('') : '<div class="empty-state"><div><strong>暂无里程碑</strong>建立阶段节点后可查看项目推进轨迹。</div></div>'
+        const milestoneRows = selectedMilestone ? [
+          ['阶段', selectedMilestone.phase],
+          ['状态', selectedMilestone.status],
+          ['负责人', selectedMilestone.owner],
+          ['目标日期', selectedMilestone.date],
+          ['变更风险', selectedMilestone.risk],
+        ] : []
+
+        return elementFromHTML(`
+          <section class="page-view execution-shell" data-page="project-detail" aria-labelledby="project-detail-title">
+            ${renderOverviewHeader('project-detail', '聚焦 Project OS v1.2 的阶段里程碑、开放任务、交付证据与最近交接。', '记录进展')}
+            <div class="metric-grid" aria-label="项目详情关键指标">${renderMetricCards(metrics)}</div>
+            <div class="detail-layout">
+              <section class="signature-stage milestone-stage" aria-labelledby="milestone-track-title">
+                <div class="signature-heading"><div><h2 id="milestone-track-title">阶段—里程碑轨迹</h2><span>${milestoneItems.length} 个稳定节点 · 选择不切换路由</span></div></div>
+                <div class="milestone-track-scroll" tabindex="0" aria-label="项目里程碑轨迹，可横向滚动">
+                  <div class="milestone-track">${trackMarkup}</div>
+                </div>
+              </section>
+              <section class="context-panel" aria-labelledby="milestone-context-title">
+                <div class="panel-heading"><h2 id="milestone-context-title">${escapeHtml(selectedMilestone?.name || '里程碑上下文')}</h2><span class="status-badge ${executionStatusTone(selectedMilestone?.status)}">${escapeHtml(selectedMilestone?.status || '无选择')}</span></div>
+                ${selectedMilestone ? `<dl class="context-list">${renderContextRows(milestoneRows)}</dl><p class="summary-note">${escapeHtml(selectedMilestone.summary)}</p>` : '<div class="empty-state"><div><strong>暂无里程碑上下文</strong>当前项目还没有可选择的里程碑。</div></div>'}
+              </section>
+            </div>
+            <div class="project-brief-grid">
+              <section class="glass-panel" aria-labelledby="project-brief-title">
+                <div class="panel-heading"><h2 id="project-brief-title">项目简报</h2><p>当前事实</p></div>
+                <p class="summary-note">Project OS v1.2 正在把九个核心页面合并到统一共享壳，当前重点是执行页联调与窄屏回归。</p>
+                <dl class="context-list">${renderContextRows([['负责人', project?.owner || '暂无'], ['目标日期', project?.due || '暂无'], ['健康状态', project?.health || '未知'], ['开放风险', `${project?.risk ?? 0} 项`]])}</dl>
+              </section>
+              <section class="glass-panel" aria-labelledby="open-task-title">
+                <div class="panel-heading"><h2 id="open-task-title">开放任务</h2><p>${openTasks.length} 项</p></div>
+                ${recordListMarkup(openTasks.slice(0, 4), (task) => `<li><strong>${escapeHtml(task.code)} · ${escapeHtml(task.title)}</strong><span>${escapeHtml(effectiveTaskStatus(task))} · ${escapeHtml(task.owner)}</span><small>截止 ${escapeHtml(task.due)}</small></li>`, '暂无开放任务', '当前项目任务均已完成。')}
+              </section>
+              <section class="glass-panel" aria-labelledby="delivery-handoff-title">
+                <div class="panel-heading"><h2 id="delivery-handoff-title">交付与交接</h2><p>最新证据</p></div>
+                ${recordListMarkup(projectDeliverables.slice(0, 2), (item) => `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.status)} · ${escapeHtml(item.owner || '未指派')}</span><small>${escapeHtml(item.time)}</small></li>`, '暂无交付物', '当前项目尚未登记交付证据。')}
+                <p class="summary-note"><strong>最近交接：</strong>${latestHandoff ? `${escapeHtml(latestHandoff.from)} → ${escapeHtml(latestHandoff.to)}，${escapeHtml(latestHandoff.summary)}` : '暂无交接记录。'}</p>
+                <p class="summary-note"><strong>风险：</strong>${projectRisks.length ? projectRisks.map((risk) => escapeHtml(risk.title)).join('；') : '当前无已登记风险。'}</p>
+              </section>
+            </div>
+          </section>
+        `)
+      }
+
+      function renderActors() {
+        const actorItems = safeRecords(actors)
+        const projectItems = safeRecords(projects)
+        const activityItems = safeRecords(activityRecords)
+        const filterOptions = [
+          ['all', '全部'],
+          ['human', '人类'],
+          ['agent', 'Agent'],
+        ]
+        const visibleActors = actorItems.filter((actor) => previewState.actorFilter === 'all' || actor.type === previewState.actorFilter)
+        if (!visibleActors.some((actor) => actor.id === previewState.selectedActorId)) {
+          previewState.selectedActorId = visibleActors[0]?.id ?? null
+        }
+        const visibleActorIds = new Set(visibleActors.map((actor) => actor.id))
+        const selectedActor = visibleActors.find((actor) => actor.id === previewState.selectedActorId) ?? null
+        const activeActors = actorItems.filter((actor) => actor.status !== '待命' && actor.status !== '未知')
+        const averageLoad = safeAverage(actorItems.map((actor) => actor.load))
+        const metrics = [
+          ['协作者', String(actorItems.length).padStart(2, '0'), `${actorItems.filter((actor) => actor.type === 'human').length} 人 / ${actorItems.filter((actor) => actor.type === 'agent').length} Agent`],
+          ['活跃中', String(activeActors.length).padStart(2, '0'), '样例状态'],
+          ['平均负载', `${averageLoad}%`, '可调度'],
+          ['待命节点', String(actorItems.filter((actor) => actor.status === '待命').length).padStart(2, '0'), '可接力'],
+        ]
+
+        const filters = filterOptions.map(([value, label]) => `
+          <button type="button" data-actor-filter="${escapeHtml(value)}" data-focus-key="actors-filter-${escapeHtml(value)}" aria-pressed="${previewState.actorFilter === value}">${escapeHtml(label)}</button>
+        `).join('')
+
+        const positionByActorId = new Map(visibleActors.map((actor, index) => [
+          actor.id,
+          resolveActorPosition(actor.id, index),
+        ]))
+        const validConnections = actorConnections.filter((connection) => {
+          if (!connection || typeof connection.from !== 'string' || typeof connection.to !== 'string') return false
+          return visibleActorIds.has(connection.from)
+            && visibleActorIds.has(connection.to)
+            && positionByActorId.has(connection.from)
+            && positionByActorId.has(connection.to)
+        })
+        const connectors = validConnections.map((connection) => {
+          const from = positionByActorId.get(connection.from)
+          const to = positionByActorId.get(connection.to)
+          return `<line class="${connection.primary ? 'is-primary' : ''}" x1="${clampPercent(from.x)}" y1="${clampPercent(from.y)}" x2="${clampPercent(to.x)}" y2="${clampPercent(to.y)}"></line>`
+        }).join('')
+
+        const nodes = visibleActors.map((actor) => {
+          const position = positionByActorId.get(actor.id)
+          const safeLoad = clampPercent(actor.load)
+          return `
+            <button class="actor-node" type="button" data-actor-id="${escapeHtml(actor.id)}" data-focus-key="actors-node-${escapeHtml(actor.id)}" aria-pressed="${selectedActor?.id === actor.id}"
+              style="--node-x: ${clampPercent(position.x)}%; --node-y: ${clampPercent(position.y)}%" aria-label="查看 ${escapeHtml(actor.name)} 协作摘要">
+              <span class="actor-node-head"><strong title="${escapeHtml(actor.name)}">${escapeHtml(actor.name)}</strong><span class="status-badge ${actorStatusTone(actor.status)}">${escapeHtml(actor.status)}</span></span>
+              <small>${actorTypeLabel(actor.type)} · ${safeLoad}% 负载</small>
+              <span class="progress-rail" aria-hidden="true"><span style="--progress: ${safeLoad}%"></span></span>
+            </button>
+          `
+        }).join('')
+
+        const connectionDescriptions = validConnections.map((connection) => {
+          const fromActor = visibleActors.find((actor) => actor.id === connection.from)
+          const toActor = visibleActors.find((actor) => actor.id === connection.to)
+          return `<li>${escapeHtml(fromActor?.name || connection.from)} 到 ${escapeHtml(toActor?.name || connection.to)}：${connection.primary ? '主要协作' : '辅助协作'}</li>`
+        }).join('')
+        const actorProjects = selectedActor
+          ? projectItems.filter((project) => project.owner === selectedActor.name)
+          : []
+        const recentActivity = selectedActor
+          ? activityItems.find((activity) => activity.actorId === selectedActor.id)
+          : null
+        const actorSummaryRows = selectedActor ? [
+          ['身份', actorTypeLabel(selectedActor.type)],
+          ['当前状态', selectedActor.status],
+          ['工作负载', `${clampPercent(selectedActor.load)}%`],
+          ['参与项目', actorProjects.map((project) => project.name).join('、') || '暂无'],
+        ] : []
+        const selectedSkills = Array.isArray(selectedActor?.skills) ? selectedActor.skills : []
+        const skillMarkup = selectedSkills.map((skill) => `<span class="skill-chip">${escapeHtml(skill)}</span>`).join('')
+        const actorSummaryMarkup = selectedActor ? `
+          <section class="context-panel actor-summary" aria-labelledby="actor-summary-title">
+            <div class="panel-heading"><h2 id="actor-summary-title">${escapeHtml(selectedActor.name)}</h2><span class="status-badge ${actorStatusTone(selectedActor.status)}">${escapeHtml(selectedActor.status)}</span></div>
+            <dl class="context-list">${renderContextRows(actorSummaryRows)}</dl>
+            <div class="skill-chips" aria-label="技能">${skillMarkup || '<span class="skill-chip">暂无技能</span>'}</div>
+            <p class="summary-note">最近活动：${escapeHtml(recentActivity?.text || '暂无')}</p>
+          </section>
+        ` : `
+          <section class="context-panel actor-summary" aria-labelledby="actor-summary-title">
+            <h2 id="actor-summary-title">协作者摘要</h2>
+            <div class="empty-state" data-actor-summary-empty><div><strong>暂无可选协作者</strong>调整筛选或邀请协作者后查看摘要。</div></div>
+          </section>
+        `
+
+        return elementFromHTML(`
+          <section class="page-view overview-shell" data-page="actors" aria-labelledby="actors-title">
+            ${renderOverviewHeader('actors', '观察人类与 Agent 的负载、技能和协作关系', '邀请协作者')}
+            <div class="metric-grid" aria-label="协作者网络关键指标">${renderMetricCards(metrics)}</div>
+            <div class="actor-layout">
+              <section class="signature-stage actor-network-stage" aria-labelledby="actors-signature-title">
+                <div class="signature-heading">
+                  <div><h2 id="actors-signature-title">协作网络</h2><span>${visibleActors.length} 个节点 · ${validConnections.length} 条连接</span></div>
+                  <div class="segmented" role="group" aria-label="协作者类型筛选">${filters}</div>
+                </div>
+                <div class="network-scroll" tabindex="0" aria-label="协作者关系图，可在窄屏横向滚动" aria-describedby="actor-connections-description">
+                  <div class="actor-network-canvas">
+                    <svg class="network-connectors" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${connectors}</svg>
+                    ${nodes || '<div class="empty-state" data-actor-empty><div><strong>没有匹配协作者</strong>请切换类型筛选。</div></div>'}
+                  </div>
+                </div>
+                <div class="sr-only" id="actor-connections-description">
+                  <p>当前协作连接关系：</p>
+                  ${connectionDescriptions ? `<ul>${connectionDescriptions}</ul>` : '<p>当前筛选下无协作连接。</p>'}
+                </div>
+              </section>
+              ${actorSummaryMarkup}
+            </div>
+          </section>
+        `)
+      }
+
+      function renderTasks() {
+        const taskItems = safeRecords(tasks)
+        if (!taskScopeValues.has(previewState.taskScope)) previewState.taskScope = 'all'
+        if (!rangeValues.has(previewState.taskRange)) previewState.taskRange = 'month'
+        const visibleTasks = taskItems.filter((task) => taskMatchesScope(task, previewState.taskScope))
+        const selectedTask = normalizeRecordSelection('selectedTaskId', visibleTasks)
+        const todayPending = visibleTasks.filter((task) => task.due === DEMO_REFERENCE_DATE && effectiveTaskStatus(task) !== '已完成').length
+        const metrics = [
+          ['今日待办', String(todayPending).padStart(2, '0'), todayPending ? '今日聚焦' : '今日清零'],
+          ['进行中', String(visibleTasks.filter((task) => effectiveTaskStatus(task) === '进行中').length).padStart(2, '0'), '持续推进'],
+          ['已完成', String(visibleTasks.filter((task) => effectiveTaskStatus(task) === '已完成').length).padStart(2, '0'), '含本次预览'],
+          ['逾期', String(visibleTasks.filter((task) => effectiveTaskStatus(task) === '逾期').length).padStart(2, '0'), '需要关注'],
+        ]
+        const scopeButtons = [['all','全部'],['mine','我的'],['involved','我参与的']].map(([value, label]) => `
+          <button type="button" data-task-scope="${value}" data-focus-key="tasks-scope-${value}" aria-pressed="${previewState.taskScope === value}">${label}</button>
+        `).join('')
+        const taskList = visibleTasks.length ? visibleTasks.map((task) => {
+          const status = effectiveTaskStatus(task)
+          return `<li class="task-list-item">
+            <button class="task-row-button" type="button" data-task-detail="${escapeHtml(task.id)}" data-focus-key="tasks-list-row-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" aria-label="查看 ${escapeHtml(task.code)} ${escapeHtml(task.title)} 详情">
+              <span class="task-row-code">${escapeHtml(task.code)} · ${escapeHtml(status)}</span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.owner)} · 截止 ${escapeHtml(task.due)}</small>
+            </button>
+            <button class="task-detail-button" type="button" data-task-detail="${escapeHtml(task.id)}" data-focus-key="tasks-list-detail-${escapeHtml(task.id)}" aria-label="打开 ${escapeHtml(task.title)} 智能上下文">详情</button>
+          </li>`
+        }).join('') : '<li><div class="empty-state"><div><strong>当前范围暂无任务</strong>切换任务范围后继续查看。</div></div></li>'
+        const fanCards = visibleTasks.length ? visibleTasks.map((task, index) => {
+          const status = effectiveTaskStatus(task)
+          return `<button class="task-fan-card" type="button" data-task-id="${escapeHtml(task.id)}" data-focus-key="tasks-fan-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--index:${index};--count:${visibleTasks.length}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}">
+            <small>${escapeHtml(task.priority)}优先 · ${escapeHtml(task.code)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(status)}</span><span>截止 ${escapeHtml(task.due)}</span><span>进度 ${clampPercent(task.progress)}%</span>
+          </button>`
+        }).join('') : '<div class="empty-state"><div><strong>没有可展示任务卡</strong>当前范围不会生成空的三维卡片。</div></div>'
+        const taskRows = selectedTask ? [
+          ['负责人', selectedTask.owner],
+          ['所属项目', selectedTask.project],
+          ['优先级', selectedTask.priority],
+          ['状态', effectiveTaskStatus(selectedTask)],
+          ['截止日期', selectedTask.due],
+          ['进度', `${clampPercent(selectedTask.progress)}%`],
+        ] : []
+        const advice = !selectedTask ? '切换到包含任务的范围后，可查看下一步建议。'
+          : effectiveTaskStatus(selectedTask) === '逾期' ? '先确认阻塞责任人和新的可承诺时间，再继续推进。'
+          : selectedTask.priority === '高' ? '优先确认验收证据与依赖边界，避免关键路径返工。'
+          : '围绕下一验收点同步进度，并保持依赖与风险可见。'
+        const rangeConfig = executionRange(previewState.taskRange)
+        const timelineTasks = visibleTasks.filter((task) => {
+          const due = parseDemoDate(task.due)
+          return due && due >= rangeConfig.start && due <= rangeConfig.end
+        }).sort((a, b) => String(a.due).localeCompare(String(b.due)))
+        const rangeButtons = [['week','周'],['month','月'],['quarter','季度']].map(([value, label]) => `
+          <button type="button" data-task-range="${value}" data-focus-key="tasks-range-${value}" aria-pressed="${previewState.taskRange === value}">${label}</button>
+        `).join('')
+        const timelineMarkup = timelineTasks.length ? timelineTasks.map((task) => `
+          <li><button class="timeline-task-button" type="button" data-task-detail="${escapeHtml(task.id)}" data-focus-key="tasks-timeline-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}"><strong>${escapeHtml(task.title)}</strong><time datetime="${escapeHtml(task.due)}">${escapeHtml(task.due)}</time></button></li>
+        `).join('') : '<li><div class="empty-state"><div><strong>当前范围暂无交付节点</strong>时间线范围独立于任务范围。</div></div></li>'
+
+        return elementFromHTML(`
+          <section class="page-view execution-shell" data-page="tasks" aria-labelledby="tasks-title">
+            ${renderOverviewHeader('tasks', '把任务范围、六卡执行扇面、智能上下文与独立交付时间线放进共享壳。', '创建任务')}
+            <div class="metric-grid" aria-label="任务关键指标">${renderMetricCards(metrics)}</div>
+            <div class="task-workspace">
+              <section class="glass-panel task-list-panel" aria-labelledby="task-list-title">
+                <div class="panel-heading"><h2 id="task-list-title">任务列表</h2><p>${visibleTasks.length} 项</p></div>
+                <div class="segmented" role="group" aria-label="任务范围筛选">${scopeButtons}</div>
+                <div class="task-list-scroll"><ul class="task-list-items">${taskList}</ul></div>
+              </section>
+              <section class="signature-stage task-fan-stage" aria-labelledby="task-fan-title">
+                <div class="signature-heading"><div><h2 id="task-fan-title">关键任务扇面</h2><span>${visibleTasks.length} 张卡 · 绿色边光表示选择</span></div></div>
+                <div class="task-fan-scroll" tabindex="0" aria-label="任务卡扇面，窄屏可横向滚动"><div class="task-fan-canvas">${fanCards}</div></div>
+              </section>
+              <section class="context-panel task-context" aria-labelledby="task-context-title">
+                <div class="panel-heading"><h2 id="task-context-title">${escapeHtml(selectedTask?.title || '智能任务上下文')}</h2><span class="status-badge ${executionStatusTone(selectedTask ? effectiveTaskStatus(selectedTask) : '')}">${escapeHtml(selectedTask ? effectiveTaskStatus(selectedTask) : '无选择')}</span></div>
+                ${selectedTask ? `<dl class="context-list">${renderContextRows(taskRows)}</dl><p class="task-context-description">${escapeHtml(selectedTask.description)}</p><p class="task-advice"><strong>建议</strong><br>${escapeHtml(advice)}</p><div class="skill-chips" aria-label="任务标签">${safeStringList(selectedTask.tags).map((tag) => `<span class="skill-chip">${escapeHtml(tag)}</span>`).join('') || '<span class="skill-chip">暂无标签</span>'}</div><div class="task-context-actions"><button class="secondary-action" type="button" data-prototype-action="编辑任务">编辑</button><button class="primary-action" type="button" data-task-complete="${escapeHtml(selectedTask.id)}" data-focus-key="tasks-complete-${escapeHtml(selectedTask.id)}" aria-disabled="${effectiveTaskStatus(selectedTask) === '已完成'}">${effectiveTaskStatus(selectedTask) === '已完成' ? '预览中已完成' : '标记完成'}</button></div>` : '<div class="empty-state"><div><strong>暂无任务上下文</strong>当前范围没有可选择任务。</div></div>'}
+              </section>
+            </div>
+            <section class="glass-panel delivery-timeline-panel" aria-labelledby="delivery-timeline-title">
+              <div class="panel-heading"><div><h2 id="delivery-timeline-title">独立交付时间线</h2><p>${escapeHtml(rangeLabels.get(previewState.taskRange))} · ${timelineTasks.length} 个节点</p></div><div class="segmented" role="group" aria-label="任务交付时间范围">${rangeButtons}</div></div>
+              <div class="delivery-timeline-scroll" tabindex="0" aria-label="交付时间线，可横向滚动"><ol class="delivery-timeline" style="--timeline-count:${Math.max(timelineTasks.length, 1)}">${timelineMarkup}</ol></div>
+            </section>
+          </section>
+        `)
+      }
+
+      function ganttScaleMarkup(config) {
+        const points = []
+        if (config.range === 'week') {
+          for (let index = 0; index < 7; index += 1) {
+            const date = new Date(config.start)
+            date.setUTCDate(date.getUTCDate() + index)
+            points.push({ left:((index + 0.5) / 7) * 100, label:`${date.getUTCMonth() + 1}/${date.getUTCDate()}` })
+          }
+        } else if (config.range === 'month') {
+          for (let day = 1; day <= config.days; day += 7) points.push({ left:((day - 0.5) / config.days) * 100, label:`8/${day}` })
+        } else {
+          for (let month = config.start.getUTCMonth(); month <= config.end.getUTCMonth(); month += 1) {
+            const monthStart = new Date(Date.UTC(config.start.getUTCFullYear(), month, 1))
+            const monthEnd = new Date(Date.UTC(config.start.getUTCFullYear(), month + 1, 0))
+            const midpoint = (dayDifference(config.start, monthStart) + dayDifference(config.start, monthEnd) + 1) / 2
+            points.push({ left:(midpoint / config.days) * 100, label:`${month + 1} 月` })
+          }
+        }
+        return points.map((point) => `<span style="--scale-left:${Math.max(0, Math.min(100, point.left)).toFixed(3)}%">${escapeHtml(point.label)}</span>`).join('')
+      }
+
+      function ganttStatusMeta(status) {
+        if (status === '进行中') return { className:'is-in-progress', label:'进行中' }
+        if (status === '逾期') return { className:'is-overdue', label:'逾期' }
+        if (status === '已完成' || status === '完成') return { className:'is-complete', label:'完成' }
+        return { className:'is-neutral', label:String(status || '待处理') }
+      }
+
+      function renderGantt() {
+        if (!rangeValues.has(previewState.ganttRange)) previewState.ganttRange = 'month'
+        const config = executionRange(previewState.ganttRange)
+        const taskItems = safeRecords(tasks)
+        const ganttTasks = taskItems.filter((task) => taskOverlapsRange(task, config))
+        const selectedTask = normalizeRecordSelection('selectedGanttTaskId', ganttTasks)
+        const taskIndexById = new Map(ganttTasks.map((task, index) => [task.id, index]))
+        const validDependencies = []
+        ganttTasks.forEach((task) => {
+          safeStringList(task.dependencies).forEach((dependencyId) => {
+            const from = ganttTasks.find((item) => item.id === dependencyId)
+            if (from && taskIndexById.has(task.id)) validDependencies.push({ from, to:task })
+          })
+        })
+        const rows = ganttTasks.map((task) => {
+          const taskStart = parseDemoDate(task.start)
+          const taskDue = parseDemoDate(task.due)
+          const clippedStart = taskStart < config.start ? config.start : taskStart
+          const clippedEnd = taskDue > config.end ? config.end : taskDue
+          const startColumn = Math.max(1, dayDifference(config.start, clippedStart) + 1)
+          const span = Math.max(1, dayDifference(clippedStart, clippedEnd) + 1)
+          const statusMeta = ganttStatusMeta(effectiveTaskStatus(task))
+          const compactLabel = previewState.ganttRange === 'quarter'
+          const barLabel = compactLabel ? task.title : `${task.code} · ${task.title}`
+          return `<div class="gantt-row"><button class="gantt-bar ${statusMeta.className}${compactLabel ? ' is-compact' : ''}" type="button" data-gantt-task-id="${escapeHtml(task.id)}" data-focus-key="gantt-bar-${escapeHtml(task.id)}" aria-pressed="${selectedTask?.id === task.id}" style="--bar-start:${startColumn};--bar-span:${span}" aria-label="选择 ${escapeHtml(task.code)} ${escapeHtml(task.title)}，${escapeHtml(statusMeta.label)}">${escapeHtml(barLabel)}</button></div>`
+        }).join('')
+        const chartHeight = 46 + ganttTasks.length * 54
+        const connectorPaths = validDependencies.map(({ from, to }) => {
+          const fromDue = parseDemoDate(from.due)
+          const toStart = parseDemoDate(to.start)
+          const fromX = Math.max(0, Math.min(1000, ((dayDifference(config.start, fromDue) + 1) / config.days) * 1000))
+          const toX = Math.max(0, Math.min(1000, (dayDifference(config.start, toStart) / config.days) * 1000))
+          const fromY = 46 + taskIndexById.get(from.id) * 54 + 27
+          const toY = 46 + taskIndexById.get(to.id) * 54 + 27
+          const elbow = Math.max(fromX + 12, (fromX + toX) / 2)
+          return `<path d="M ${fromX.toFixed(2)} ${fromY} H ${elbow.toFixed(2)} V ${toY} H ${toX.toFixed(2)}"></path>`
+        }).join('')
+        const dependencyText = validDependencies.map(({ from, to }) => `<li>${escapeHtml(from.code)} ${escapeHtml(from.title)} → ${escapeHtml(to.code)} ${escapeHtml(to.title)}</li>`).join('')
+        const rangeButtons = [['week','周'],['month','月'],['quarter','季度']].map(([value, label]) => `<button type="button" data-gantt-range="${value}" data-focus-key="gantt-range-${value}" aria-pressed="${previewState.ganttRange === value}">${label}</button>`).join('')
+        const widthByRange = { week:760, month:1040, quarter:1280 }
+        const reference = parseDemoDate(DEMO_REFERENCE_DATE)
+        const showToday = reference && reference >= config.start && reference <= config.end
+        const todayLeft = showToday ? ((dayDifference(config.start, reference) + 0.5) / config.days) * 100 : 0
+        const dependencies = selectedTask ? safeStringList(selectedTask.dependencies).map((id) => taskItems.find((task) => task.id === id)?.title || `未找到依赖（${id}）`) : []
+        const inspectorRows = selectedTask ? [
+          ['任务编号', selectedTask.code],
+          ['状态', effectiveTaskStatus(selectedTask) === '已完成' ? '完成' : effectiveTaskStatus(selectedTask)],
+          ['负责人', selectedTask.owner],
+          ['开始', selectedTask.start],
+          ['截止', selectedTask.due],
+          ['依赖', dependencies.join('；') || '无'],
+        ] : []
+        const metrics = [
+          ['计划任务', String(ganttTasks.length).padStart(2, '0'), rangeLabels.get(previewState.ganttRange)],
+          ['进行中', String(ganttTasks.filter((task) => effectiveTaskStatus(task) === '进行中').length).padStart(2, '0'), '绿色'],
+          ['完成', String(ganttTasks.filter((task) => effectiveTaskStatus(task) === '已完成').length).padStart(2, '0'), '银色'],
+          ['逾期', String(ganttTasks.filter((task) => effectiveTaskStatus(task) === '逾期').length).padStart(2, '0'), '红色'],
+        ]
+
+        return elementFromHTML(`
+          <section class="page-view execution-shell" data-page="gantt" aria-labelledby="gantt-title">
+            ${renderOverviewHeader('gantt', '通过局部横向时间线校准任务范围、状态和安全依赖连接。', '调整排程')}
+            <div class="metric-grid" aria-label="甘特排程关键指标">${renderMetricCards(metrics)}</div>
+            <div class="gantt-layout">
+              <section class="signature-stage gantt-stage" aria-labelledby="gantt-stage-title">
+                <div class="signature-heading"><div><h2 id="gantt-stage-title">横向任务排程</h2><span>${formatDemoDate(config.start)} — ${formatDemoDate(config.end)}</span></div><div class="segmented" role="group" aria-label="甘特时间范围">${rangeButtons}</div></div>
+                <div class="gantt-scroll" tabindex="0" aria-label="甘特时间线，可横向滚动" aria-describedby="${showToday ? 'gantt-today-description ' : ''}gantt-dependencies">
+                  <div class="gantt-canvas" style="min-width:${widthByRange[previewState.ganttRange]}px;--gantt-columns:${config.days};--gantt-height:${Math.max(chartHeight, 180)}px">
+                    <div class="gantt-scale">${ganttScaleMarkup(config)}</div>
+                    ${ganttTasks.length ? rows : '<div class="empty-state"><div><strong>当前范围暂无任务</strong>调整甘特时间范围后继续查看。</div></div>'}
+                    <svg class="gantt-connectors" viewBox="0 0 1000 ${Math.max(chartHeight, 180)}" preserveAspectRatio="none" aria-hidden="true">${connectorPaths}</svg>
+                    ${showToday ? `<div class="gantt-today" style="--today-left:${todayLeft.toFixed(3)}%" aria-hidden="true"><span>今日 ${escapeHtml(DEMO_REFERENCE_DATE.slice(5))}</span></div>` : ''}
+                  </div>
+                </div>
+                ${showToday ? `<p class="sr-only" id="gantt-today-description">今日：${escapeHtml(DEMO_REFERENCE_DATE)}</p>` : ''}
+                <div id="gantt-dependencies"><p class="summary-note">依赖关系文字等价：</p>${dependencyText ? `<ul class="dependency-summary">${dependencyText}</ul>` : '<p class="summary-note">当前范围没有有效依赖；坏引用已安全跳过。</p>'}</div>
+              </section>
+              <section class="context-panel gantt-inspector" aria-labelledby="gantt-inspector-title">
+                <div class="panel-heading"><h2 id="gantt-inspector-title">${escapeHtml(selectedTask?.title || '任务检查器')}</h2><span class="status-badge ${executionStatusTone(selectedTask ? effectiveTaskStatus(selectedTask) : '')}">${escapeHtml(selectedTask ? (effectiveTaskStatus(selectedTask) === '已完成' ? '完成' : effectiveTaskStatus(selectedTask)) : '无选择')}</span></div>
+                ${selectedTask ? `<dl class="context-list">${renderContextRows(inspectorRows)}</dl><p class="summary-note">${escapeHtml(selectedTask.description)}</p>` : '<div class="empty-state"><div><strong>暂无排程任务</strong>当前时间范围没有可检查任务。</div></div>'}
+              </section>
+            </div>
+          </section>
+        `)
+      }
+
+      function renderRequirements() {
+        const stages = ['收集','评审','已批准','开发中','已交付']
+        const requirementItems = safeRecords(requirements)
+        const selectedRequirement = normalizeRecordSelection('selectedRequirementId', requirementItems)
+        const taskItems = safeRecords(tasks)
+        const defectItems = safeRecords(defects)
+        const columns = stages.map((stage) => {
+          const stageItems = requirementItems.filter((item) => item.status === stage)
+          const cards = stageItems.length ? stageItems.map((item) => `<li><button class="requirement-card" type="button" data-requirement-id="${escapeHtml(item.id)}" data-focus-key="requirements-card-${escapeHtml(item.id)}" aria-pressed="${selectedRequirement?.id === item.id}"><small>${escapeHtml(item.code)} · ${escapeHtml(item.priority)}优先</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.owner)} · ${safeStringList(item.taskIds).length} 个关联任务</span></button></li>`).join('') : '<li class="requirement-column-empty">当前列暂无需求</li>'
+          return `<section class="requirement-column" aria-labelledby="requirement-stage-${escapeHtml(stage)}"><h3 id="requirement-stage-${escapeHtml(stage)}">${escapeHtml(stage)} · ${stageItems.length}</h3><ol>${cards}</ol></section>`
+        }).join('')
+        const linkedTasks = selectedRequirement ? safeStringList(selectedRequirement.taskIds).map((id) => taskItems.find((task) => task.id === id)?.title || `未找到任务（${id}）`) : []
+        const linkedDefects = selectedRequirement ? defectItems.filter((defect) => defect.requirementId === selectedRequirement.id) : []
+        const requirementRows = selectedRequirement ? [
+          ['负责人', selectedRequirement.owner],
+          ['优先级', selectedRequirement.priority],
+          ['生命周期', selectedRequirement.status],
+          ['变更风险', selectedRequirement.changeRisk],
+          ['关联任务', linkedTasks.join('；') || '无'],
+          ['关联缺陷', linkedDefects.map((item) => item.code).join('；') || '无'],
+        ] : []
+        const metrics = [
+          ['需求总数', String(requirementItems.length).padStart(2, '0'), '稳定 ID'],
+          ['评审中', String(requirementItems.filter((item) => item.status === '评审').length).padStart(2, '0'), '待决策'],
+          ['开发中', String(requirementItems.filter((item) => item.status === '开发中').length).padStart(2, '0'), '执行态'],
+          ['已交付', String(requirementItems.filter((item) => item.status === '已交付').length).padStart(2, '0'), '可追踪'],
+        ]
+
+        return elementFromHTML(`
+          <section class="page-view execution-shell" data-page="requirements" aria-labelledby="requirements-title">
+            ${renderOverviewHeader('requirements', '把需求从收集到交付的责任、验收标准和追踪关系放进五列生命周期。', '录入需求')}
+            <div class="metric-grid" aria-label="需求关键指标">${renderMetricCards(metrics)}</div>
+            <div class="requirement-layout">
+              <section class="signature-stage requirement-stage" aria-labelledby="requirement-pipeline-title">
+                <div class="signature-heading"><div><h2 id="requirement-pipeline-title">需求生命周期管线</h2><span>收集 → 评审 → 已批准 → 开发中 → 已交付</span></div></div>
+                <div class="pipeline-scroll" tabindex="0" aria-label="需求生命周期五列管线，可横向滚动"><div class="requirement-pipeline">${columns}</div></div>
+              </section>
+              <section class="context-panel requirement-context" aria-labelledby="requirement-context-title">
+                <div class="panel-heading"><h2 id="requirement-context-title">${escapeHtml(selectedRequirement?.title || '需求上下文')}</h2><span class="status-badge ${executionStatusTone(selectedRequirement?.priority)}">${escapeHtml(selectedRequirement?.status || '无选择')}</span></div>
+                ${selectedRequirement ? `<dl class="context-list">${renderContextRows(requirementRows)}</dl><p class="summary-note"><strong>验收标准</strong></p><ul class="criteria-list">${safeStringList(selectedRequirement.acceptanceCriteria).map((criterion) => `<li>${escapeHtml(criterion)}</li>`).join('') || '<li>暂无验收标准</li>'}</ul><p class="summary-note"><strong>关联缺陷</strong></p><ul class="linked-list">${linkedDefects.map((defect) => `<li>${escapeHtml(defect.code)} · ${escapeHtml(defect.title)}</li>`).join('') || '<li>暂无关联缺陷</li>'}</ul>` : '<div class="empty-state"><div><strong>暂无需求上下文</strong>五个生命周期列当前均为空。</div></div>'}
+              </section>
+            </div>
+          </section>
+        `)
+      }
+
+      function defectSeverityClass(severity) {
+        const normalized = String(severity || '').toLowerCase()
+        if (normalized === 'blocker') return 'severity-blocker'
+        if (normalized === 'critical') return 'severity-critical'
+        if (normalized === '高') return 'severity-high'
+        return 'severity-standard'
+      }
+
+      function renderDefects() {
+        const severityLevels = ['Blocker','Critical','高','中','低']
+        const impactLevels = ['高','中','低']
+        const defectItems = safeRecords(defects)
+        const selectedDefect = normalizeRecordSelection('selectedDefectId', defectItems)
+        const requirementItems = safeRecords(requirements)
+        const projectItems = safeRecords(projects)
+        const matrixRows = severityLevels.map((severity) => {
+          const cells = impactLevels.map((impact) => {
+            const matches = defectItems.filter((defect) => defect.severity === severity && defect.impact === impact)
+            const content = matches.length ? `<ul class="defect-cell-list">${matches.map((defect) => `<li><button class="defect-button ${defectSeverityClass(defect.severity)}" type="button" data-defect-id="${escapeHtml(defect.id)}" data-focus-key="defects-matrix-${escapeHtml(defect.id)}" aria-pressed="${selectedDefect?.id === defect.id}">${escapeHtml(defect.code)}<br>${escapeHtml(defect.title)}</button></li>`).join('')}</ul>` : '<span class="defect-cell-empty">无缺陷</span>'
+            return `<td>${content}</td>`
+          }).join('')
+          return `<tr><th scope="row">${escapeHtml(severity)}</th>${cells}</tr>`
+        }).join('')
+        const severityRank = new Map(severityLevels.map((value, index) => [value, index]))
+        const triageItems = defectItems.slice().sort((a, b) => (severityRank.get(a.severity) ?? 99) - (severityRank.get(b.severity) ?? 99)).slice(0, 3)
+        const triageMarkup = triageItems.length ? triageItems.map((defect) => `<li><button class="defect-button ${defectSeverityClass(defect.severity)}" type="button" data-defect-id="${escapeHtml(defect.id)}" data-focus-key="defects-triage-${escapeHtml(defect.id)}" aria-pressed="${selectedDefect?.id === defect.id}">${escapeHtml(defect.code)} · ${escapeHtml(defect.severity)}<br>${escapeHtml(defect.owner)} · ${escapeHtml(defect.status)}</button></li>`).join('') : '<li class="requirement-column-empty">当前没有待分诊缺陷</li>'
+        let relatedRecord = '无'
+        if (selectedDefect?.requirementId) {
+          const requirement = requirementItems.find((item) => item.id === selectedDefect.requirementId)
+          relatedRecord = requirement ? `${requirement.code} · ${requirement.title}` : `未找到需求（${selectedDefect.requirementId}）`
+        } else if (selectedDefect?.projectId) {
+          const project = projectItems.find((item) => item.id === selectedDefect.projectId)
+          relatedRecord = project ? project.name : `未找到项目（${selectedDefect.projectId}）`
+        }
+        const defectRows = selectedDefect ? [
+          ['严重度', selectedDefect.severity],
+          ['影响', selectedDefect.impact],
+          ['状态', selectedDefect.status],
+          ['负责人', selectedDefect.owner],
+          ['影响版本', selectedDefect.version],
+          ['关联需求 / 项目', relatedRecord],
+        ] : []
+        const metrics = [
+          ['开放缺陷', String(defectItems.length).padStart(2, '0'), '分诊队列'],
+          ['Blocker', String(defectItems.filter((item) => item.severity === 'Blocker').length).padStart(2, '0'), '阻塞发布'],
+          ['Critical', String(defectItems.filter((item) => item.severity === 'Critical').length).padStart(2, '0'), '核心路径'],
+          ['回归中', String(defectItems.filter((item) => item.status === '回归中').length).padStart(2, '0'), '等待证据'],
+        ]
+
+        return elementFromHTML(`
+          <section class="page-view execution-shell" data-page="defects" aria-labelledby="defects-title">
+            ${renderOverviewHeader('defects', '按严重度与影响面组织缺陷，只让 Blocker 和 Critical 使用红色警示。', '报告缺陷')}
+            <div class="metric-grid" aria-label="缺陷关键指标">${renderMetricCards(metrics)}</div>
+            <div class="defect-layout">
+              <section class="signature-stage defect-stage" aria-labelledby="defect-matrix-title">
+                <div class="signature-heading"><div><h2 id="defect-matrix-title">严重度 × 影响矩阵</h2><span>红：Blocker / Critical · 琥珀：高 · 银：中低</span></div></div>
+                <div class="defect-matrix-scroll" tabindex="0" aria-label="缺陷严重度与影响矩阵，可横向滚动">
+                  <table class="defect-matrix-table"><caption>行表示严重度，列表示影响范围；每个按钮都可打开分诊详情。</caption><thead><tr><th scope="col">严重度 \ 影响</th>${impactLevels.map((impact) => `<th scope="col">${escapeHtml(impact)}影响</th>`).join('')}</tr></thead><tbody>${matrixRows}</tbody></table>
+                </div>
+                <section class="triage-queue" aria-labelledby="triage-queue-title"><h3 id="triage-queue-title">分诊队列</h3><ol>${triageMarkup}</ol></section>
+              </section>
+              <section class="context-panel defect-context" aria-labelledby="defect-context-title">
+                <div class="panel-heading"><h2 id="defect-context-title">${escapeHtml(selectedDefect?.title || '缺陷上下文')}</h2><span class="status-badge ${executionStatusTone(selectedDefect?.severity)}">${escapeHtml(selectedDefect?.severity || '无选择')}</span></div>
+                ${selectedDefect ? `<dl class="context-list">${renderContextRows(defectRows)}</dl><p class="summary-note"><strong>复现步骤</strong></p><ol class="reproduction-list">${safeStringList(selectedDefect.steps).map((step) => `<li>${escapeHtml(step)}</li>`).join('') || '<li>暂无复现步骤</li>'}</ol>` : '<div class="empty-state"><div><strong>暂无缺陷上下文</strong>矩阵与分诊队列当前均为空。</div></div>'}
+              </section>
+            </div>
+          </section>
+        `)
+      }
+
+      function renderSettings() {
+        const settingsSections = [
+          { id: 'appearance', label: '外观' },
+          { id: 'data', label: '数据' },
+          { id: 'mcp', label: 'MCP' },
+          { id: 'skills', label: 'Skills' },
+        ]
+        const activeSection = settingsSections.some((section) => section.id === previewState.settingsSection)
+          ? previewState.settingsSection
+          : 'appearance'
+        previewState.settingsSection = activeSection
+        const activeLabel = settingsSections.find((section) => section.id === activeSection)?.label || '外观'
+        const categoryMarkup = `
+          <li><button type="button" data-settings-section="appearance" data-focus-key="settings-section-appearance" aria-pressed="${activeSection === 'appearance'}" aria-controls="settings-detail-panel">外观</button></li>
+          <li><button type="button" data-settings-section="data" data-focus-key="settings-section-data" aria-pressed="${activeSection === 'data'}" aria-controls="settings-detail-panel">数据</button></li>
+          <li><button type="button" data-settings-section="mcp" data-focus-key="settings-section-mcp" aria-pressed="${activeSection === 'mcp'}" aria-controls="settings-detail-panel">MCP</button></li>
+          <li><button type="button" data-settings-section="skills" data-focus-key="settings-section-skills" aria-pressed="${activeSection === 'skills'}" aria-controls="settings-detail-panel">Skills</button></li>
+        `
+        const formMarkup = {
+          appearance: `
+            <form class="settings-form" data-settings-form aria-labelledby="settings-detail-title">
+              <fieldset>
+                <legend>显示偏好</legend>
+                <div class="settings-control">
+                  <label for="settings-theme">主题偏好</label>
+                  <select id="settings-theme" name="theme">
+                    <option value="system">跟随系统</option>
+                    <option value="dark" selected>深色</option>
+                    <option value="high-contrast">高对比度</option>
+                  </select>
+                </div>
+                <div class="settings-control">
+                  <label for="settings-density">界面密度</label>
+                  <select id="settings-density" name="density">
+                    <option value="comfortable" selected>舒适</option>
+                    <option value="compact">紧凑</option>
+                  </select>
+                </div>
+                <div class="settings-control">
+                  <span>动效偏好</span>
+                  <div class="settings-checkbox-detail">
+                    <label class="settings-checkbox" for="settings-reduce-motion">
+                      <input id="settings-reduce-motion" name="reduce-motion" type="checkbox" aria-describedby="settings-motion-help" />
+                      <span>减少界面动效</span>
+                    </label>
+                    <small id="settings-motion-help">仅改变当前预览控件，不覆盖系统设置。</small>
+                  </div>
+                </div>
+              </fieldset>
+              <div class="settings-actions"><button class="primary-action" type="button" data-prototype-action="记录外观偏好">记录当前偏好</button></div>
+            </form>
+          `,
+          data: `
+            <form class="settings-form" data-settings-form aria-labelledby="settings-detail-title">
+              <fieldset>
+                <legend>数据视图与导出范围</legend>
+                <div class="settings-control">
+                  <label for="settings-default-view">默认视图</label>
+                  <select id="settings-default-view" name="default-view">
+                    <option value="dashboard" selected>全局驾驶舱</option>
+                    <option value="projects">项目矩阵</option>
+                    <option value="tasks">任务控制台</option>
+                  </select>
+                </div>
+                <div class="settings-control">
+                  <label for="settings-export-scope">导出范围</label>
+                  <select id="settings-export-scope" name="export-scope">
+                    <option value="current" selected>当前项目</option>
+                    <option value="workspace">整个工作区</option>
+                  </select>
+                </div>
+                <div class="settings-control">
+                  <span>历史数据</span>
+                  <div class="settings-checkbox-detail">
+                    <label class="settings-checkbox" for="settings-include-archive">
+                      <input id="settings-include-archive" name="include-archive" type="checkbox" aria-describedby="settings-archive-help" />
+                      <span>包含已归档记录</span>
+                    </label>
+                    <small id="settings-archive-help">此选择只保留在当前页面 DOM。</small>
+                  </div>
+                </div>
+              </fieldset>
+              <div class="settings-actions"><button class="primary-action" type="button" data-prototype-action="记录数据偏好">记录当前偏好</button></div>
+            </form>
+          `,
+          mcp: `
+            <form class="settings-form" data-settings-form aria-labelledby="settings-detail-title">
+              <fieldset>
+                <legend>MCP 本地连接预览</legend>
+                <div class="settings-control">
+                  <label for="settings-mcp-endpoint">Endpoint</label>
+                  <input id="settings-mcp-endpoint" name="endpoint" type="text" value="http://127.0.0.1:3100/mcp" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="settings-control">
+                  <label for="settings-mcp-policy">连接策略</label>
+                  <select id="settings-mcp-policy" name="connection-policy">
+                    <option value="manual" selected>仅手动测试</option>
+                    <option value="workspace">进入工作区时检查</option>
+                  </select>
+                </div>
+              </fieldset>
+              <p class="settings-preview-note">测试按钮仅提供界面反馈，不会发起网络请求。</p>
+              <div class="settings-actions"><button class="secondary-action" type="button" data-prototype-action="测试 MCP 连接">测试连接</button><button class="primary-action" type="button" data-prototype-action="记录 MCP 配置">记录配置</button></div>
+            </form>
+          `,
+          skills: `
+            <form class="settings-form" data-settings-form aria-labelledby="settings-detail-title">
+              <fieldset>
+                <legend>可启用的 Skills</legend>
+                <div class="settings-checkbox-row">
+                  <label class="settings-checkbox" for="settings-skill-planning"><input id="settings-skill-planning" name="skills" type="checkbox" value="planning" checked /><span>项目规划<small>生成阶段拆解与交付检查点。</small></span></label>
+                  <label class="settings-checkbox" for="settings-skill-review"><input id="settings-skill-review" name="skills" type="checkbox" value="review" checked /><span>质量复核<small>提供需求、缺陷与验收的检查视角。</small></span></label>
+                  <label class="settings-checkbox" for="settings-skill-handoff"><input id="settings-skill-handoff" name="skills" type="checkbox" value="handoff" /><span>交接摘要<small>整理当前上下文中的交接要点。</small></span></label>
+                </div>
+              </fieldset>
+              <div class="settings-actions"><button class="secondary-action" type="button" data-prototype-action="导出 Skills 配置">导出配置</button><button class="primary-action" type="button" data-prototype-action="记录 Skills 偏好">记录技能偏好</button></div>
+            </form>
+          `,
+        }[activeSection]
+
+        return elementFromHTML(`
+          <section class="page-view settings-shell" data-page="settings" aria-labelledby="settings-title">
+            <header class="page-header">
+              <div>
+                <p class="page-kicker">Project OS / settings</p>
+                <h1 id="settings-title" tabindex="-1">设置中心</h1>
+                <p class="page-description">集中调整界面、数据、MCP 与 Skills 的预览偏好；所有变化只停留在当前页面。</p>
+              </div>
+              <div class="header-actions">
+                <button class="secondary-action" type="button" data-prototype-action="导出设置快照">导出快照</button>
+                <button class="primary-action" type="button" data-prototype-action="记录设置快照">记录设置快照</button>
+              </div>
+            </header>
+            <div class="settings-layout">
+              <nav class="glass-panel settings-category-panel" aria-label="设置分类">
+                <ul class="settings-category-list">${categoryMarkup}</ul>
+              </nav>
+              <section class="glass-panel settings-detail" id="settings-detail-panel" aria-labelledby="settings-detail-title">
+                <div class="panel-heading"><div><h2 id="settings-detail-title">${escapeHtml(activeLabel)}</h2><p>预览模式 · 不会持久化</p></div><span class="status-badge">本页内</span></div>
+                ${formMarkup}
+              </section>
+            </div>
+          </section>
+        `)
+      }
+
+      function assertRouteRegistry() {
+        const expectedRoutes = new Set(routeOrder)
+        if (expectedRoutes.size !== routeOrder.length) {
+          throw new Error('Route registry mismatch: routeOrder contains duplicates')
+        }
+
+        const routeRegistries = {
+          pageTitles: Object.keys(pageTitles),
+          pageRenderers: Object.keys(pageRenderers),
+          pageShells: Object.keys(pageShells),
+          navigation: Array.from(document.querySelectorAll('[data-route]'), (link) => link.dataset.route),
+        }
+
+        Object.entries(routeRegistries).forEach(([name, routes]) => {
+          const actualRoutes = new Set(routes)
+          const matches = routes.length === routeOrder.length
+            && actualRoutes.size === expectedRoutes.size
+            && routeOrder.every((route) => actualRoutes.has(route))
+
+          if (!matches) throw new Error(`Route registry mismatch: ${name}`)
+        })
+      }
+
+      function currentRoute() {
+        const candidate = location.hash.replace(/^#\/?/, '')
+        return routeOrder.includes(candidate) ? candidate : 'dashboard'
+      }
+
+      function canonicalizeRouteHash(route) {
+        const canonicalHash = `#${route}`
+        if (location.hash !== canonicalHash) history.replaceState(null, '', canonicalHash)
+      }
+
+      function clearToastFeedback() {
+        clearTimeout(toastTimer)
+        clearTimeout(toastClearTimer)
+        toastTimer = 0
+        toastClearTimer = 0
+        toast.classList.remove('is-visible')
+        toast.textContent = ''
+      }
+
+      function revealActiveNavigation(activeLink) {
+        if (!activeLink || !railScroll || railScroll.scrollWidth <= railScroll.clientWidth + 1) return
+        const overflowX = getComputedStyle(railScroll).overflowX
+        if (overflowX !== 'auto' && overflowX !== 'scroll') return
+
+        const railBounds = railScroll.getBoundingClientRect()
+        const linkBounds = activeLink.getBoundingClientRect()
+        const edgePadding = 8
+        const linkLeft = linkBounds.left - railBounds.left + railScroll.scrollLeft
+        let nextScrollLeft = railScroll.scrollLeft
+        if (linkBounds.left < railBounds.left + edgePadding) {
+          nextScrollLeft = linkLeft - edgePadding
+        } else if (linkBounds.right > railBounds.right - edgePadding) {
+          nextScrollLeft = linkLeft + linkBounds.width - railScroll.clientWidth + edgePadding
+        }
+
+        const maximumScrollLeft = Math.max(0, railScroll.scrollWidth - railScroll.clientWidth)
+        const clampedScrollLeft = Math.min(maximumScrollLeft, Math.max(0, nextScrollLeft))
+        if (Math.abs(clampedScrollLeft - railScroll.scrollLeft) < 1) return
+        railScroll.scrollTo({ left:clampedScrollLeft, top:railScroll.scrollTop, behavior:'auto' })
+      }
+
+      function renderCurrentPage({ focusHeading = false } = {}) {
+        const route = currentRoute()
+        const routeChanged = lastRenderedRoute !== null && route !== lastRenderedRoute
+        if (routeChanged) clearToastFeedback()
+        canonicalizeRouteHash(route)
+
+        let activeLink = null
+        document.querySelectorAll('[data-route]').forEach((link) => {
+          const active = link.dataset.route === route
+          link.classList.toggle('is-active', active)
+          active ? link.setAttribute('aria-current', 'page') : link.removeAttribute('aria-current')
+          if (active) activeLink = link
+        })
+
+        pageRoot.replaceChildren(pageRenderers[route]())
+        document.title = `Project OS · ${pageTitles[route]}`
+        lastRenderedRoute = route
+        revealActiveNavigation(activeLink)
+
+        if (focusHeading) pageRoot.querySelector('h1')?.focus()
+      }
+
+      function showToast(message) {
+        clearToastFeedback()
+        toast.textContent = message
+        toast.classList.add('is-visible')
+        toastTimer = window.setTimeout(() => {
+          toast.classList.remove('is-visible')
+          const clearDelay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180
+          toastClearTimer = window.setTimeout(() => {
+            toast.textContent = ''
+            toastClearTimer = 0
+          }, clearDelay)
+          toastTimer = 0
+        }, 2200)
+      }
+
+      function announceSelection(message) {
+        showToast(message)
+      }
+
+      function rerenderCurrentPageAndRestoreFocus(attribute, value, focusKey) {
+        renderCurrentPage()
+        const target = focusKey
+          ? Array.from(pageRoot.querySelectorAll('[data-focus-key]'))
+            .find((element) => element.dataset.focusKey === focusKey)
+          : Array.from(pageRoot.querySelectorAll(`[${attribute}]`))
+            .find((element) => element.getAttribute(attribute) === value)
+        target?.focus()
+      }
+
+      document.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null
+        if (!target) return
+
+        const skipTarget = target.closest('.skip-link')
+        if (skipTarget) {
+          event.preventDefault()
+          mainContent.focus()
+          return
+        }
+
+        const disabledControl = target.closest('[aria-disabled="true"]')
+        if (disabledControl) return
+
+        const dashboardSelection = target.closest('[data-dashboard-select]')
+        if (dashboardSelection) {
+          const selection = dashboardSelection.dataset.dashboardSelect
+          const riskItems = safeRecords(riskQueue)
+          const actorItems = safeRecords(actors)
+          const isKnownRisk = riskItems.some((risk) => risk.id === selection)
+          const isKnownActor = actorItems.some((actor) => actor.id === selection)
+          if (isKnownRisk || isKnownActor) {
+            previewState.dashboardSelection = selection
+            rerenderCurrentPageAndRestoreFocus('data-dashboard-select', selection, dashboardSelection.dataset.focusKey)
+            const selectedRisk = riskItems.find((risk) => risk.id === selection)
+            const selectedActor = actorItems.find((actor) => actor.id === selection)
+            announceSelection(selectedRisk
+              ? `已选择风险：${selectedRisk.title}`
+              : `已选择协作者：${selectedActor.name}`)
+          }
+          return
+        }
+
+        const projectFilter = target.closest('[data-project-filter]')
+        if (projectFilter) {
+          const filter = projectFilter.dataset.projectFilter
+          if (projectFilterValues.has(filter)) {
+            previewState.projectFilter = filter
+            const visibleProjects = safeRecords(projects).filter((project) => projectMatchesFilter(project, filter))
+            if (!visibleProjects.some((project) => project.id === previewState.selectedProjectId)) {
+              previewState.selectedProjectId = visibleProjects[0]?.id ?? null
+            }
+            rerenderCurrentPageAndRestoreFocus('data-project-filter', filter, projectFilter.dataset.focusKey)
+            announceSelection(`项目筛选：${projectFilterLabels.get(filter)}，${visibleProjects.length ? `${visibleProjects.length} 个项目` : '无匹配项目'}`)
+          }
+          return
+        }
+
+        const projectSelection = target.closest('[data-project-id]')
+        if (projectSelection) {
+          const projectId = projectSelection.dataset.projectId
+          const project = safeRecords(projects).find((item) => item.id === projectId)
+          if (project && projectMatchesFilter(project, previewState.projectFilter)) {
+            previewState.selectedProjectId = projectId
+            rerenderCurrentPageAndRestoreFocus('data-project-id', projectId, projectSelection.dataset.focusKey)
+            announceSelection(`已选择项目：${project.name}`)
+          }
+          return
+        }
+
+        const actorFilter = target.closest('[data-actor-filter]')
+        if (actorFilter) {
+          const filter = actorFilter.dataset.actorFilter
+          if (actorFilterValues.has(filter)) {
+            previewState.actorFilter = filter
+            const visibleActors = safeRecords(actors).filter((actor) => filter === 'all' || actor.type === filter)
+            if (!visibleActors.some((actor) => actor.id === previewState.selectedActorId)) {
+              previewState.selectedActorId = visibleActors[0]?.id ?? null
+            }
+            rerenderCurrentPageAndRestoreFocus('data-actor-filter', filter, actorFilter.dataset.focusKey)
+            announceSelection(`协作者筛选：${actorFilterLabels.get(filter)}，${visibleActors.length ? `${visibleActors.length} 位协作者` : '无匹配协作者'}`)
+          }
+          return
+        }
+
+        const actorSelection = target.closest('[data-actor-id]')
+        if (actorSelection) {
+          const actorId = actorSelection.dataset.actorId
+          const actor = safeRecords(actors).find((item) => item.id === actorId)
+          if (actor && (previewState.actorFilter === 'all' || actor.type === previewState.actorFilter)) {
+            previewState.selectedActorId = actorId
+            rerenderCurrentPageAndRestoreFocus('data-actor-id', actorId, actorSelection.dataset.focusKey)
+            announceSelection(`已选择协作者：${actor.name}`)
+          }
+          return
+        }
+
+        const milestoneSelection = target.closest('[data-milestone-id]')
+        if (milestoneSelection) {
+          const milestoneId = milestoneSelection.dataset.milestoneId
+          const milestone = safeRecords(milestones).find((item) => item.id === milestoneId)
+          if (milestone) {
+            previewState.selectedMilestoneId = milestoneId
+            rerenderCurrentPageAndRestoreFocus('data-milestone-id', milestoneId, milestoneSelection.dataset.focusKey)
+            announceSelection(`里程碑：${milestone.name}，仅更新项目上下文`)
+          }
+          return
+        }
+
+        const taskScope = target.closest('[data-task-scope]')
+        if (taskScope) {
+          const scope = taskScope.dataset.taskScope
+          if (taskScopeValues.has(scope)) {
+            previewState.taskScope = scope
+            const visibleTasks = safeRecords(tasks).filter((task) => taskMatchesScope(task, scope))
+            if (!visibleTasks.some((task) => task.id === previewState.selectedTaskId)) {
+              previewState.selectedTaskId = visibleTasks[0]?.id ?? null
+            }
+            rerenderCurrentPageAndRestoreFocus('data-task-scope', scope, taskScope.dataset.focusKey)
+            announceSelection(`任务范围：${taskScopeLabels.get(scope)}，${visibleTasks.length ? `${visibleTasks.length} 项任务` : '暂无任务'}`)
+          }
+          return
+        }
+
+        const taskRange = target.closest('[data-task-range]')
+        if (taskRange) {
+          const range = taskRange.dataset.taskRange
+          if (rangeValues.has(range)) {
+            previewState.taskRange = range
+            rerenderCurrentPageAndRestoreFocus('data-task-range', range, taskRange.dataset.focusKey)
+            announceSelection(`交付时间线：${rangeLabels.get(range)}，只更新预览范围`)
+          }
+          return
+        }
+
+        const taskSelection = target.closest('[data-task-id]')
+        if (taskSelection) {
+          const taskId = taskSelection.dataset.taskId
+          const task = safeRecords(tasks).find((item) => item.id === taskId)
+          if (task && taskMatchesScope(task, previewState.taskScope)) {
+            previewState.selectedTaskId = taskId
+            rerenderCurrentPageAndRestoreFocus('data-task-id', taskId, taskSelection.dataset.focusKey)
+            announceSelection(`任务：${task.code} ${task.title}`)
+          }
+          return
+        }
+
+        const taskDetail = target.closest('[data-task-detail]')
+        if (taskDetail) {
+          const taskId = taskDetail.dataset.taskDetail
+          const task = safeRecords(tasks).find((item) => item.id === taskId)
+          if (task && taskMatchesScope(task, previewState.taskScope)) {
+            previewState.selectedTaskId = taskId
+            rerenderCurrentPageAndRestoreFocus('data-task-detail', taskId, taskDetail.dataset.focusKey)
+            announceSelection(`任务详情：${task.code} ${task.title}`)
+          }
+          return
+        }
+
+        const taskComplete = target.closest('[data-task-complete]')
+        if (taskComplete) {
+          const taskId = taskComplete.dataset.taskComplete
+          const task = safeRecords(tasks).find((item) => item.id === taskId)
+          if (task) {
+            if (effectiveTaskStatus(task) === '已完成') return
+            if (!(previewState.completedTaskIds instanceof Set)) previewState.completedTaskIds = new Set()
+            previewState.completedTaskIds.add(taskId)
+            previewState.selectedTaskId = taskId
+            rerenderCurrentPageAndRestoreFocus('data-task-complete', taskId, taskComplete.dataset.focusKey)
+            announceSelection(`${task.code} 已标记为预览完成态；仅保存在本页内存，未写入系统`)
+          }
+          return
+        }
+
+        const ganttRange = target.closest('[data-gantt-range]')
+        if (ganttRange) {
+          const range = ganttRange.dataset.ganttRange
+          if (rangeValues.has(range)) {
+            previewState.ganttRange = range
+            rerenderCurrentPageAndRestoreFocus('data-gantt-range', range, ganttRange.dataset.focusKey)
+            announceSelection(`甘特范围：${rangeLabels.get(range)}，只更新当前排程视图`)
+          }
+          return
+        }
+
+        const ganttTask = target.closest('[data-gantt-task-id]')
+        if (ganttTask) {
+          const taskId = ganttTask.dataset.ganttTaskId
+          const task = safeRecords(tasks).find((item) => item.id === taskId)
+          if (task) {
+            previewState.selectedGanttTaskId = taskId
+            rerenderCurrentPageAndRestoreFocus('data-gantt-task-id', taskId, ganttTask.dataset.focusKey)
+            announceSelection(`甘特任务：${task.code} ${task.title}`)
+          }
+          return
+        }
+
+        const requirementSelection = target.closest('[data-requirement-id]')
+        if (requirementSelection) {
+          const requirementId = requirementSelection.dataset.requirementId
+          const requirement = safeRecords(requirements).find((item) => item.id === requirementId)
+          if (requirement) {
+            previewState.selectedRequirementId = requirementId
+            rerenderCurrentPageAndRestoreFocus('data-requirement-id', requirementId, requirementSelection.dataset.focusKey)
+            announceSelection(`需求：${requirement.code} ${requirement.title}`)
+          }
+          return
+        }
+
+        const defectSelection = target.closest('[data-defect-id]')
+        if (defectSelection) {
+          const defectId = defectSelection.dataset.defectId
+          const defect = safeRecords(defects).find((item) => item.id === defectId)
+          if (defect) {
+            previewState.selectedDefectId = defectId
+            rerenderCurrentPageAndRestoreFocus('data-defect-id', defectId, defectSelection.dataset.focusKey)
+            announceSelection(`缺陷：${defect.code} ${defect.title}`)
+          }
+          return
+        }
+
+        const settingsSection = target.closest('[data-settings-section]')
+        if (settingsSection) {
+          const section = settingsSection.dataset.settingsSection
+          const settingsLabels = new Map([['appearance', '外观'], ['data', '数据'], ['mcp', 'MCP'], ['skills', 'Skills']])
+          if (settingsLabels.has(section)) {
+            previewState.settingsSection = section
+            rerenderCurrentPageAndRestoreFocus('data-settings-section', section, settingsSection.dataset.focusKey)
+            announceSelection(`已切换设置分类：${settingsLabels.get(section)}`)
+          }
+          return
+        }
+
+        const action = target.closest('[data-prototype-action]')
+        if (action) showToast(`已记录原型操作：${action.dataset.prototypeAction}。预览模式，未保存、未连接、未导出。`)
+      })
+
+      document.addEventListener('submit', (event) => {
+        if (!event.target.matches('[data-settings-form]')) return
+        event.preventDefault()
+        showToast('已记录原型操作。预览模式，未提交或持久化设置。')
+      })
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return
+        document.querySelectorAll('[data-compact-nav].is-open').forEach((nav) => {
+          nav.classList.remove('is-open')
+          nav.setAttribute('aria-expanded', 'false')
+        })
+      })
+
+      window.addEventListener('hashchange', () => renderCurrentPage({ focusHeading: true }))
+
+      assertRouteRegistry()
+      if (!location.hash) history.replaceState(null, '', '#dashboard')
+      renderCurrentPage()
+    </script>
+  </body>
+</html>

@@ -501,6 +501,13 @@ describe('production context', () => {
       `).get()).toEqual({ count: 1 })
       expect(database.prepare('SELECT COUNT(*) AS count FROM settings').get())
         .toEqual({ count: 1 })
+      expect(defaultSeedDocument.settings).toMatchObject({
+        theme: 'dark',
+        background: 'soft',
+        accent: 'teal',
+        density: 'comfortable',
+        version: 1,
+      })
     } finally {
       database.close()
     }
@@ -546,7 +553,7 @@ describe('production context', () => {
     }, ownerId, 'web')
     settings.update({
       ...settings.get(),
-      theme: 'dark',
+      theme: 'light',
     }, ownerId, 'web')
     tokens.issue('discarded-token')
 
@@ -575,7 +582,7 @@ describe('production context', () => {
     expect(actors.list().map(({ name }) => name)).toEqual(['Local Owner'])
     expect(projects.list().map(({ name }) => name)).toEqual(['Default Project'])
     expect(tasks.list().map(({ id }) => id)).toEqual([beforeTask.id])
-    expect(settings.get().theme).toBe('system')
+    expect(settings.get()).toMatchObject({ theme: 'dark', accent: 'teal' })
     expect(tokens.verify(beforeToken.token)).toBe(true)
     expect(actors.createHuman({
       name: 'After restore actor',

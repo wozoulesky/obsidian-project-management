@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import type { Actor, Project, ProjectStatus } from '../../data/domain'
-import { projectRisk } from './project-risk'
+import { projectRisk, type ProjectHealth } from './project-risk'
 
 const statusLabels: Record<ProjectStatus, string> = {
   not_started: '未开始',
@@ -12,12 +12,18 @@ const statusLabels: Record<ProjectStatus, string> = {
 }
 
 export function ProjectCard({
+  health,
   owner,
+  onSelect,
   project,
+  selected,
   taskCount,
 }: {
+  health: ProjectHealth
   owner?: Actor
+  onSelect: () => void
   project: Project
+  selected: boolean
   taskCount: number
 }) {
   const risk = projectRisk(project)
@@ -28,8 +34,8 @@ export function ProjectCard({
           <small>{project.code}</small>
           <h2>{project.name}</h2>
         </div>
-        <span className={`project-card__status project-card__status--${project.status}`}>
-          {statusLabels[project.status]}
+        <span className={`project-card__health project-card__health--${health}`}>
+          {health}
         </span>
       </div>
       {project.description ? (
@@ -39,6 +45,10 @@ export function ProjectCard({
         <div>
           <dt>主要负责人</dt>
           <dd>{owner?.name ?? project.ownerId}</dd>
+        </div>
+        <div>
+          <dt>状态</dt>
+          <dd>{statusLabels[project.status]}</dd>
         </div>
         <div>
           <dt>任务数</dt>
@@ -62,9 +72,24 @@ export function ProjectCard({
           value={project.progress}
         />
       </div>
-      <Link className="project-card__link" to={`/projects/${project.id}`}>
-        查看项目
-      </Link>
+      <div className="project-card__actions">
+        <button
+          aria-label={`查看 ${project.name} 摘要`}
+          aria-pressed={selected}
+          className="project-card__summary-button"
+          onClick={onSelect}
+          type="button"
+        >
+          查看摘要
+        </button>
+        <Link
+          aria-label={`进入 ${project.name} 详情`}
+          className="project-card__link"
+          to={`/projects/${project.id}`}
+        >
+          进入项目
+        </Link>
+      </div>
     </article>
   )
 }

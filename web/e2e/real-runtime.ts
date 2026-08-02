@@ -22,8 +22,12 @@ type RealRuntime = {
   seed: {
     agentId: string
     agentName: string
+    defaultProjectId: string
+    localActorId: string
+    localActorName: string
     ownerId: string
     ownerName: string
+    portfolioId: string
     taskTitle: string
   }
 }
@@ -69,6 +73,7 @@ export const test = base.extend<
         const address = api.server.address() as AddressInfo
         const apiURL = `http://127.0.0.1:${address.port}`
         const actorId = api.context.localActorId
+        const localActor = api.context.services.actors.get(actorId)
         const owner = api.context.services.actors.createHuman(
           {
             name: 'Lin',
@@ -88,7 +93,7 @@ export const test = base.extend<
           actorId,
           'mcp',
         )
-        api.context.services.projects.create(
+        const portfolio = api.context.services.projects.create(
           {
             name: 'Lin Portfolio',
             description: '用于验证负责人筛选的项目',
@@ -148,8 +153,12 @@ export const test = base.extend<
           seed: {
             agentId: agent.id,
             agentName: agent.name,
+            defaultProjectId: 'project_default',
+            localActorId: localActor.id,
+            localActorName: localActor.name,
             ownerId: owner.id,
             ownerName: owner.name,
+            portfolioId: portfolio.id,
             taskTitle,
           },
         })

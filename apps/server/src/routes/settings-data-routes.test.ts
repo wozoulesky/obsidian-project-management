@@ -59,6 +59,13 @@ describe('settings routes', () => {
 
     expect(response.status).toBe(200)
     expect(response.body.data).toEqual(defaultSeedDocument.settings)
+    expect(response.body.data).toMatchObject({
+      theme: 'dark',
+      background: 'soft',
+      accent: 'teal',
+      density: 'comfortable',
+      version: 1,
+    })
   })
 
   it('updates partial settings, records activity, and preserves a no-op version', async () => {
@@ -66,19 +73,19 @@ describe('settings routes', () => {
 
     const updated = await request(app)
       .patch('/api/v1/settings')
-      .send({ theme: 'dark', version: 1 })
+      .send({ theme: 'light', version: 1 })
 
     expect(updated.status).toBe(200)
     expect(updated.body.data).toMatchObject({
-      theme: 'dark',
+      theme: 'light',
       background: 'soft',
-      accent: 'blue',
+      accent: 'teal',
       density: 'comfortable',
       version: 2,
     })
     const noOp = await request(app)
       .patch('/api/v1/settings')
-      .send({ theme: 'dark', version: 2 })
+      .send({ theme: 'light', version: 2 })
     expect(noOp.status).toBe(200)
     expect(noOp.body.data).toEqual(updated.body.data)
     expect(context.database.prepare(`
@@ -96,7 +103,7 @@ describe('settings routes', () => {
     const { app } = fixture()
     await request(app)
       .patch('/api/v1/settings')
-      .send({ theme: 'dark', version: 1 })
+      .send({ theme: 'light', version: 1 })
 
     const cases = [
       { body: { accent: 'teal', version: 1 }, status: 409 },
@@ -252,8 +259,8 @@ describe('backup routes', () => {
     expect(backup.status).toBe(201)
     const changed = await request(app)
       .patch('/api/v1/settings')
-      .send({ theme: 'dark', version: 1 })
-    expect(changed.body.data.theme).toBe('dark')
+      .send({ theme: 'light', version: 1 })
+    expect(changed.body.data.theme).toBe('light')
 
     const restored = await request(app)
       .post('/api/v1/backups/restore')
@@ -264,7 +271,7 @@ describe('backup routes', () => {
       path: 'backups/before.sqlite',
     })
     const settings = await request(app).get('/api/v1/settings')
-    expect(settings.body.data.theme).toBe('system')
+    expect(settings.body.data).toMatchObject({ theme: 'dark', accent: 'teal' })
     expect((await request(app).get('/api/v1/health')).status).toBe(200)
   })
 
@@ -317,7 +324,7 @@ describe('backup routes', () => {
     const active = fixture()
     await request(active.app)
       .patch('/api/v1/settings')
-      .send({ theme: 'dark', version: 1 })
+      .send({ theme: 'light', version: 1 })
     const candidate = createAppContext({
       databasePath: join(active.directory, 'candidate-active.sqlite'),
       backupRoot: join(active.directory, 'backups'),
@@ -338,7 +345,7 @@ describe('backup routes', () => {
     expect(restored.status).toBe(400)
     expect(restored.body.error.code).toBe('BACKUP_INVALID')
     expect((await request(active.app).get('/api/v1/settings')).body.data.theme)
-      .toBe('dark')
+      .toBe('light')
     expect((await request(active.app).get('/api/v1/health')).status).toBe(200)
   })
 })
@@ -351,7 +358,7 @@ describe('export and import routes', () => {
       .send({ name: 'Export secret' })
     await request(app)
       .patch('/api/v1/settings')
-      .send({ theme: 'dark', version: 1 })
+      .send({ theme: 'light', version: 1 })
 
     const exported = await request(app).get('/api/v1/export')
 
@@ -360,7 +367,7 @@ describe('export and import routes', () => {
       schemaVersion: 1,
       actors: expect.any(Array),
       projects: expect.any(Array),
-      settings: expect.objectContaining({ theme: 'dark' }),
+      settings: expect.objectContaining({ theme: 'light' }),
     })
     expect(exported.body.data).not.toHaveProperty('tokens')
     expect(exported.body.data).not.toHaveProperty('activities')
@@ -475,7 +482,7 @@ describe('export and import routes', () => {
     const { app } = fixture()
     await request(app)
       .patch('/api/v1/settings')
-      .send({ theme: 'dark', version: 1 })
+      .send({ theme: 'light', version: 1 })
     const document = (await request(app).get('/api/v1/export')).body.data
     document.actors[0].id = 'actor_other'
     document.projects[0].ownerId = 'actor_other'
@@ -491,7 +498,7 @@ describe('export and import routes', () => {
     expect(imported.status).toBe(400)
     expect(imported.body.error.code).toBe('IMPORT_INVALID')
     expect((await request(app).get('/api/v1/settings')).body.data.theme)
-      .toBe('dark')
+      .toBe('light')
     expect((await request(app).get('/api/v1/health')).status).toBe(200)
   })
 
@@ -578,7 +585,7 @@ describe('export and import routes', () => {
         .send({ name: 'Retained token' })
       await request(app)
         .patch('/api/v1/settings')
-        .send({ theme: 'dark', version: 1 })
+        .send({ theme: 'light', version: 1 })
       const beforeActivities = context.database.prepare(`
         SELECT operation, actor_id, source, entity_id
         FROM activities
@@ -606,14 +613,14 @@ describe('export and import routes', () => {
         ORDER BY created_at, id
       `).all()).toEqual(beforeActivities)
       expect((await request(app).get('/api/v1/settings')).body.data)
-        .toMatchObject({ theme: 'dark', version: 2 })
+        .toMatchObject({ theme: 'light', version: 2 })
       const subsequentWrite = await request(app)
         .patch('/api/v1/settings')
-        .send({ accent: 'teal', version: 2 })
+        .send({ accent: 'purple', version: 2 })
       expect(subsequentWrite.status).toBe(200)
       expect(subsequentWrite.body.data).toMatchObject({
-        theme: 'dark',
-        accent: 'teal',
+        theme: 'light',
+        accent: 'purple',
         version: 3,
       })
       expect((await request(app).get('/api/v1/health')).status).toBe(200)

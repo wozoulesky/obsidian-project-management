@@ -19,11 +19,13 @@ test.beforeEach(async ({ page }, testInfo) => {
   await freezeVisualTime(page)
 })
 
-test('task inspector matches its visual baseline', async ({ page }) => {
+test('persistent task context matches its visual baseline', async ({ page }) => {
   await openReadyPage(page, '/tasks?selected=task-051')
+  const context = page.getByRole('region', { name: '智能任务上下文' })
   await expect(
-    page.getByRole('dialog', { name: 'MCP 权限校验' }),
+    context.getByRole('heading', { name: 'MCP 权限校验' }),
   ).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 
   await expect(page).toHaveScreenshot(
     'state-task-inspector.png',
@@ -77,7 +79,7 @@ test('empty task filter matches its visual baseline', async ({ page }) => {
     page,
     '/tasks?status=overdue&assignee=human-lin',
   )
-  await expect(page.getByText('没有符合筛选条件的任务。')).toBeVisible()
+  await expect(page.getByText('没有符合筛选条件的任务')).toBeVisible()
 
   await expect(page).toHaveScreenshot(
     'state-empty.png',
