@@ -122,24 +122,24 @@ export function TaskProgressForm({ task }: { task: Task }) {
           }
           if (
             progressRevisionRef.current === submittedProgressRevision
-            && (
-              progressSourceRevisionRef.current
-                === submittedProgressSourceRevision
-              || currentProgressSourceRef.current === updatedTask.progress
-            )
           ) {
             progressDirtyRef.current = false
-            setProgress(String(updatedTask.progress))
+            setProgress(String(
+              progressSourceRevisionRef.current
+                === submittedProgressSourceRevision
+                ? updatedTask.progress
+                : currentProgressSourceRef.current,
+            ))
           }
           if (
             statusRevisionRef.current === submittedStatusRevision
-            && (
-              statusSourceRevisionRef.current === submittedStatusSourceRevision
-              || currentStatusSourceRef.current === updatedTask.status
-            )
           ) {
             statusDirtyRef.current = false
-            setStatus(updatedTask.status)
+            setStatus(
+              statusSourceRevisionRef.current === submittedStatusSourceRevision
+                ? updatedTask.status
+                : currentStatusSourceRef.current,
+            )
           }
         },
         onError: (error) => {
