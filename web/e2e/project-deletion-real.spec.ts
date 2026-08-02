@@ -205,7 +205,10 @@ test('keeps the dialog open when project deletion reports a version conflict', a
   const confirmation = dialog.getByLabel(`输入 ${project.name} 以确认`)
   await confirmation.fill(project.name)
 
-  const projectRoute = `**/api/v1/projects/${project.id}`
+  const projectURL = `${runtime.apiURL}/api/v1/projects/${
+    encodeURIComponent(project.id)
+  }`
+  const projectRoute = `**/api/v1/projects/${encodeURIComponent(project.id)}`
   let interceptedDelete = false
   const rejectDeleteOnce = async (route: Route) => {
     if (route.request().method() !== 'DELETE' || interceptedDelete) {
@@ -227,27 +230,73 @@ test('keeps the dialog open when project deletion reports a version conflict', a
       }),
     })
   }
-  await page.route(projectRoute, rejectDeleteOnce)
-  await dialog.getByRole('button', {
-    name: '永久删除项目',
-    exact: true,
-  }).click()
+  let journeyError: unknown
+  let cleanupError: unknown
+  try {
+    await page.route(projectRoute, rejectDeleteOnce)
+    await dialog.getByRole('button', {
+      name: '永久删除项目',
+      exact: true,
+    }).click()
 
-  await expect(dialog).toBeVisible()
-  await expect(
-    dialog.getByRole('alert'),
-  ).toHaveText('项目已被修改，请刷新后重新确认。')
-  await expect(confirmation).toHaveValue(project.name)
-  expect(interceptedDelete).toBe(true)
-  await page.unroute(projectRoute, rejectDeleteOnce)
+    await expect(dialog).toBeVisible()
+    await expect(
+      dialog.getByRole('alert'),
+    ).toHaveText('项目已被修改，请刷新后重新确认。')
+    await expect(confirmation).toHaveValue(project.name)
+    expect(interceptedDelete).toBe(true)
 
-  const retainedProject = await fetch(
-    `${runtime.apiURL}/api/v1/projects/${encodeURIComponent(project.id)}`,
-  )
-  expect(retainedProject.status).toBe(200)
-  const retainedEnvelope = await retainedProject.json() as ApiEnvelope<CreatedProject>
-  expect(retainedEnvelope.data).toMatchObject({
-    id: project.id,
-    name: project.name,
-  })
+    const retainedProject = await fetch(projectURL)
+    expect(retainedProject.status).toBe(200)
+    const retainedEnvelope = await retainedProject.json() as ApiEnvelope<
+      CreatedProject
+    >
+    expect(retainedEnvelope.data).toMatchObject({
+      id: project.id,
+      name: project.name,
+    })
+  } catch (error) {
+    journeyError = error
+  } finally {
+    try {
+      await page.unroute(projectRoute, rejectDeleteOnce)
+    } catch (error) {
+      cleanupError = error
+    }
+
+    try {
+      const retainedProject = await request.get(projectURL)
+      if (retainedProject.status() === 200) {
+        const retainedEnvelope = await retainedProject.json() as ApiEnvelope<
+          CreatedProject
+        >
+        const deletion = await request.delete(projectURL, {
+          data: { version: retainedEnvelope.data.version },
+        })
+        expect(deletion.status()).toBe(200)
+        const deletionEnvelope = await deletion.json() as ApiEnvelope<{
+          id: string
+          name: string
+        }>
+        expect(deletionEnvelope.data).toMatchObject({
+          id: project.id,
+          name: project.name,
+        })
+      } else {
+        expect(retainedProject.status()).toBe(404)
+      }
+      const cleanedProject = await request.get(projectURL)
+      expect(cleanedProject.status()).toBe(404)
+    } catch (error) {
+      cleanupError ??= error
+    }
+  }
+
+  if (journeyError !== undefined) {
+    if (journeyError instanceof Error && cleanupError !== undefined) {
+      Object.assign(journeyError, { cleanupError })
+    }
+    throw journeyError
+  }
+  if (cleanupError !== undefined) throw cleanupError
 })

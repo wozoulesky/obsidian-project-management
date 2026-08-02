@@ -1,8 +1,26 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const realJourneysOnly = process.argv.some(
-  (argument) => argument === '--project=real-browser-journeys',
-)
+function collectSelectedProjects(argv: string[]): string[] {
+  const selectedProjects: string[] = []
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]!
+    if (argument.startsWith('--project=')) {
+      const project = argument.slice('--project='.length)
+      if (project !== '') selectedProjects.push(project)
+      continue
+    }
+    if (argument !== '--project') continue
+    const project = argv[index + 1]
+    if (project === undefined || project.startsWith('-')) continue
+    selectedProjects.push(project)
+    index += 1
+  }
+  return selectedProjects
+}
+
+const selectedProjects = collectSelectedProjects(process.argv.slice(2))
+const realJourneysOnly = selectedProjects.length > 0
+  && selectedProjects.every((project) => project === 'real-browser-journeys')
 
 export default defineConfig({
   testDir: './e2e',
