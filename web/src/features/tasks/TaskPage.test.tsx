@@ -129,10 +129,32 @@ describe('filterTasks', () => {
     expect(filterTasks(fixtureTasks, malicious)[0]?.dueDate)
       .toBe('2026-07-23')
   })
+
+  it.each([
+    ['code', '  task-code  ', 'code-match'],
+    ['title', 'migration', 'title-match'],
+    ['description', 'legacy data', 'description-match'],
+    ['assignee name', 'casey owner', 'assignee-match'],
+    ['project id', 'project-atlas', 'project-match'],
+  ])('matches a trimmed case-insensitive query by %s', (_field, query, id) => {
+    const source = [
+      task({ id: 'code-match', code: 'TASK-CODE' }),
+      task({ id: 'title-match', title: 'History MIGRATION' }),
+      task({ id: 'description-match', description: 'Move LEGACY DATA safely' }),
+      task({
+        id: 'assignee-match',
+        assignee: { id: 'casey', name: 'Casey Owner', kind: 'human' },
+      }),
+      task({ id: 'project-match', projectId: 'PROJECT-ATLAS' }),
+    ]
+
+    expect(filterTasks(source, new URLSearchParams({ q: query })))
+      .toEqual([expect.objectContaining({ id })])
+  })
 })
 
 describe('TaskPage workflow', () => {
-  it('renders list, fan and persistent context before the independent timeline', async () => {
+  it('renders the fan workspace without an independent delivery timeline', async () => {
     vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
       task({
         id: 'done-early',
@@ -151,7 +173,7 @@ describe('TaskPage workflow', () => {
         status: 'overdue',
       }),
     ])
-    const { container } = renderApp(<TaskPage />)
+    renderApp(<TaskPage />)
 
     const workspace = await screen.findByTestId('task-workspace')
     const filterToolbar = screen.getByTestId('task-filter-toolbar')
@@ -186,9 +208,74 @@ describe('TaskPage workflow', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(window.location.search).not.toContain('selected=')
 
-    const timeline = screen.getByRole('region', { name: '独立交付时间线' })
-    expect(timeline).toBe(container.querySelector('.task-workspace')?.nextElementSibling)
+    expect(screen.queryByRole('region', { name: '独立交付时间线' }))
+      .not.toBeInTheDocument()
     expect(filterToolbar.nextElementSibling).toBe(workspace)
+  })
+
+  it('uses a controlled search and preserves view while clearing selection', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, {
+      route: '/tasks?view=board&selected=task-047&status=overdue&q=断线',
+    })
+
+    const search = await screen.findByRole('searchbox', { name: '搜索任务' })
+    expect(search).toHaveValue('断线')
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('断线恢复测试')
+
+    await user.clear(search)
+    await user.type(search, '恢复')
+
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('q')).toBe('恢复')
+    expect(params.get('view')).toBe('board')
+    expect(params.get('status')).toBe('overdue')
+    expect(params.has('selected')).toBe(false)
+  })
+
+  it('keeps selection and filters when switching task views', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, {
+      route: '/tasks?view=board&selected=task-047&status=overdue',
+    })
+
+    const switcher = await screen.findByRole('group', { name: '任务视图' })
+    expect(within(switcher).getByRole('button', { name: '看板' }))
+      .toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('region', { name: '任务看板工作区' })).toBeVisible()
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('断线恢复测试')
+
+    await user.click(within(switcher).getByRole('button', { name: '时间线' }))
+
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('view')).toBe('timeline')
+    expect(params.get('selected')).toBe('task-047')
+    expect(params.get('status')).toBe('overdue')
+    expect(screen.getByRole('region', { name: '任务时间线工作区' }))
+      .toBeVisible()
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toHaveTextContent('断线恢复测试')
+  })
+
+  it('falls back to fan for an invalid view and removes view for fan', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, {
+      route: '/tasks?view=invalid&selected=task-047&priority=P0',
+    })
+
+    const switcher = await screen.findByRole('group', { name: '任务视图' })
+    const fan = within(switcher).getByRole('button', { name: '扇面' })
+    expect(fan).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('region', { name: '关键任务扇面' })).toBeVisible()
+
+    await user.click(fan)
+
+    const params = new URLSearchParams(window.location.search)
+    expect(params.has('view')).toBe(false)
+    expect(params.get('selected')).toBe('task-047')
+    expect(params.get('priority')).toBe('P0')
   })
 
   it('shortens opaque project ids in the persistent context', () => {
@@ -341,38 +428,6 @@ describe('TaskPage workflow', () => {
     expect(screen.getByRole('region', { name: '智能任务上下文' }))
       .toHaveTextContent('断线恢复测试')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('keeps timeline range local and writes timeline selection without dropping filters', async () => {
-    const user = userEvent.setup()
-    renderApp(<TaskPage />, {
-      route: '/tasks?priority=P1&sort=due_desc',
-    })
-
-    const workspace = await screen.findByTestId('task-workspace')
-    const listCount = within(workspace).getAllByRole('button', {
-      name: /^查看 /,
-    }).length
-    const context = within(workspace).getByRole('region', {
-      name: '智能任务上下文',
-    })
-    const initialContext = context.textContent
-    const timeline = screen.getByRole('region', { name: '独立交付时间线' })
-
-    await user.click(within(timeline).getByRole('button', { name: '季度' }))
-
-    expect(window.location.search).toBe('?priority=P1&sort=due_desc')
-    expect(within(workspace).getAllByRole('button', { name: /^查看 / }))
-      .toHaveLength(listCount)
-    expect(context.textContent).toBe(initialContext)
-
-    await user.click(within(timeline).getByRole('button', {
-      name: '选择 TASK-063 甘特图渲染',
-    }))
-    expect(window.location.search).toContain('priority=P1')
-    expect(window.location.search).toContain('sort=due_desc')
-    expect(window.location.search).toContain('selected=task-063')
-    expect(context).toHaveTextContent('甘特图渲染')
   })
 
   it('keeps focus on the fan trigger without opening an inspector dialog', async () => {
@@ -537,12 +592,17 @@ describe('TaskPage workflow', () => {
 
   it('writes the overdue filter to the URL and only shows overdue work', async () => {
     const user = userEvent.setup()
-    renderApp(<AppRoutes />, { route: '/tasks' })
+    renderApp(<AppRoutes />, {
+      route: '/tasks?view=fan&selected=task-051',
+    })
 
     await screen.findByRole('button', { name: '查看 断线恢复测试' })
     await user.click(screen.getByRole('button', { name: '已延期' }))
 
-    expect(window.location.search).toContain('status=overdue')
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('status')).toBe('overdue')
+    expect(params.get('view')).toBe('fan')
+    expect(params.has('selected')).toBe(false)
     expect(screen.getByRole('button', { name: '查看 断线恢复测试' }))
       .toBeVisible()
     expect(screen.queryByRole('button', { name: '查看 甘特图渲染' }))

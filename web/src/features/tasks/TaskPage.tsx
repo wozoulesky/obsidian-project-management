@@ -10,11 +10,12 @@ import { PageHeader } from '../../components/layout/PageHeader'
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Task } from '../../data/domain'
 import { useTasks } from '../../data/query-hooks'
-import { DeliveryTimeline } from './DeliveryTimeline'
 import { TaskCompactList } from './TaskCompactList'
 import { TaskContextPanel } from './TaskContextPanel'
 import { filterTasks, TaskFilters } from './TaskFilters'
 import { prioritizeFanTasks, TaskFan } from './TaskFan'
+import { parseTaskView } from './task-workspace-model'
+import { TaskViewSwitch } from './TaskViewSwitch'
 import './tasks-glass.css'
 
 const metricCopy = {
@@ -56,6 +57,7 @@ export function TaskPage() {
   ].join('-')
   const tasks = tasksQuery.data ?? []
   const filteredTasks = filterTasks(tasks, searchParams)
+  const view = parseTaskView(searchParams.get('view'))
   const requestedTaskId = searchParams.get('selected')
   const prioritizedTasks = prioritizeFanTasks(filteredTasks)
   const selectedTask =
@@ -111,9 +113,12 @@ export function TaskPage() {
       />
       <PageHeader
         actions={(
-          <span className="task-page__count">
-            {filteredTasks.length} / {tasks.length} 项
-          </span>
+          <>
+            <TaskViewSwitch value={view} />
+            <span className="task-page__count">
+              {filteredTasks.length} / {tasks.length} 项
+            </span>
+          </>
         )}
         eyebrow="PLAN / TASKS"
         subtitle={`以 ${today} 为今日基准，聚合筛选范围内的执行状态与交付风险。`}
@@ -141,29 +146,36 @@ export function TaskPage() {
         <TaskFilters tasks={tasks} />
       </div>
       <div className="task-workspace" data-testid="task-workspace">
-        <TaskCompactList
-          allTasks={tasks}
-          dataSlot="list"
-          onSelect={selectTask}
-          selectedTaskId={selectedTaskId}
-          tasks={filteredTasks}
-        />
-        <TaskFan
-          dataSlot="fan"
-          onSelect={selectTask}
-          selectedTaskId={selectedTaskId}
-          tasks={filteredTasks}
-        />
+        {view === 'fan' ? (
+          <>
+            <TaskCompactList
+              allTasks={tasks}
+              dataSlot="list"
+              onSelect={selectTask}
+              selectedTaskId={selectedTaskId}
+              tasks={filteredTasks}
+            />
+            <TaskFan
+              dataSlot="fan"
+              onSelect={selectTask}
+              selectedTaskId={selectedTaskId}
+              tasks={filteredTasks}
+            />
+          </>
+        ) : (
+          <GlassPanel
+            ariaLabel={view === 'board' ? '任务看板工作区' : '任务时间线工作区'}
+            data-slot={view}
+            style={{ gridColumn: '1 / span 2' }}
+          >
+            <p>{view === 'board' ? '任务看板' : '任务时间线'}将在下一阶段接入。</p>
+          </GlassPanel>
+        )}
         <TaskContextPanel
           dataSlot="context"
           task={selectedTask}
         />
       </div>
-      <DeliveryTimeline
-        onSelect={selectTask}
-        selectedTaskId={selectedTaskId}
-        tasks={filteredTasks}
-      />
     </section>
   )
 }
