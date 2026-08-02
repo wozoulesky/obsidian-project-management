@@ -132,6 +132,8 @@ export function useProjectRepository() {
   }
 }
 
+const projectTaskListQueryMarker = { scope: 'project-task-list' } as const
+
 export const projectQueryKeys = {
   actors: ['actors'] as const,
   currentActor: ['actors', 'current'] as const,
@@ -157,6 +159,15 @@ export const projectQueryKeys = {
     ['dashboard', { scope: 'workspace' }, days] as const,
   tasksFor: (selectedProjectId: string) =>
     ['tasks', selectedProjectId] as const,
+  taskListFor: <Parameters extends Readonly<Record<string, unknown>>>(
+    selectedProjectId: string,
+    parameters: Parameters,
+  ) => [
+    'tasks',
+    selectedProjectId,
+    projectTaskListQueryMarker,
+    parameters,
+  ] as const,
   requirementsFor: (selectedProjectId: string) =>
     ['requirements', selectedProjectId] as const,
   defectsFor: (selectedProjectId: string) =>
@@ -319,6 +330,7 @@ const createTaskQueryOptions = (
 
         return {
           queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+          meta: projectTaskListQueryMarker,
           enabled,
           queryFn: shouldFail
             ? () => {
@@ -330,6 +342,7 @@ const createTaskQueryOptions = (
       }
     : () => ({
         queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+        meta: projectTaskListQueryMarker,
         enabled,
         queryFn: () => repository.listTasks(selectedProjectId),
       })
@@ -720,8 +733,15 @@ type TaskMoveQueryMarker = {
 }
 
 type PendingTaskMoveScopes = {
+  allTasksDirty: boolean
+  dirtyProjects: Set<string>
   projects: Map<string, number>
   total: number
+}
+
+type TaskMoveInvalidationFlush = {
+  allTasks: boolean
+  projectIds: string[]
 }
 
 const pendingTaskMovesByClient = new WeakMap<
@@ -734,36 +754,31 @@ const pendingTaskMoveScopesByClient = new WeakMap<
 >()
 const taskMoveQueryMarkers = new WeakMap<Query, TaskMoveQueryMarker>()
 
-const approvedTaskListFilterKeys = new Set([
-  'assignee',
-  'assigneeId',
-  'milestoneId',
-  'priority',
-  'q',
-  'query',
-  'search',
-  'status',
-  'statuses',
-])
+function isProjectTaskListMarker(value: unknown) {
+  return (
+    value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && Object.keys(value).length === 1
+    && Reflect.get(value, 'scope') === projectTaskListQueryMarker.scope
+  )
+}
 
-function isApprovedTaskListQueryKey(
-  queryKey: readonly unknown[],
+function isProjectTaskListQuery(
+  query: Query,
   selectedProjectId: string,
 ) {
+  const { queryKey } = query
   if (queryKey[0] !== 'tasks' || queryKey[1] !== selectedProjectId) {
     return false
   }
   if (queryKey.length === 2) return true
-  if (queryKey.length !== 3) return false
-  const filter = queryKey[2]
-  if (
-    filter === null
-    || typeof filter !== 'object'
-    || Array.isArray(filter)
-  ) return false
-  const keys = Object.keys(filter)
-  return keys.length > 0 && keys.every(
-    (key) => approvedTaskListFilterKeys.has(key),
+  return (
+    isProjectTaskListMarker(query.options.meta)
+    || (
+      queryKey.length === 4
+      && isProjectTaskListMarker(queryKey[2])
+    )
   )
 }
 
@@ -808,6 +823,8 @@ function registerTaskMoveScope(
   projectId: string,
 ) {
   const current = pendingTaskMoveScopesByClient.get(queryClient) ?? {
+    allTasksDirty: false,
+    dirtyProjects: new Set<string>(),
     projects: new Map<string, number>(),
     total: 0,
   }
@@ -816,23 +833,44 @@ function registerTaskMoveScope(
   pendingTaskMoveScopesByClient.set(queryClient, current)
 }
 
+function markTaskMoveScopeDirty(
+  queryClient: QueryClient,
+  projectId: string,
+) {
+  const current = pendingTaskMoveScopesByClient.get(queryClient)
+  if (current === undefined) return
+  current.allTasksDirty = true
+  current.dirtyProjects.add(projectId)
+}
+
 function releaseTaskMoveScope(
   queryClient: QueryClient,
   projectId: string,
 ) {
   const current = pendingTaskMoveScopesByClient.get(queryClient)
   if (current === undefined) {
-    return { allTasks: false, projectTaskLists: false }
+    return { allTasks: false, projectIds: [] }
   }
   current.total = Math.max(0, current.total - 1)
   const projectCount = current.projects.get(projectId) ?? 0
   if (projectCount <= 1) current.projects.delete(projectId)
   else current.projects.set(projectId, projectCount - 1)
-  if (current.total === 0) pendingTaskMoveScopesByClient.delete(queryClient)
-  return {
-    allTasks: current.total === 0,
-    projectTaskLists: !current.projects.has(projectId),
+  const projectIds = [...current.dirtyProjects].filter(
+    (dirtyProjectId) => !current.projects.has(dirtyProjectId),
+  )
+  for (const dirtyProjectId of projectIds) {
+    current.dirtyProjects.delete(dirtyProjectId)
   }
+  const allTasks = current.total === 0 && current.allTasksDirty
+  if (allTasks) current.allTasksDirty = false
+  if (
+    current.total === 0
+    && current.dirtyProjects.size === 0
+    && !current.allTasksDirty
+  ) {
+    pendingTaskMoveScopesByClient.delete(queryClient)
+  }
+  return { allTasks, projectIds }
 }
 
 function releaseTaskMove(
@@ -922,8 +960,8 @@ function taskMoveQueryCandidates(
   const queryCache = queryClient.getQueryCache()
   const projectTaskQueries = queryCache.findAll({
     queryKey: projectQueryKeys.tasksFor(selectedProjectId),
-  }).filter(({ queryKey }) => (
-    isApprovedTaskListQueryKey(queryKey, selectedProjectId)
+  }).filter((query) => (
+    isProjectTaskListQuery(query, selectedProjectId)
   ))
   const allTasksQuery = queryCache.find({
     queryKey: projectQueryKeys.allTasks,
@@ -940,44 +978,49 @@ function taskMoveQueryCandidates(
 
 function invalidateTaskMoveQueries(
   queryClient: QueryClient,
-  selectedProjectId: string,
-  options: {
-    projectTaskLists: boolean
-    allTasks: boolean
-  },
+  selectedProjectId: string | undefined,
+  flush: TaskMoveInvalidationFlush,
 ) {
-  const taskListFilters: QueryFilters[] = options.projectTaskLists
-    ? queryClient.getQueryCache()
-      .findAll({ queryKey: projectQueryKeys.tasksFor(selectedProjectId) })
-      .filter(({ queryKey }) => (
-        isApprovedTaskListQueryKey(queryKey, selectedProjectId)
+  const taskListFilters: QueryFilters[] = flush.projectIds.flatMap(
+    (dirtyProjectId) => queryClient.getQueryCache()
+      .findAll({ queryKey: projectQueryKeys.tasksFor(dirtyProjectId) })
+      .filter((query) => (
+        isProjectTaskListQuery(query, dirtyProjectId)
       ))
-      .map(({ queryKey }) => ({ queryKey, exact: true }))
-    : []
+      .map(({ queryKey }) => ({ queryKey, exact: true })),
+  )
+  const relatedFilters: QueryFilters[] = selectedProjectId === undefined
+    ? []
+    : [
+        { queryKey: projectQueryKeys.ganttFor(selectedProjectId), exact: true },
+        {
+          queryKey: projectQueryKeys.requirementsFor(selectedProjectId),
+          exact: true,
+        },
+        {
+          queryKey: projectQueryKeys.dashboardPrefixFor(selectedProjectId),
+          exact: false,
+        },
+        {
+          queryKey: projectQueryKeys.workspaceDashboardPrefix,
+          exact: false,
+        },
+        {
+          queryKey: projectQueryKeys.projectFor(selectedProjectId),
+          exact: true,
+        },
+        { queryKey: projectQueryKeys.projects, exact: true },
+        { queryKey: projectQueryKeys.activities, exact: true },
+      ]
   const filters: readonly QueryFilters[] = [
     ...taskListFilters,
-    ...(options.allTasks
+    ...(flush.allTasks
       ? [{ queryKey: projectQueryKeys.allTasks, exact: true }]
       : []),
-    { queryKey: projectQueryKeys.ganttFor(selectedProjectId), exact: true },
-    {
-      queryKey: projectQueryKeys.requirementsFor(selectedProjectId),
-      exact: true,
-    },
-    {
-      queryKey: projectQueryKeys.dashboardPrefixFor(selectedProjectId),
-      exact: false,
-    },
-    {
-      queryKey: projectQueryKeys.workspaceDashboardPrefix,
-      exact: false,
-    },
-    { queryKey: projectQueryKeys.projectFor(selectedProjectId), exact: true },
-    { queryKey: projectQueryKeys.projects, exact: true },
-    { queryKey: projectQueryKeys.activities, exact: true },
+    ...relatedFilters,
   ]
-  return Promise.all(filters.map((filter) => (
-    queryClient.invalidateQueries(filter)
+  return Promise.allSettled(filters.map((filter) => (
+    Promise.resolve().then(() => queryClient.invalidateQueries(filter))
   )))
 }
 
@@ -1081,13 +1124,15 @@ export function useMoveTaskStatus() {
           token,
         }
       } catch (error) {
+        let flush: TaskMoveInvalidationFlush
         try {
           rollbackTaskMoveSnapshots(snapshots)
         } finally {
           snapshots.length = 0
           releaseTaskMove(queryClient, task.id, token)
-          releaseTaskMoveScope(queryClient, canonicalProjectId)
+          flush = releaseTaskMoveScope(queryClient, canonicalProjectId)
         }
+        await invalidateTaskMoveQueries(queryClient, undefined, flush)
         throw error
       }
     },
@@ -1117,6 +1162,10 @@ export function useMoveTaskStatus() {
       if (pendingMoves?.get(mutationContext.taskId) !== mutationContext.token) {
         return
       }
+      markTaskMoveScopeDirty(
+        queryClient,
+        mutationContext.canonicalProjectId,
+      )
       const invalidationOptions = releaseTaskMoveScope(
         queryClient,
         mutationContext.canonicalProjectId,

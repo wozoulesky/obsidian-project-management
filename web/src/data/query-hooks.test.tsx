@@ -762,6 +762,28 @@ describe('project deletion synchronization', () => {
 })
 
 describe('optimistic task status moves', () => {
+  it('builds explicitly marked task-list keys for arbitrary parameters', () => {
+    const parameters = { after: 'task-020', limit: 25, sort: 'dueDate' }
+    expect(projectQueryKeys.taskListFor('atlas', parameters)).toEqual([
+      'tasks',
+      'atlas',
+      { scope: 'project-task-list' },
+      parameters,
+    ])
+  })
+
+  it('marks canonical project task query options as a task list', async () => {
+    const repository = createMockProjectRepository()
+    const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+
+    renderHook(() => useProjectTasks('atlas'), { wrapper })
+
+    await waitFor(() => expect(queryClient.getQueryCache().find({
+      queryKey: projectQueryKeys.tasksFor('atlas'),
+      exact: true,
+    })?.options.meta).toEqual({ scope: 'project-task-list' }))
+  })
+
   const moveInvalidationKeys = (selectedProjectId: string) => [
     projectQueryKeys.tasksFor(selectedProjectId),
     projectQueryKeys.allTasks,
@@ -802,7 +824,9 @@ describe('optimistic task status moves', () => {
     const projectTasks = [task, otherTask]
     const allTasks = [{ ...task, progress: 17 }, otherTask]
     const filteredTasks = [otherTask, { ...task, progress: 64 }]
-    const filteredKey = ['tasks', 'atlas', { assignee: 'human-lin' }] as const
+    const filteredKey = projectQueryKeys.taskListFor('atlas', {
+      assignee: 'human-lin',
+    })
     const metadataKey = ['tasks', 'atlas', 'metadata'] as const
     const arrayMetadataKey = ['tasks', 'atlas', 'metadata-array'] as const
     const metadata = { total: 2 }
@@ -961,7 +985,9 @@ describe('optimistic task status moves', () => {
     const projectTasks = [task, otherTask]
     const allTasks = [otherTask, { ...task, progress: 46, version: 23 }]
     const filteredTasks = [{ ...task, progress: 88, version: 41 }]
-    const filteredKey = ['tasks', 'atlas', { status: 'open' }] as const
+    const filteredKey = projectQueryKeys.taskListFor('atlas', {
+      status: 'open',
+    })
     const metadataKey = ['tasks', 'metadata'] as const
     const emptyKey = ['tasks', 'empty'] as const
     const unrelatedKey = ['settings', 'move-test'] as const
@@ -1101,7 +1127,9 @@ describe('optimistic task status moves', () => {
     const repository = createMockProjectRepository()
     const [fixtureTask] = await repository.listTasks('atlas')
     const task = { ...fixtureTask, projectId: 'atlas', version: 31 }
-    const filteredKey = ['tasks', 'atlas', { assignee: 'agent-1' }] as const
+    const filteredKey = projectQueryKeys.taskListFor('atlas', {
+      assignee: 'agent-1',
+    })
     const originalTasks = [task]
     const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
     queryClient.setQueryData(filteredKey, originalTasks, { updatedAt: 303 })
@@ -1278,7 +1306,7 @@ describe('optimistic task status moves', () => {
     expect(updateTaskProgress).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the server version usable when invalidation fails', async () => {
+  it('resolves with the server version when invalidation fails', async () => {
     const repository = createMockProjectRepository()
     const [fixtureTask] = await repository.listTasks('atlas')
     const task = {
@@ -1315,7 +1343,11 @@ describe('optimistic task status moves', () => {
       projectId: 'atlas',
       status: 'done',
       task,
-    })).rejects.toBe(invalidationError)
+    })).resolves.toMatchObject({
+      status: 'done',
+      updatedAt: '2026-08-03T10:00:01.000',
+      version: 21,
+    })
     const firstServerTask = queryClient.getQueryData<Task[]>(
       projectQueryKeys.tasksFor('atlas'),
     )![0]
@@ -1405,7 +1437,9 @@ describe('optimistic task status moves', () => {
     const firstTask = { ...tasks[0], projectId: 'atlas', version: 25 }
     const secondTask = { ...tasks[1], projectId: 'atlas', version: 26 }
     const originalTasks = [firstTask, secondTask]
-    const filteredKey = ['tasks', 'atlas', { status: 'open' }] as const
+    const filteredKey = projectQueryKeys.taskListFor('atlas', {
+      status: 'open',
+    })
     const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
     for (const queryKey of [
       projectQueryKeys.tasksFor('atlas'),
@@ -1651,6 +1685,174 @@ describe('optimistic task status moves', () => {
       .toEqual([serverFirstTask, serverSecondTask])
   })
 
+  it('flushes deferred project task lists when a companion cancellation fails', async () => {
+    const repository = createMockProjectRepository()
+    const tasks = await repository.listTasks('atlas')
+    const firstTask = { ...tasks[0], projectId: 'atlas', version: 35 }
+    const secondTask = { ...tasks[1], projectId: 'atlas', version: 36 }
+    const originalTasks = [firstTask, secondTask]
+    const exactKey = projectQueryKeys.tasksFor('atlas')
+    const derivedKey = projectQueryKeys.taskListFor('atlas', {
+      limit: 20,
+      sort: 'priority',
+    })
+    const pendingKey = projectQueryKeys.taskListFor('atlas', {
+      after: secondTask.id,
+      limit: 20,
+    })
+    const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+    queryClient.setQueryData(exactKey, originalTasks)
+    queryClient.setQueryData(derivedKey, originalTasks)
+    queryClient.setQueryData(projectQueryKeys.allTasks, originalTasks)
+    queryClient.getQueryCache().build(queryClient, {
+      queryKey: pendingKey,
+      queryFn: async () => [] as Task[],
+    })
+    let refetchedTasks: Task[] = originalTasks
+    const listTasks = vi.spyOn(repository, 'listTasks')
+      .mockImplementation(async () => refetchedTasks)
+    renderHook(() => useProjectTasks('atlas'), { wrapper })
+    const cancellation = createDeferredResult<void>()
+    let blockCancellation = false
+    const cancelQueries = vi.spyOn(queryClient, 'cancelQueries')
+      .mockImplementation(() => blockCancellation
+        ? cancellation.promise
+        : Promise.resolve())
+    const firstResponse = createDeferredResult<Task>()
+    const updateTaskProgress = vi.spyOn(repository, 'updateTaskProgress')
+      .mockReturnValue(firstResponse.promise)
+    const firstHook = renderHook(() => useMoveTaskStatus(), { wrapper })
+    const secondHook = renderHook(() => useMoveTaskStatus(), { wrapper })
+    let firstMutation!: Promise<Task>
+    let secondMutation!: Promise<Task>
+
+    act(() => {
+      firstMutation = firstHook.result.current.mutateAsync({
+        projectId: 'atlas',
+        status: 'done',
+        task: firstTask,
+      })
+    })
+    await waitFor(() => expect(queryClient.getQueryData<Task[]>(exactKey)?.[0])
+      .toMatchObject({ status: 'done' }))
+    blockCancellation = true
+    act(() => {
+      secondMutation = secondHook.result.current.mutateAsync({
+        projectId: 'atlas',
+        status: 'overdue',
+        task: secondTask,
+      })
+    })
+    const observedSecond = secondMutation.catch((error: unknown) => error)
+    await waitFor(() => expect(cancelQueries).toHaveBeenCalledTimes(6))
+    const serverFirstTask = {
+      ...firstTask,
+      progress: 100,
+      status: 'done' as const,
+      version: 37,
+    }
+    refetchedTasks = [serverFirstTask, secondTask]
+    await act(async () => {
+      firstResponse.resolve(serverFirstTask)
+      await firstMutation
+    })
+
+    for (const queryKey of [exactKey, derivedKey, pendingKey]) {
+      expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(false)
+    }
+    const cancelError = new Error('second move cancellation failed')
+    await act(async () => {
+      cancellation.reject(cancelError)
+      await observedSecond
+    })
+
+    await expect(observedSecond).resolves.toBe(cancelError)
+    expect(updateTaskProgress).toHaveBeenCalledTimes(1)
+    for (const queryKey of [derivedKey, pendingKey]) {
+      expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true)
+    }
+    expect(listTasks).toHaveBeenCalledTimes(1)
+    expect(queryClient.getQueryData(exactKey)).toEqual(refetchedTasks)
+    expect(queryClient.getQueryState(
+      projectQueryKeys.allTasks,
+    )?.isInvalidated).toBe(true)
+  })
+
+  it('flushes deferred all-tasks invalidation after another project cancels', async () => {
+    const repository = createMockProjectRepository()
+    const tasks = await repository.listTasks('atlas')
+    const atlasTask = { ...tasks[0], projectId: 'atlas', version: 38 }
+    const borealisTask = { ...tasks[1], projectId: 'borealis', version: 39 }
+    const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+    queryClient.setQueryData(projectQueryKeys.tasksFor('atlas'), [atlasTask])
+    queryClient.setQueryData(
+      projectQueryKeys.tasksFor('borealis'),
+      [borealisTask],
+    )
+    queryClient.setQueryData(
+      projectQueryKeys.allTasks,
+      [atlasTask, borealisTask],
+    )
+    const cancellation = createDeferredResult<void>()
+    let blockCancellation = false
+    vi.spyOn(queryClient, 'cancelQueries').mockImplementation(() => (
+      blockCancellation ? cancellation.promise : Promise.resolve()
+    ))
+    const firstResponse = createDeferredResult<Task>()
+    const updateTaskProgress = vi.spyOn(repository, 'updateTaskProgress')
+      .mockReturnValue(firstResponse.promise)
+    const atlasHook = renderHook(() => useMoveTaskStatus(), { wrapper })
+    const borealisHook = renderHook(() => useMoveTaskStatus(), { wrapper })
+    let atlasMutation!: Promise<Task>
+    let borealisMutation!: Promise<Task>
+
+    act(() => {
+      atlasMutation = atlasHook.result.current.mutateAsync({
+        projectId: 'atlas',
+        status: 'done',
+        task: atlasTask,
+      })
+    })
+    await waitFor(() => expect(queryClient.getQueryData<Task[]>(
+      projectQueryKeys.tasksFor('atlas'),
+    )?.[0]).toMatchObject({ status: 'done' }))
+    blockCancellation = true
+    act(() => {
+      borealisMutation = borealisHook.result.current.mutateAsync({
+        projectId: 'borealis',
+        status: 'overdue',
+        task: borealisTask,
+      })
+    })
+    const observedBorealis = borealisMutation.catch(
+      (error: unknown) => error,
+    )
+    await waitFor(() => expect(updateTaskProgress).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      firstResponse.resolve({
+        ...atlasTask,
+        progress: 100,
+        status: 'done',
+        version: 40,
+      })
+      await atlasMutation
+    })
+
+    expect(queryClient.getQueryState(
+      projectQueryKeys.allTasks,
+    )?.isInvalidated).toBe(false)
+    const cancelError = new Error('borealis cancellation failed')
+    await act(async () => {
+      cancellation.reject(cancelError)
+      await observedBorealis
+    })
+
+    await expect(observedBorealis).resolves.toBe(cancelError)
+    expect(queryClient.getQueryState(
+      projectQueryKeys.allTasks,
+    )?.isInvalidated).toBe(true)
+  })
+
   it('rejects a conflicting task project before touching cache or server', async () => {
     const repository = createMockProjectRepository()
     const [fixtureTask] = await repository.listTasks('atlas')
@@ -1718,8 +1920,14 @@ describe('optimistic task status moves', () => {
     const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
     seedMoveInvalidationCaches(queryClient, 'atlas')
     queryClient.setQueryData(projectQueryKeys.tasksFor('atlas'), [task])
-    const derivedArrayKey = ['tasks', 'atlas', { status: 'done' }] as const
-    const pendingFilterKey = ['tasks', 'atlas', { assignee: 'agent-2' }] as const
+    const derivedArrayKey = projectQueryKeys.taskListFor('atlas', {
+      after: 'task-010',
+      limit: 25,
+      sort: 'dueDate',
+    })
+    const pendingFilterKey = projectQueryKeys.taskListFor('atlas', {
+      assignee: 'agent-2',
+    })
     const metadataKey = ['tasks', 'atlas', 'metadata'] as const
     const pendingObjectMetadataKey = [
       'tasks',
