@@ -124,6 +124,13 @@ describe('gantt date interactions', () => {
     expect(shiftDate('2026-7-31', 1)).toBeNull()
   })
 
+  it('returns null instead of throwing beyond the JavaScript Date range', () => {
+    expect(() => shiftDate('+275760-09-13', 1)).not.toThrow()
+    expect(shiftDate('+275760-09-13', 1)).toBeNull()
+    expect(() => shiftDate('9999-12-31', 1e9)).not.toThrow()
+    expect(shiftDate('9999-12-31', 1e9)).toBeNull()
+  })
+
   it('converts pointer movement to whole-day deltas', () => {
     expect(dateDeltaFromPixels(49, 140, 14)).toBe(5)
     expect(dateDeltaFromPixels(-29, 140, 14)).toBe(-3)
@@ -137,5 +144,25 @@ describe('gantt date interactions', () => {
     expect(
       buildDateProposal('resize', '2026-07-24', '2026-07-28', -9),
     ).toEqual({ startDate: '2026-07-24', dueDate: '2026-07-24' })
+  })
+
+  it('never exposes extended ISO dates as task proposals', () => {
+    expect(
+      buildDateProposal('move', '9999-12-31', '9999-12-31', 1),
+    ).toBeNull()
+    expect(
+      buildDateProposal('move', '0000-01-01', '0000-01-01', -1),
+    ).toBeNull()
+    expect(
+      buildDateProposal('resize', '9999-12-30', '9999-12-31', 1),
+    ).toBeNull()
+    expect(
+      buildDateProposal(
+        'move',
+        '+010000-01-01',
+        '+010000-01-02',
+        1,
+      ),
+    ).toBeNull()
   })
 })
