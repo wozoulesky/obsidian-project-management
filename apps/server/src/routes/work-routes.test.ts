@@ -541,6 +541,27 @@ describe('project routes', () => {
     expect(response.body.error.code).toBe('PROJECT_NOT_FOUND')
   })
 
+  it('rejects oversized project ids when fetching a project', async () => {
+    const { api } = createApi()
+
+    const response = await api
+      .get(`/api/v1/projects/${'x'.repeat(257)}`)
+      .expect(400)
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('rejects oversized project ids when deleting a project', async () => {
+    const { api } = createApi()
+
+    const response = await api
+      .delete(`/api/v1/projects/${'x'.repeat(257)}`)
+      .send({ version: 1 })
+      .expect(400)
+
+    expect(response.body.error.code).toBe('VALIDATION_ERROR')
+  })
+
   it('forbids an unrelated active human member from deleting a project', async () => {
     const outsiderId = 'actor_unrelated_member'
     const context = createContext(true, outsiderId)

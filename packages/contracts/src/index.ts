@@ -219,7 +219,7 @@ export const createProjectInputSchema = projectSchema.omit({
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>
 
 export const projectIdParamsSchema = z.object({
-  id: idSchema,
+  id: idSchema.max(256),
 }).strict()
 export type ProjectIdParams = z.infer<typeof projectIdParamsSchema>
 

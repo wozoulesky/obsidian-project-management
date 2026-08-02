@@ -166,6 +166,17 @@ describe('project deletion contracts', () => {
     }).success).toBe(false)
   })
 
+  it('bounds shared project route identifiers at 256 characters', () => {
+    const maximumId = 'x'.repeat(256)
+
+    expect(projectIdParamsSchema.parse({ id: maximumId })).toEqual({
+      id: maximumId,
+    })
+    expect(projectIdParamsSchema.safeParse({
+      id: 'x'.repeat(257),
+    }).success).toBe(false)
+  })
+
   it('validates deletion input and result schemas strictly', () => {
     expect(deleteProjectInputSchema.parse({ version: 2 })).toEqual({
       version: 2,
