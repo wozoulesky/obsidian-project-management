@@ -245,7 +245,7 @@
   }
 }
 
-@media (width < 48rem) {
+@media (width <= 48rem) {
   .settings-page__workspace {
     grid-template-columns: minmax(0, 1fr);
   }

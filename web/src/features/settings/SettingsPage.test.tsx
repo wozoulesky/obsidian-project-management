@@ -72,11 +72,32 @@ describe('SettingsPage', () => {
       /\.settings-actions\s*{[^}]*justify-content:\s*flex-end/s,
     )
     expect(settingsGlassCss).toMatch(
-      /@media \(width < 48rem\)[\s\S]*\.settings-category-nav\s*{[^}]*overflow-x:\s*auto/s,
+      /@media \(width <= 48rem\)[\s\S]*\.settings-category-nav\s*{[^}]*overflow-x:\s*auto/s,
     )
     expect(settingsGlassCss).toMatch(
-      /@media \(width < 48rem\)[\s\S]*\.settings-control-grid\s*{[^}]*grid-template-columns:\s*1fr/s,
+      /@media \(width <= 48rem\)[\s\S]*\.settings-control-grid\s*{[^}]*grid-template-columns:\s*1fr/s,
     )
+  })
+
+  it('treats the exact 48rem boundary as mobile in CSS and keyboard semantics', async () => {
+    const matchMedia = vi.fn((query: string) => ({
+      matches: query === '(max-width: 48rem)',
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }) as unknown as MediaQueryList)
+    vi.stubGlobal('matchMedia', matchMedia)
+
+    renderApp(<SettingsPage />)
+
+    expect(await screen.findByRole('tablist', { name: '设置分类' }))
+      .toHaveAttribute('aria-orientation', 'horizontal')
+    expect(matchMedia).toHaveBeenCalledWith('(max-width: 48rem)')
+    expect(settingsGlassCss).toContain('@media (width <= 48rem)')
   })
 
   it('keeps secondary MCP and Skills tools collapsed by default', async () => {
