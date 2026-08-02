@@ -51,6 +51,27 @@ function affectedQueryKeys(
       workspaceDashboard,
     ]
   }
+  if (activity.operation.startsWith('session.')) {
+    return [
+      projectQueryKeys.sessionsFor(projectId),
+      dashboard,
+      workspaceDashboard,
+    ]
+  }
+  if (activity.operation.startsWith('handoff.')) {
+    return [
+      projectQueryKeys.handoffsFor(projectId),
+      dashboard,
+      workspaceDashboard,
+    ]
+  }
+  if (activity.operation.startsWith('deliverable.')) {
+    return [
+      projectQueryKeys.deliverablesFor(projectId),
+      dashboard,
+      workspaceDashboard,
+    ]
+  }
   if (activity.operation === 'settings.update') {
     return [projectQueryKeys.settings]
   }
