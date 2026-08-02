@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -174,6 +174,33 @@ describe('App', () => {
     await waitFor(() => expect(listTasks).toHaveBeenCalledWith(
       'completed-project',
     ))
+  })
+
+  it('keeps workspace blocked after a project-list error and recovers on retry', async () => {
+    sessionStorage.removeItem('project-os:workspace-project')
+    vi.spyOn(httpProjectRepository, 'listProjects')
+      .mockRejectedValueOnce(new Error('projects unavailable'))
+      .mockResolvedValue([
+        project('project_default', 'in_progress'),
+        project('active-project', 'in_progress'),
+      ])
+    const listTasks = vi.spyOn(httpProjectRepository, 'listTasks')
+      .mockResolvedValue([])
+    stubBackgroundQueries()
+
+    renderProductionApp()
+
+    await screen.findByRole('alert', {
+      name: '无法读取本地项目数据',
+    })
+    expect(listTasks).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    await waitFor(() => expect(listTasks).toHaveBeenCalledWith(
+      'active-project',
+    ))
+    expect(listTasks).not.toHaveBeenCalledWith('project_default')
   })
 
   it('uses the shared loading skeleton while workspace scope resolves', () => {

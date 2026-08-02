@@ -1,5 +1,5 @@
 import type { Project, ProjectStatus } from '../data/domain'
-import { LoadingState } from '../components/data/DataState'
+import { ErrorState, LoadingState } from '../components/data/DataState'
 import { AppShell } from '../components/app-shell/AppShell'
 import { ActivitySync } from '../data/ActivitySync'
 import {
@@ -63,19 +63,26 @@ function WorkspaceProjectGate() {
   const [isResolved, setIsResolved] = useState(false)
 
   useEffect(() => {
-    if (isResolved || projects.isPending) return
-    if (projects.data !== undefined) {
-      const selectedProjectId = selectInitialProject(projects.data, projectId)
-      if (
-        selectedProjectId !== undefined
-        && selectedProjectId !== projectId
-      ) {
-        selectProject(selectedProjectId)
-      }
+    if (isResolved || projects.data === undefined) return
+    const selectedProjectId = selectInitialProject(projects.data, projectId)
+    if (
+      selectedProjectId !== undefined
+      && selectedProjectId !== projectId
+    ) {
+      selectProject(selectedProjectId)
     }
     setIsResolved(true)
-  }, [isResolved, projectId, projects.data, projects.isPending, selectProject])
+  }, [isResolved, projectId, projects.data, selectProject])
 
+  if (projects.isError && projects.data === undefined) {
+    return (
+      <ErrorState
+        error={projects.error}
+        isRetrying={projects.isFetching}
+        onRetry={() => projects.refetch()}
+      />
+    )
+  }
   if (!isResolved) return <LoadingState />
   return (
     <AppearanceProvider>
