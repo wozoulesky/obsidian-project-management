@@ -425,6 +425,75 @@ verbatim', '{"nested":{"flag":true},"items":[1,"two"]}',
   return database
 }
 
+function createV2DeletionFixture(): DatabaseSync {
+  const database = createV1RelayFixture()
+  database.exec(`
+    ALTER TABLE actors ADD COLUMN last_briefing_activity_id TEXT;
+
+    CREATE TABLE activities_v2 (
+      id TEXT PRIMARY KEY CHECK (length(id) > 0),
+      actor_id TEXT NOT NULL,
+      project_id TEXT,
+      source TEXT NOT NULL CHECK (source IN ('web', 'mcp')),
+      operation TEXT NOT NULL CHECK (
+        operation IN (
+          'actor.create',
+          'actor.update',
+          'actor.deactivate',
+          'actor.register',
+          'project.create',
+          'project.update',
+          'project.member.add',
+          'task.create',
+          'task.update',
+          'task.schedule',
+          'task.progress',
+          'requirement.create',
+          'requirement.update',
+          'defect.create',
+          'defect.update',
+          'defect.to_task',
+          'settings.update',
+          'backup.create',
+          'backup.restore',
+          'import.run',
+          'token.issue',
+          'token.revoke',
+          'session.checkin',
+          'session.note',
+          'session.checkout',
+          'handoff.update',
+          'deliverable.record'
+        )
+      ),
+      entity_type TEXT NOT NULL CHECK (length(entity_type) > 0),
+      entity_id TEXT NOT NULL CHECK (length(entity_id) > 0),
+      action TEXT NOT NULL CHECK (length(action) > 0),
+      note TEXT,
+      details_json TEXT NOT NULL DEFAULT '{}'
+        CHECK (json_valid(details_json)),
+      created_at TEXT NOT NULL
+        CHECK (${v1CanonicalUtcTimestamp('created_at')}),
+      FOREIGN KEY (actor_id) REFERENCES actors (id) ON DELETE RESTRICT,
+      FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
+    ) STRICT;
+
+    INSERT INTO activities_v2 SELECT * FROM activities;
+    DROP TABLE activities;
+    ALTER TABLE activities_v2 RENAME TO activities;
+
+    CREATE INDEX activities_created_at_idx
+      ON activities (created_at DESC);
+    CREATE INDEX activities_entity_idx
+      ON activities (entity_type, entity_id, created_at DESC);
+    CREATE INDEX activities_project_id_idx ON activities (project_id);
+
+    INSERT INTO schema_migrations (version, applied_at)
+    VALUES (2, '2026-07-29T08:10:00Z');
+  `)
+  return database
+}
+
 function insertSession(
   database: DatabaseSync,
   {
@@ -623,7 +692,7 @@ describe('database bootstrap', () => {
     })
   })
 
-  it('applies migrations 001 and 002 only once', () => {
+  it('applies migrations 001 through 003 only once', () => {
     const database = createTestDatabase()
     opened.push(database)
 
@@ -634,7 +703,7 @@ describe('database bootstrap', () => {
       database
         .prepare('SELECT version FROM schema_migrations ORDER BY version')
         .all(),
-    ).toEqual([{ version: 1 }, { version: 2 }])
+    ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }])
   })
 
   it('enforces foreign keys', () => {
@@ -686,14 +755,14 @@ describe('database bootstrap', () => {
         INSERT INTO schema_migrations (version, applied_at)
         VALUES (?, ?)
       `)
-      .run(3, '2026-07-29T08:00:00Z')
+      .run(4, '2026-07-29T08:00:00Z')
 
     expect(() => runMigrations(database)).toThrow(
       expect.objectContaining({
         code: 'DATABASE_SCHEMA_NEWER',
         details: {
-          databaseVersion: 3,
-          latestKnownVersion: 2,
+          databaseVersion: 4,
+          latestKnownVersion: 3,
         },
         name: 'DomainError',
       }),
@@ -769,7 +838,7 @@ describe('migration 002 relay schema', () => {
       database
         .prepare('SELECT version FROM schema_migrations ORDER BY version')
         .all(),
-    ).toEqual([{ version: 1 }, { version: 2 }])
+    ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }])
 
     expect(() => {
       database.prepare(`
@@ -1122,6 +1191,157 @@ describe('migration 002 relay schema', () => {
         sessionId: 'missing-session',
       })
     }).toThrow(/foreign key constraint failed/i)
+  })
+})
+
+describe('migration 003 project deletion activity', () => {
+  const opened: DatabaseSync[] = []
+
+  afterEach(() => {
+    opened.splice(0).forEach((database) => database.close())
+  })
+
+  it('allows project deletion activities in a newly created database', () => {
+    const database = createTestDatabase()
+    opened.push(database)
+    insertActor(database)
+    insertProject(database)
+
+    expect(() => {
+      database.prepare(`
+        INSERT INTO activities (
+          id, actor_id, project_id, source, operation, entity_type,
+          entity_id, action, note, details_json, created_at
+        ) VALUES (
+          'activity-project-delete', 'actor-1', 'project-1', 'web',
+          'project.delete', 'project', 'project-1', 'Deleted Atlas',
+          '{"projectId":"project-1","projectName":"Atlas"}', '{}',
+          '2026-07-29T08:05:00.000Z'
+        )
+      `).run()
+    }).not.toThrow()
+  })
+
+  it('upgrades v2 activities without data loss or schema regression', () => {
+    const database = createV2DeletionFixture()
+    opened.push(database)
+    const activityColumns = [
+      'id',
+      'actor_id',
+      'project_id',
+      'source',
+      'operation',
+      'entity_type',
+      'entity_id',
+      'action',
+      'note',
+      'details_json',
+      'created_at',
+    ]
+    const selectActivity = `
+      SELECT ${activityColumns.join(', ')}
+      FROM activities
+      WHERE id = 'activity-v1'
+    `
+    const before = database.prepare(selectActivity).get()
+
+    runMigrations(database)
+
+    expect(database.prepare(selectActivity).get()).toEqual(before)
+    expect(
+      database.prepare('SELECT version FROM schema_migrations ORDER BY version')
+        .all(),
+    ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }])
+    expect(
+      database.prepare(`
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table'
+          AND name IN ('activities', 'activities_v3')
+        ORDER BY name
+      `).all(),
+    ).toEqual([{ name: 'activities' }])
+    expect(
+      database.prepare(`
+        SELECT name
+        FROM pragma_table_info('activities')
+        ORDER BY cid
+      `).all().map(({ name }) => name),
+    ).toEqual(activityColumns)
+    expect(
+      database.prepare(`
+        SELECT name, sql
+        FROM sqlite_master
+        WHERE type = 'index'
+          AND tbl_name = 'activities'
+          AND sql IS NOT NULL
+        ORDER BY name
+      `).all(),
+    ).toEqual([
+      {
+        name: 'activities_created_at_idx',
+        sql: expect.stringMatching(
+          /ON activities\s*\(created_at DESC\)/i,
+        ),
+      },
+      {
+        name: 'activities_entity_idx',
+        sql: expect.stringMatching(
+          /ON activities\s*\(entity_type, entity_id, created_at DESC\)/i,
+        ),
+      },
+      {
+        name: 'activities_project_id_idx',
+        sql: expect.stringMatching(
+          /ON activities\s*\(project_id\)/i,
+        ),
+      },
+    ])
+    expect(
+      database.prepare(`
+        SELECT "table", "from", "to", on_delete
+        FROM pragma_foreign_key_list('activities')
+        ORDER BY "from"
+      `).all(),
+    ).toEqual([
+      {
+        table: 'actors',
+        from: 'actor_id',
+        to: 'id',
+        on_delete: 'RESTRICT',
+      },
+      {
+        table: 'projects',
+        from: 'project_id',
+        to: 'id',
+        on_delete: 'SET NULL',
+      },
+    ])
+
+    database.prepare(`
+      INSERT INTO activities (
+        id, actor_id, project_id, source, operation, entity_type,
+        entity_id, action, note, details_json, created_at
+      ) VALUES (
+        'activity-project-delete', 'actor-v1', 'project-v1', 'web',
+        'project.delete', 'project', 'project-v1', 'Deleted Legacy project',
+        '{"projectId":"project-v1","projectName":"Legacy project"}',
+        '{}', '2026-07-29T08:06:00.000Z'
+      )
+    `).run()
+    database.prepare(`
+      DELETE FROM projects WHERE id = 'project-v1'
+    `).run()
+    expect(
+      database.prepare(`
+        SELECT id, project_id
+        FROM activities
+        ORDER BY id
+      `).all(),
+    ).toEqual([
+      { id: 'activity-project-delete', project_id: null },
+      { id: 'activity-v1', project_id: null },
+    ])
   })
 })
 

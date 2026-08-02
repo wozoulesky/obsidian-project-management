@@ -574,6 +574,69 @@ const migrations: readonly Migration[] = [
         ON deliverables (requirement_id);
     `,
   },
+  {
+    version: 3,
+    sql: `
+      CREATE TABLE activities_v3 (
+        id TEXT PRIMARY KEY CHECK (length(id) > 0),
+        actor_id TEXT NOT NULL,
+        project_id TEXT,
+        source TEXT NOT NULL CHECK (source IN ('web', 'mcp')),
+        operation TEXT NOT NULL CHECK (
+          operation IN (
+            'actor.create',
+            'actor.update',
+            'actor.deactivate',
+            'actor.register',
+            'project.create',
+            'project.update',
+            'project.delete',
+            'project.member.add',
+            'task.create',
+            'task.update',
+            'task.schedule',
+            'task.progress',
+            'requirement.create',
+            'requirement.update',
+            'defect.create',
+            'defect.update',
+            'defect.to_task',
+            'settings.update',
+            'backup.create',
+            'backup.restore',
+            'import.run',
+            'token.issue',
+            'token.revoke',
+            'session.checkin',
+            'session.note',
+            'session.checkout',
+            'handoff.update',
+            'deliverable.record'
+          )
+        ),
+        entity_type TEXT NOT NULL CHECK (length(entity_type) > 0),
+        entity_id TEXT NOT NULL CHECK (length(entity_id) > 0),
+        action TEXT NOT NULL CHECK (length(action) > 0),
+        note TEXT,
+        details_json TEXT NOT NULL DEFAULT '{}'
+          CHECK (json_valid(details_json)),
+        created_at TEXT NOT NULL
+          CHECK (${canonicalUtcTimestamp('created_at')}),
+        FOREIGN KEY (actor_id) REFERENCES actors (id) ON DELETE RESTRICT,
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
+      ) STRICT;
+
+      INSERT INTO activities_v3 SELECT * FROM activities;
+      DROP TABLE activities;
+      ALTER TABLE activities_v3 RENAME TO activities;
+
+      CREATE INDEX activities_created_at_idx
+        ON activities (created_at DESC);
+      CREATE INDEX activities_entity_idx
+        ON activities (entity_type, entity_id, created_at DESC);
+      CREATE INDEX activities_project_id_idx ON activities (project_id);
+    `,
+  },
 ]
 
 const latestKnownVersion = validateMigrationVersions(

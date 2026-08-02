@@ -15,6 +15,111 @@ import { createTestDatabase, openDatabase } from './database.js'
 import { DomainError } from './errors.js'
 import { ProjectService } from './project-service.js'
 
+const projectChildTables = [
+  'project_members',
+  'tasks',
+  'requirements',
+  'defects',
+  'sessions',
+  'handoffs',
+  'deliverables',
+] as const
+
+function insertProjectOwnedFixtures(
+  database: DatabaseSync,
+  projectId: string,
+  actorId: string,
+): Record<(typeof projectChildTables)[number], number> {
+  const timestamp = '2026-08-02T00:00:00.000Z'
+
+  database.prepare(`
+    INSERT INTO tasks (
+      id, code, project_id, title, description, assignee_id,
+      start_date, due_date, priority, status, progress, milestone_id,
+      parent_id, dependency_ids_json, created_at, updated_at, version
+    ) VALUES (
+      'task_delete_fixture', 'TASK-DELETE', ?, 'Delete fixture', '', ?,
+      '2026-08-02', '2026-08-03', 'P1', 'not_started', 0, '',
+      NULL, '[]', ?, ?, 1
+    )
+  `).run(projectId, actorId, timestamp, timestamp)
+  database.prepare(`
+    INSERT INTO requirements (
+      id, code, project_id, title, description, priority, status,
+      acceptance_criteria_json, created_at, updated_at, version
+    ) VALUES (
+      'requirement_delete_fixture', 'REQ-DELETE', ?, 'Delete fixture',
+      '', 'P1', 'draft', '[]', ?, ?, 1
+    )
+  `).run(projectId, timestamp, timestamp)
+  database.prepare(`
+    INSERT INTO defects (
+      id, code, project_id, title, description, severity, status,
+      assignee_id, reproduction_steps_json, linked_requirement_id,
+      linked_task_id, created_at, updated_at, version
+    ) VALUES (
+      'defect_delete_fixture', 'DEF-DELETE', ?, 'Delete fixture', '',
+      'normal', 'open', ?, '[]', 'requirement_delete_fixture',
+      'task_delete_fixture', ?, ?, 1
+    )
+  `).run(projectId, actorId, timestamp, timestamp)
+  database.prepare(`
+    INSERT INTO sessions (
+      id, project_id, agent_id, intent, task_ids_json, status,
+      summary, created_at, last_active_at, closed_at
+    ) VALUES (
+      'session_delete_fixture', ?, ?, 'Delete fixture',
+      '["task_delete_fixture"]', 'active', NULL, ?, ?, NULL
+    )
+  `).run(projectId, actorId, timestamp, timestamp)
+  database.prepare(`
+    INSERT INTO handoffs (
+      id, project_id, session_id, author_id, summary, done_json,
+      blockers_json, next_steps_json, gotchas_json, refs_json, created_at
+    ) VALUES (
+      'handoff_delete_fixture', ?, 'session_delete_fixture', ?,
+      'Delete fixture', '[]', '[]', '[]', '[]', '[]', ?
+    )
+  `).run(projectId, actorId, timestamp)
+  database.prepare(`
+    INSERT INTO deliverables (
+      id, project_id, requirement_id, task_id, title, kind, ref, note,
+      created_by, session_id, created_at
+    ) VALUES (
+      'deliverable_delete_fixture', ?, 'requirement_delete_fixture',
+      'task_delete_fixture', 'Delete fixture', 'commit', 'abc123', NULL,
+      ?, 'session_delete_fixture', ?
+    )
+  `).run(projectId, actorId, timestamp)
+
+  return Object.fromEntries(projectChildTables.map((table) => {
+    const row = database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM ${table}
+      WHERE project_id = ?
+    `).get(projectId) as { count: number }
+    return [table, row.count]
+  })) as Record<(typeof projectChildTables)[number], number>
+}
+
+function insertDefaultProject(database: DatabaseSync, ownerId: string): void {
+  const timestamp = '2026-08-02T00:00:00.000Z'
+  database.prepare(`
+    INSERT INTO projects (
+      id, code, name, description, owner_id, start_date, due_date,
+      status, progress, created_at, updated_at, version
+    ) VALUES (
+      'project_default', 'PRJ-DEFAULT', 'Default project', '', ?, NULL, NULL,
+      'not_started', 0, ?, ?, 1
+    )
+  `).run(ownerId, timestamp, timestamp)
+  database.prepare(`
+    INSERT INTO project_members (
+      project_id, actor_id, membership_role, joined_at
+    ) VALUES ('project_default', ?, 'owner', ?)
+  `).run(ownerId, timestamp)
+}
+
 describe('actor and project services', () => {
   let database: DatabaseSync
   let activities: ActivityService
@@ -617,6 +722,265 @@ describe('actor and project services', () => {
     expect(projects.get(project.id)).toEqual(project)
     expect(activities.list({ entityId: project.id }))
       .toHaveLength(activityCount)
+  })
+
+  it('deletes a non-default project and retains a complete audit record', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const agent = actors.registerAgent(
+      { name: 'deleter', role: 'dev-agent', client: 'codex' },
+      owner.id,
+      'mcp',
+    )
+    const project = projects.create(
+      { name: 'Atlas', ownerId: owner.id, description: '' },
+      owner.id,
+      'web',
+    )
+    const counts = insertProjectOwnedFixtures(
+      database,
+      project.id,
+      agent.id,
+    )
+
+    const result = projects.delete(project.id, project.version, owner.id)
+
+    expect(result).toEqual({
+      id: project.id,
+      name: project.name,
+      deletedAt: expect.any(String),
+    })
+    expect(new Date(result.deletedAt).toISOString()).toBe(result.deletedAt)
+    expect(() => projects.get(project.id)).toThrowError(
+      expect.objectContaining({ code: 'PROJECT_NOT_FOUND' }),
+    )
+    projectChildTables.forEach((table) => {
+      expect(database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM ${table}
+        WHERE project_id = ?
+      `).get(project.id)).toEqual({ count: 0 })
+    })
+
+    const audit = database.prepare(`
+      SELECT operation, entity_id, project_id, source, action, note
+      FROM activities
+      WHERE operation = 'project.delete' AND entity_id = ?
+    `).get(project.id) as {
+      operation: string
+      entity_id: string
+      project_id: string | null
+      source: string
+      action: string
+      note: string
+    }
+    expect(audit).toMatchObject({
+      operation: 'project.delete',
+      entity_id: project.id,
+      project_id: null,
+      source: 'web',
+    })
+    expect(audit.action).toContain(project.name)
+    expect(JSON.parse(audit.note)).toEqual({
+      projectId: project.id,
+      projectName: project.name,
+      counts,
+    })
+  })
+
+  it('protects the literal default project from deletion', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    insertDefaultProject(database, owner.id)
+
+    expect(() => {
+      projects.delete('project_default', 1, owner.id)
+    }).toThrowError(expect.objectContaining({
+      code: 'DEFAULT_PROJECT_PROTECTED',
+    }))
+    expect(projects.get('project_default')).toMatchObject({
+      id: 'project_default',
+      name: 'Default project',
+    })
+  })
+
+  it('forbids an unrelated global member from deleting a project', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const member = actors.createHuman(
+      { name: 'Ming', role: 'member' },
+      owner.id,
+      'web',
+    )
+    const project = projects.create(
+      { name: 'Atlas', ownerId: owner.id, description: '' },
+      owner.id,
+      'web',
+    )
+
+    expect(() => {
+      projects.delete(project.id, project.version, member.id)
+    }).toThrowError(expect.objectContaining({
+      code: 'PROJECT_DELETE_FORBIDDEN',
+      details: {
+        actorId: member.id,
+        projectId: project.id,
+      },
+    }))
+    expect(projects.get(project.id)).toEqual(project)
+  })
+
+  it('allows a global owner to delete a project owned by another actor', () => {
+    const systemOwner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const projectOwner = actors.createHuman(
+      { name: 'Ming', role: 'member' },
+      systemOwner.id,
+      'web',
+    )
+    const project = projects.create(
+      { name: 'Atlas', ownerId: projectOwner.id, description: '' },
+      projectOwner.id,
+      'web',
+    )
+
+    const result = projects.delete(
+      project.id,
+      project.version,
+      systemOwner.id,
+    )
+
+    expect(result).toMatchObject({ id: project.id, name: project.name })
+    expect(() => projects.get(project.id)).toThrowError(
+      expect.objectContaining({ code: 'PROJECT_NOT_FOUND' }),
+    )
+  })
+
+  it('allows a global member to delete their own project', () => {
+    const systemOwner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const projectOwner = actors.createHuman(
+      { name: 'Ming', role: 'member' },
+      systemOwner.id,
+      'web',
+    )
+    const project = projects.create(
+      { name: 'Atlas', ownerId: projectOwner.id, description: '' },
+      projectOwner.id,
+      'web',
+    )
+
+    const result = projects.delete(
+      project.id,
+      project.version,
+      projectOwner.id,
+    )
+
+    expect(result).toMatchObject({ id: project.id, name: project.name })
+    expect(() => projects.get(project.id)).toThrowError(
+      expect.objectContaining({ code: 'PROJECT_NOT_FOUND' }),
+    )
+  })
+
+  it('rejects stale deletion without changing the project or audit log', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const project = projects.create(
+      { name: 'Atlas', ownerId: owner.id, description: '' },
+      owner.id,
+      'web',
+    )
+    const current = projects.update(
+      project.id,
+      { description: 'Current', version: project.version },
+      owner.id,
+      'web',
+    )
+    const activityCount = database.prepare(`
+      SELECT COUNT(*) AS count FROM activities
+    `).get()
+
+    expect(() => {
+      projects.delete(project.id, project.version, owner.id)
+    }).toThrowError(expect.objectContaining({
+      code: 'PROJECT_VERSION_CONFLICT',
+      details: {
+        projectId: project.id,
+        expectedVersion: project.version,
+        currentVersion: current.version,
+      },
+    }))
+    expect(projects.get(project.id)).toEqual(current)
+    expect(database.prepare(`
+      SELECT COUNT(*) AS count FROM activities
+    `).get()).toEqual(activityCount)
+  })
+
+  it('wraps an invalid deletion source without changing project or audit', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const project = projects.create(
+      { name: 'Atlas', ownerId: owner.id, description: '' },
+      owner.id,
+      'web',
+    )
+    const activityCount = database.prepare(`
+      SELECT COUNT(*) AS count FROM activities
+    `).get()
+
+    expect(() => {
+      projects.delete(
+        project.id,
+        project.version,
+        owner.id,
+        'invalid' as never,
+      )
+    }).toThrowError(expect.objectContaining({
+      code: 'PROJECT_DELETE_FAILED',
+      details: { projectId: project.id },
+    }))
+    expect(projects.get(project.id)).toEqual(project)
+    expect(database.prepare(`
+      SELECT COUNT(*) AS count FROM activities
+    `).get()).toEqual(activityCount)
+  })
+
+  it('rolls back project deletion when the project delete fails', () => {
+    const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const agent = actors.registerAgent(
+      { name: 'deleter', role: 'dev-agent', client: 'codex' },
+      owner.id,
+      'mcp',
+    )
+    const project = projects.create(
+      { name: 'Atlas', ownerId: owner.id, description: '' },
+      owner.id,
+      'web',
+    )
+    const counts = insertProjectOwnedFixtures(
+      database,
+      project.id,
+      agent.id,
+    )
+    database.exec(`
+      CREATE TRIGGER fail_project_delete
+      BEFORE DELETE ON projects
+      BEGIN
+        SELECT RAISE(ABORT, 'forced project deletion failure');
+      END;
+    `)
+
+    expect(() => {
+      projects.delete(project.id, project.version, owner.id)
+    }).toThrowError(expect.objectContaining({
+      code: 'PROJECT_DELETE_FAILED',
+    }))
+    expect(projects.get(project.id)).toEqual(project)
+    projectChildTables.forEach((table) => {
+      expect(database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM ${table}
+        WHERE project_id = ?
+      `).get(project.id)).toEqual({ count: counts[table] })
+    })
+    expect(database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM activities
+      WHERE operation = 'project.delete' AND entity_id = ?
+    `).get(project.id)).toEqual({ count: 0 })
   })
 
   it('records every successful mutation with actor, source, entity, and operation', () => {
