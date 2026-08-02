@@ -30,15 +30,24 @@ export function AgentPresence({
   isError = false,
   isFetching = false,
   isPending = false,
+  onSelect,
   onRetry = () => undefined,
+  selectedActorId = null,
   sessions,
-}: RelayStateProps & { sessions?: Session[] }) {
+}: RelayStateProps & {
+  onSelect?: (session: Session) => void
+  selectedActorId?: string | null
+  sessions?: Session[]
+}) {
   return (
-    <section aria-label="Agent 会话" className="dashboard-card relay-card">
+    <section
+      aria-label="协作者状态"
+      className="glass-panel dashboard-card relay-card"
+    >
       <div className="dashboard-card__header">
         <div>
           <p className="dashboard-card__eyebrow">PRESENCE</p>
-          <h3>现场会话</h3>
+          <h2>协作者状态</h2>
         </div>
         <Badge tone="primary">
           {sessions?.filter(({ status }) => status === 'active').length ?? 0}{' '}
@@ -65,23 +74,33 @@ export function AgentPresence({
           <ol className="agent-presence">
             {sessions.map((session) => (
               <li className="agent-presence__item" key={session.id}>
-                <div className="agent-presence__heading">
-                  <strong>{session.agent.name}</strong>
-                  <Badge
-                    tone={
-                      session.status === 'abandoned' ? 'warning' : 'primary'
-                    }
-                  >
-                    {session.status === 'abandoned' ? '已离场' : '进行中'}
-                  </Badge>
-                </div>
-                <p>{session.intent}</p>
-                <div className="agent-presence__meta">
-                  <span>{session.taskIds.length} 个认领任务</span>
-                  <time dateTime={session.lastActiveAt}>
-                    最后活跃 {hongKongDateTime(session.lastActiveAt)}
-                  </time>
-                </div>
+                <button
+                  aria-label={`选择协作者：${session.agent.name}`}
+                  aria-pressed={selectedActorId === session.agentId}
+                  className="dashboard-select-item"
+                  onClick={() => onSelect?.(session)}
+                  type="button"
+                >
+                  <span className="dashboard-select-item__heading">
+                    <strong>{session.agent.name}</strong>
+                    <Badge
+                      tone={
+                        session.status === 'abandoned' ? 'warning' : 'primary'
+                      }
+                    >
+                      {session.status === 'active' ? '活跃' : '已离场'}
+                    </Badge>
+                  </span>
+                  <span className="dashboard-select-item__description">
+                    {session.intent}
+                  </span>
+                  <span className="dashboard-select-item__meta">
+                    <span>{session.taskIds.length} 个认领任务</span>
+                    <time dateTime={session.lastActiveAt}>
+                      {hongKongDateTime(session.lastActiveAt)}
+                    </time>
+                  </span>
+                </button>
               </li>
             ))}
           </ol>

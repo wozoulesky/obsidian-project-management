@@ -2,38 +2,37 @@ import { MetricGrid } from '../../components/layout/MetricGrid'
 import type { DashboardSnapshot, Project, RiskItem } from '../../data/domain'
 
 export function MetricBand({
-  metrics,
   projects,
+  workspaceMetrics,
   risks,
 }: {
-  metrics: DashboardSnapshot['metrics']
   projects: Project[]
+  workspaceMetrics: DashboardSnapshot['metrics']
   risks: RiskItem[]
 }) {
-  const completionRate =
-    metrics.totalTasks === 0
-      ? 0
-      : Math.round((metrics.completedTasks / metrics.totalTasks) * 100)
+  const activeProjects = projects.filter(
+    ({ status }) => status === 'in_progress',
+  ).length
   const metricItems = [
     {
       label: '项目总数',
       value: String(projects.length),
-      detail: `${projects.filter(({ status }) => status === 'in_progress').length} 个进行中`,
+      detail: '工作区全部项目',
     },
     {
-      label: '当前项目任务完成率',
-      value: `${completionRate}%`,
-      detail: `${metrics.completedTasks} / ${metrics.totalTasks} 项`,
+      label: '活跃项目',
+      value: String(activeProjects),
+      detail: `${activeProjects} 个进行中`,
     },
     {
-      label: '当前项目待处理风险',
+      label: '组合开放风险',
       value: String(risks.length),
       detail: `${risks.filter(({ level }) => level === 'critical').length} 项严重`,
     },
     {
-      label: '当前项目活跃协作者',
-      value: String(metrics.activeActors),
-      detail: `${metrics.activeAgents} 个 Agent`,
+      label: '活跃协作者',
+      value: String(workspaceMetrics.activeActors),
+      detail: `${workspaceMetrics.activeAgents} 个 Agent`,
     },
   ]
 
