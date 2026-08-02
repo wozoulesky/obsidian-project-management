@@ -9,7 +9,13 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { useCallback, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Task, TaskStatus } from '../../data/domain'
@@ -49,9 +55,11 @@ export function createTaskBoardDragEndHandler(moveTask: MoveTask) {
 
 function BoardColumn({
   children,
+  count,
   status,
 }: {
-  children: React.ReactNode
+  children: ReactNode
+  count: number
   status: TaskStatus
 }) {
   const { isOver, setNodeRef } = useDroppable({
@@ -69,8 +77,13 @@ function BoardColumn({
     >
       <header className="task-board__column-header">
         <h3>{taskStatusLabels[status]}</h3>
+        <span>{count}</span>
       </header>
-      <div className="task-board__cards">{children}</div>
+      <div className="task-board__cards">
+        {count === 0 ? (
+          <p className="task-board__empty">暂无任务</p>
+        ) : children}
+      </div>
     </section>
   )
 }
@@ -191,28 +204,46 @@ export function TaskBoard({
     useSensor(PointerSensor),
     useSensor(KeyboardSensor),
   )
-  const [announcement, setAnnouncement] = useState('')
+  const [announcement, setAnnouncement] = useState<{
+    id: number
+    message: string
+  } | null>(null)
   const [pendingTaskIds, setPendingTaskIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
+  const pendingMoves = useRef(new Map<string, symbol>())
+  const announce = useCallback((message: string) => {
+    setAnnouncement((current) => ({
+      id: (current?.id ?? 0) + 1,
+      message,
+    }))
+  }, [])
   const moveTask = useCallback(async (task: Task, status: TaskStatus) => {
+    if (pendingMoves.current.has(task.id)) return
+    const token = Symbol(task.id)
+    pendingMoves.current.set(task.id, token)
     setPendingTaskIds((current) => new Set(current).add(task.id))
     try {
       await onMoveTask(task, status)
-      setAnnouncement(
+      announce(
         `已将 ${task.title} 移动到${taskStatusLabels[status]}`,
       )
     } catch {
-      setAnnouncement('移动失败，任务已恢复到原状态')
+      announce(`移动 ${task.title} 失败，任务已恢复到原状态`)
     } finally {
-      setPendingTaskIds((current) => {
-        const next = new Set(current)
-        next.delete(task.id)
-        return next
-      })
+      if (pendingMoves.current.get(task.id) === token) {
+        pendingMoves.current.delete(task.id)
+        setPendingTaskIds((current) => {
+          const next = new Set(current)
+          next.delete(task.id)
+          return next
+        })
+      }
     }
-  }, [onMoveTask])
-  const handleDragEnd = createTaskBoardDragEndHandler(moveTask)
+  }, [announce, onMoveTask])
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    void createTaskBoardDragEndHandler(moveTask)(event)
+  }, [moveTask])
 
   return (
     <GlassPanel
@@ -223,9 +254,7 @@ export function TaskBoard({
     >
       <DndContext
         collisionDetection={closestCenter}
-        onDragEnd={(event) => {
-          void handleDragEnd(event)
-        }}
+        onDragEnd={handleDragEnd}
         sensors={sensors}
       >
         <div className="task-board__scroll">
@@ -233,7 +262,11 @@ export function TaskBoard({
             {taskStatuses.map((status) => {
               const columnTasks = tasks.filter((task) => task.status === status)
               return (
-                <BoardColumn key={status} status={status}>
+                <BoardColumn
+                  count={columnTasks.length}
+                  key={status}
+                  status={status}
+                >
                   {columnTasks.map((task) => (
                     <BoardCard
                       isPending={pendingTaskIds.has(task.id)}
@@ -251,7 +284,14 @@ export function TaskBoard({
         </div>
       </DndContext>
       <p aria-live="polite" className="task-board__announcement" role="status">
-        {announcement}
+        {announcement ? (
+          <span
+            data-announcement-id={announcement.id}
+            key={announcement.id}
+          >
+            {announcement.message}
+          </span>
+        ) : null}
       </p>
     </GlassPanel>
   )

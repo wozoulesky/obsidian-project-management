@@ -1,5 +1,12 @@
 import type { DragEndEvent } from '@dnd-kit/core'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -66,10 +73,12 @@ function renderBoard({
     .mockResolvedValue(undefined),
   onSelect = vi.fn(),
   selectedTaskId = null,
+  tasks = fixtureTasks,
 }: {
   onMoveTask?: (task: Task, status: TaskStatus) => Promise<void>
   onSelect?: (taskId: string) => void
   selectedTaskId?: string | null
+  tasks?: readonly Task[]
 } = {}) {
   return {
     onMoveTask,
@@ -79,7 +88,7 @@ function renderBoard({
         onMoveTask={onMoveTask}
         onSelect={onSelect}
         selectedTaskId={selectedTaskId}
-        tasks={fixtureTasks}
+        tasks={tasks}
       />,
     ),
   }
@@ -111,6 +120,19 @@ describe('TaskBoard', () => {
     expect(onSelect).toHaveBeenCalledWith('task-alpha')
   })
 
+  it('keeps every empty column droppable and labels its empty state', () => {
+    renderBoard({ tasks: [] })
+
+    for (const label of ['未开始', '进行中', '已完成', '已逾期']) {
+      const column = screen.getByRole('region', {
+        name: new RegExp(label),
+      })
+      expect(column).toHaveAttribute('data-status')
+      expect(within(column).getByText('0')).toBeVisible()
+      expect(within(column).getByText('暂无任务')).toBeVisible()
+    }
+  })
+
   it('moves a task through the keyboard fallback and announces success', async () => {
     const user = userEvent.setup()
     const { onMoveTask } = renderBoard()
@@ -124,8 +146,9 @@ describe('TaskBoard', () => {
       fixtureTasks[0],
       'done',
     ))
-    expect(screen.getByText('已将 接口联调 移动到已完成'))
-      .toHaveAttribute('role', 'status')
+    expect(screen.getByText('已将 接口联调 移动到已完成')
+      .closest('[role="status"]'))
+      .toHaveClass('task-board__announcement')
   })
 
   it('announces a failed move and suppresses the rejected promise', async () => {
@@ -139,8 +162,79 @@ describe('TaskBoard', () => {
       'done',
     )
 
-    expect(await screen.findByText('移动失败，任务已恢复到原状态'))
-      .toHaveAttribute('role', 'status')
+    expect((await screen.findByText(
+      '移动 接口联调 失败，任务已恢复到原状态',
+    )).closest('[role="status"]'))
+      .toHaveClass('task-board__announcement')
+  })
+
+  it('announces concurrent task results in settlement order', async () => {
+    let resolveAlpha!: () => void
+    let resolveBeta!: () => void
+    const alphaMove = new Promise<void>((resolve) => {
+      resolveAlpha = resolve
+    })
+    const betaMove = new Promise<void>((resolve) => {
+      resolveBeta = resolve
+    })
+    const onMoveTask = vi.fn<(task: Task, status: TaskStatus) => Promise<void>>()
+      .mockImplementation((selectedTask) => (
+        selectedTask.id === 'task-alpha' ? alphaMove : betaMove
+      ))
+    const user = userEvent.setup()
+    renderBoard({ onMoveTask })
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: '移动 接口联调 到' }),
+      'done',
+    )
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: '移动 发布检查 到' }),
+      'done',
+    )
+
+    resolveBeta()
+    const firstMessage = await screen.findByText(
+      '已将 发布检查 移动到已完成',
+    )
+    const firstId = firstMessage.getAttribute('data-announcement-id')
+
+    resolveAlpha()
+    const secondMessage = await screen.findByText(
+      '已将 接口联调 移动到已完成',
+    )
+    expect(secondMessage).not.toBe(firstMessage)
+    expect(secondMessage.getAttribute('data-announcement-id')).not.toBe(firstId)
+    expect(document.querySelectorAll('.task-board__announcement'))
+      .toHaveLength(1)
+  })
+
+  it('replaces the live message node for consecutive identical failures', async () => {
+    const onMoveTask = vi.fn<(task: Task, status: TaskStatus) => Promise<void>>()
+      .mockRejectedValue(new Error('conflict'))
+    const user = userEvent.setup()
+    renderBoard({ onMoveTask })
+    const moveControl = screen.getByRole('combobox', {
+      name: '移动 接口联调 到',
+    })
+
+    await user.selectOptions(moveControl, 'done')
+    const firstMessage = await screen.findByText(
+      '移动 接口联调 失败，任务已恢复到原状态',
+    )
+    const firstId = firstMessage.getAttribute('data-announcement-id')
+    await waitFor(() => expect(moveControl).toBeEnabled())
+
+    await user.selectOptions(moveControl, 'overdue')
+    await waitFor(() => expect(onMoveTask).toHaveBeenCalledTimes(2))
+    await waitFor(() => {
+      const secondMessage = screen.getByText(
+        '移动 接口联调 失败，任务已恢复到原状态',
+      )
+      expect(secondMessage).not.toBe(firstMessage)
+      expect(secondMessage.getAttribute('data-announcement-id'))
+        .not.toBe(firstId)
+    })
   })
 
   it('disables movement controls only for the pending task', async () => {
@@ -173,6 +267,29 @@ describe('TaskBoard', () => {
       expect(screen.getByRole('combobox', { name: '移动 接口联调 到' }))
         .toBeEnabled()
     })
+  })
+
+  it('deduplicates same-task moves synchronously and keeps the owner pending', async () => {
+    let resolveMove!: () => void
+    const pendingMove = new Promise<void>((resolve) => {
+      resolveMove = resolve
+    })
+    const onMoveTask = vi.fn<(task: Task, status: TaskStatus) => Promise<void>>()
+      .mockReturnValue(pendingMove)
+    renderBoard({ onMoveTask })
+    const moveControl = screen.getByRole('combobox', {
+      name: '移动 接口联调 到',
+    })
+
+    act(() => {
+      fireEvent.change(moveControl, { target: { value: 'done' } })
+      fireEvent.change(moveControl, { target: { value: 'overdue' } })
+    })
+
+    expect(onMoveTask).toHaveBeenCalledTimes(1)
+    expect(moveControl).toBeDisabled()
+    resolveMove()
+    await waitFor(() => expect(moveControl).toBeEnabled())
   })
 })
 
@@ -232,5 +349,88 @@ describe('TaskPage board integration', () => {
       .toHaveTextContent('发布检查')
     expect(screen.queryByText('任务看板将在下一阶段接入。'))
       .not.toBeInTheDocument()
+  })
+
+  it('moves through the repository with the task project and version', async () => {
+    const explicitProjectTask = task({
+      id: 'task-explicit-project',
+      title: '跨项目任务',
+      projectId: 'borealis',
+      version: 11,
+    })
+    vi.spyOn(projectRepository, 'listTasks').mockResolvedValue([
+      explicitProjectTask,
+    ])
+    const updateTaskProgress = vi.spyOn(
+      projectRepository,
+      'updateTaskProgress',
+    ).mockResolvedValue({
+      ...explicitProjectTask,
+      status: 'done',
+      progress: 100,
+      version: 12,
+    })
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, { route: '/tasks?view=board' })
+
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: '移动 跨项目任务 到' }),
+      'done',
+    )
+
+    await waitFor(() => expect(updateTaskProgress).toHaveBeenCalledWith(
+      'task-explicit-project',
+      expect.objectContaining({
+        progress: 100,
+        status: 'done',
+        version: 11,
+      }),
+    ))
+    expect(await screen.findByText('已将 跨项目任务 移动到已完成'))
+      .toBeVisible()
+  })
+
+  it('falls back to the workspace project for a task without projectId', async () => {
+    const fallbackTask = task({
+      id: 'task-workspace-fallback',
+      title: '工作区回退任务',
+      projectId: undefined,
+      version: 7,
+    })
+    const updatedTask = {
+      ...fallbackTask,
+      projectId: 'atlas',
+      status: 'done' as const,
+      progress: 100,
+      version: 8,
+    }
+    const listTasks = vi.spyOn(projectRepository, 'listTasks')
+      .mockResolvedValueOnce([fallbackTask])
+      .mockResolvedValue([updatedTask])
+    const updateTaskProgress = vi.spyOn(
+      projectRepository,
+      'updateTaskProgress',
+    ).mockResolvedValue(updatedTask)
+    const user = userEvent.setup()
+    renderApp(<TaskPage />, { route: '/tasks?view=board' })
+
+    await user.selectOptions(
+      await screen.findByRole('combobox', {
+        name: '移动 工作区回退任务 到',
+      }),
+      'done',
+    )
+
+    await waitFor(() => expect(updateTaskProgress).toHaveBeenCalledWith(
+      'task-workspace-fallback',
+      expect.objectContaining({
+        progress: 100,
+        status: 'done',
+        version: 7,
+      }),
+    ))
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(2))
+    expect(listTasks).toHaveBeenNthCalledWith(1, 'atlas')
+    expect(listTasks).toHaveBeenNthCalledWith(2, 'atlas')
   })
 })
