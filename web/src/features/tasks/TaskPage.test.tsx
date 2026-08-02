@@ -1257,6 +1257,156 @@ describe('TaskPage workflow', () => {
     expect(status).toHaveValue('overdue')
   })
 
+  it('does not replace a newer external status with an older save response', async () => {
+    const request = deferred<Task>()
+    const original = task({
+      id: 'external-status-during-save',
+      progress: 40,
+      status: 'in_progress',
+      version: 1,
+    })
+    const updateProgress = vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    const { rerender } = renderApp(
+      <TaskInspector onClose={vi.fn()} task={original} />,
+    )
+    const dialog = screen.getByRole('dialog', { name: original.title })
+    const progress = within(dialog).getByRole('spinbutton', {
+      name: '任务进度',
+    })
+    const status = within(dialog).getByRole('combobox', { name: '状态' })
+    await user.clear(progress)
+    await user.type(progress, '70')
+    await user.click(within(dialog).getByRole('button', {
+      name: '提交进度',
+    }))
+    await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(1))
+
+    rerender(
+      <TaskInspector
+        onClose={vi.fn()}
+        task={{ ...original, status: 'overdue', version: 2 }}
+      />,
+    )
+    expect(status).toHaveValue('overdue')
+
+    await act(async () => {
+      request.resolve({
+        ...original,
+        progress: 70,
+        status: 'in_progress',
+        version: 2,
+      })
+      await request.promise
+    })
+
+    expect(progress).toHaveValue(70)
+    expect(status).toHaveValue('overdue')
+  })
+
+  it('does not replace newer external progress with an older save response', async () => {
+    const request = deferred<Task>()
+    const original = task({
+      id: 'external-progress-during-save',
+      progress: 40,
+      status: 'in_progress',
+      version: 1,
+    })
+    const updateProgress = vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    const { rerender } = renderApp(
+      <TaskInspector onClose={vi.fn()} task={original} />,
+    )
+    const dialog = screen.getByRole('dialog', { name: original.title })
+    const progress = within(dialog).getByRole('spinbutton', {
+      name: '任务进度',
+    })
+    const status = within(dialog).getByRole('combobox', { name: '状态' })
+    await user.selectOptions(status, 'done')
+    await user.click(within(dialog).getByRole('button', {
+      name: '提交进度',
+    }))
+    await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(1))
+
+    rerender(
+      <TaskInspector
+        onClose={vi.fn()}
+        task={{ ...original, progress: 80, version: 2 }}
+      />,
+    )
+    expect(progress).toHaveValue(80)
+
+    await act(async () => {
+      request.resolve({
+        ...original,
+        progress: 40,
+        status: 'done',
+        version: 2,
+      })
+      await request.promise
+    })
+
+    expect(progress).toHaveValue(80)
+    expect(status).toHaveValue('done')
+  })
+
+  it('unlocks fields when the external source already matches the save response', async () => {
+    const request = deferred<Task>()
+    const original = task({
+      id: 'matching-source-during-save',
+      progress: 40,
+      status: 'in_progress',
+      version: 1,
+    })
+    const updateProgress = vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    const { rerender } = renderApp(
+      <TaskInspector onClose={vi.fn()} task={original} />,
+    )
+    const dialog = screen.getByRole('dialog', { name: original.title })
+    const progress = within(dialog).getByRole('spinbutton', {
+      name: '任务进度',
+    })
+    const status = within(dialog).getByRole('combobox', { name: '状态' })
+    await user.clear(progress)
+    await user.type(progress, '70')
+    await user.selectOptions(status, 'done')
+    await user.click(within(dialog).getByRole('button', {
+      name: '提交进度',
+    }))
+    await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(1))
+
+    const matchingSource = {
+      ...original,
+      progress: 70,
+      status: 'done' as const,
+      version: 2,
+    }
+    rerender(<TaskInspector onClose={vi.fn()} task={matchingSource} />)
+    await act(async () => {
+      request.resolve(matchingSource)
+      await request.promise
+    })
+
+    rerender(
+      <TaskInspector
+        onClose={vi.fn()}
+        task={{
+          ...matchingSource,
+          progress: 90,
+          status: 'overdue',
+          version: 3,
+        }}
+      />,
+    )
+
+    expect(progress).toHaveValue(90)
+    expect(status).toHaveValue('overdue')
+  })
+
   it('lets only the latest consecutive request report errors or own fields', async () => {
     const oldSuccess = deferred<Task>()
     const oldFailure = deferred<Task>()

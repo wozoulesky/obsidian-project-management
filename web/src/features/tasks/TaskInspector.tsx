@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 
 import { EntityInspector } from '../../components/data/EntityInspector'
 import { Button } from '../../components/ui/Button'
@@ -24,11 +30,36 @@ export function TaskProgressForm({ task }: { task: Task }) {
   const statusDirtyRef = useRef(false)
   const progressRevisionRef = useRef(0)
   const statusRevisionRef = useRef(0)
+  const progressSourceRevisionRef = useRef(0)
+  const statusSourceRevisionRef = useRef(0)
+  const currentProgressSourceRef = useRef(task.progress)
+  const currentStatusSourceRef = useRef(task.status)
+  const sourceTaskIdRef = useRef(task.id)
   const requestTokenRef = useRef(0)
 
   useEffect(() => () => {
     requestTokenRef.current += 1
   }, [])
+
+  useLayoutEffect(() => {
+    if (sourceTaskIdRef.current !== task.id) {
+      sourceTaskIdRef.current = task.id
+      progressSourceRevisionRef.current = 0
+      statusSourceRevisionRef.current = 0
+      currentProgressSourceRef.current = task.progress
+      currentStatusSourceRef.current = task.status
+      return
+    }
+
+    if (currentProgressSourceRef.current !== task.progress) {
+      currentProgressSourceRef.current = task.progress
+      progressSourceRevisionRef.current += 1
+    }
+    if (currentStatusSourceRef.current !== task.status) {
+      currentStatusSourceRef.current = task.status
+      statusSourceRevisionRef.current += 1
+    }
+  }, [task.id, task.progress, task.status])
 
   useEffect(() => {
     if (taskIdRef.current !== task.id) {
@@ -72,6 +103,8 @@ export function TaskProgressForm({ task }: { task: Task }) {
     requestTokenRef.current = requestToken
     const submittedProgressRevision = progressRevisionRef.current
     const submittedStatusRevision = statusRevisionRef.current
+    const submittedProgressSourceRevision = progressSourceRevisionRef.current
+    const submittedStatusSourceRevision = statusSourceRevisionRef.current
     updateProgress.mutate(
       {
         taskId: task.id,
@@ -81,16 +114,30 @@ export function TaskProgressForm({ task }: { task: Task }) {
         onSuccess: (updatedTask) => {
           if (
             taskIdRef.current !== submittedTaskId
+            || sourceTaskIdRef.current !== submittedTaskId
             || updatedTask.id !== submittedTaskId
             || requestTokenRef.current !== requestToken
           ) {
             return
           }
-          if (progressRevisionRef.current === submittedProgressRevision) {
+          if (
+            progressRevisionRef.current === submittedProgressRevision
+            && (
+              progressSourceRevisionRef.current
+                === submittedProgressSourceRevision
+              || currentProgressSourceRef.current === updatedTask.progress
+            )
+          ) {
             progressDirtyRef.current = false
             setProgress(String(updatedTask.progress))
           }
-          if (statusRevisionRef.current === submittedStatusRevision) {
+          if (
+            statusRevisionRef.current === submittedStatusRevision
+            && (
+              statusSourceRevisionRef.current === submittedStatusSourceRevision
+              || currentStatusSourceRef.current === updatedTask.status
+            )
+          ) {
             statusDirtyRef.current = false
             setStatus(updatedTask.status)
           }
@@ -98,6 +145,7 @@ export function TaskProgressForm({ task }: { task: Task }) {
         onError: (error) => {
           if (
             taskIdRef.current !== submittedTaskId
+            || sourceTaskIdRef.current !== submittedTaskId
             || requestTokenRef.current !== requestToken
           ) {
             return
