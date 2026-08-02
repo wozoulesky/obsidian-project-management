@@ -41,6 +41,11 @@ function isIsoDate(value: string): boolean {
 export function createMockProjectRepository(): ProjectRepository {
   const seed = createFixtureSeed()
   const taskState = seed.tasks
+  const initialTaskSequences = taskState.flatMap(({ id, code }) => [
+    Number(id.match(/^task-(\d+)$/)?.[1]),
+    Number(code.match(/^TASK-(\d+)$/)?.[1]),
+  ]).filter(Number.isInteger)
+  let taskSequence = Math.max(taskState.length, ...initialTaskSequences)
   const requirementState = seed.requirements
   const defectState = seed.defects
   const activityState = seed.activities
@@ -355,9 +360,10 @@ export function createMockProjectRepository(): ProjectRepository {
         throw new Error('Task assignee must be an active project member')
       }
       const now = new Date().toISOString()
+      taskSequence += 1
       const task: Task = {
-        id: `task-${taskState.length + 1}`,
-        code: `TASK-${String(taskState.length + 1).padStart(3, '0')}`,
+        id: `task-${taskSequence}`,
+        code: `TASK-${String(taskSequence).padStart(3, '0')}`,
         projectId,
         title: validated.title,
         description: validated.description ?? '',

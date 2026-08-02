@@ -21,6 +21,7 @@ import {
   useCurrentActor,
   useDashboard,
   useProject,
+  useProjectTasks,
   useProjectRepository,
   useProjects,
   useImportData,
@@ -33,6 +34,14 @@ import {
   workspaceProjectStorageKey,
 } from './query-hooks'
 import { createMockProjectRepository } from './mock-project-repository'
+
+function createDeferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
 
 function createHarness() {
   const queryClient = new QueryClient({
@@ -252,6 +261,85 @@ describe('project deletion synchronization', () => {
     expect(getProject).not.toHaveBeenCalled()
   })
 
+  it('keeps all-task aggregate separate from a project named all', async () => {
+    const repository = createMockProjectRepository()
+    const atlas = await repository.getProject('atlas')
+    const baseTask = (await repository.listAllTasks())[0]!
+    const deletedTask = {
+      ...baseTask,
+      id: 'all-task',
+      code: 'ALL-TASK',
+      projectId: 'all',
+    }
+    const survivingTask = {
+      ...baseTask,
+      id: 'other-task',
+      code: 'OTHER-TASK',
+      projectId: 'other',
+    }
+    const projectAll = { ...atlas, id: 'all', code: 'ALL', name: 'All' }
+    const otherProject = {
+      ...atlas,
+      id: 'other',
+      code: 'OTHER',
+      name: 'Other',
+    }
+    vi.spyOn(repository, 'deleteProject').mockResolvedValue({
+      id: 'all',
+      name: 'All',
+      deletedAt: '2026-08-02T04:00:00.000Z',
+      deletedCounts: {
+        project_members: 1,
+        tasks: 1,
+        requirements: 0,
+        defects: 0,
+        sessions: 0,
+        handoffs: 0,
+        deliverables: 0,
+      },
+    })
+    const listAllTasks = vi.spyOn(repository, 'listAllTasks')
+      .mockResolvedValue([survivingTask])
+    const listTasks = vi.spyOn(repository, 'listTasks')
+      .mockResolvedValue([deletedTask])
+    const { queryClient, wrapper } = createDeleteHarness(repository, 'other')
+    queryClient.setQueryData(projectQueryKeys.projects, [
+      projectAll,
+      otherProject,
+    ])
+    queryClient.setQueryData(projectQueryKeys.allTasks, [
+      deletedTask,
+      survivingTask,
+    ])
+    queryClient.setQueryData(projectQueryKeys.tasksFor('all'), [deletedTask])
+    const { result } = renderHook(() => ({
+      allTasks: useAllTasks(),
+      scopedTasks: useProjectTasks('all'),
+      deletion: useDeleteProject(),
+    }), { wrapper })
+
+    await act(() => result.current.deletion.mutateAsync({
+      projectId: 'all',
+      version: 1,
+    }))
+
+    await waitFor(() => expect(result.current.allTasks.data).toEqual([
+      survivingTask,
+    ]))
+    expect(queryClient.getQueryData(projectQueryKeys.allTasks)).toEqual([
+      survivingTask,
+    ])
+    expect(queryClient.getQueryData(projectQueryKeys.tasksFor('all')))
+      .toBeUndefined()
+    expect(result.current.scopedTasks.data).toBeUndefined()
+    expect(result.current.scopedTasks.fetchStatus).toBe('idle')
+    expect(listAllTasks).toHaveBeenCalledTimes(1)
+    expect(listTasks).not.toHaveBeenCalled()
+    expect(projectQueryKeys.allTasks).not.toEqual(
+      projectQueryKeys.tasksFor('all'),
+    )
+  })
+
   it('leaves cache, storage, and selection untouched when deletion fails', async () => {
     const repository = createMockProjectRepository()
     const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
@@ -323,6 +411,181 @@ describe('project deletion synchronization', () => {
     expect(sessionStorage.getItem(workspaceProjectStorageKey))
       .toBe('project_default')
   })
+
+  it('does not overwrite a project selected while deletion is pending', async () => {
+    const repository = createMockProjectRepository()
+    const atlas = await repository.getProject('atlas')
+    const projectB = await repository.createProject({
+      name: 'B',
+      description: '',
+      ownerId: atlas.ownerId,
+      startDate: null,
+      dueDate: null,
+    })
+    const projectC = await repository.createProject({
+      name: 'C',
+      description: '',
+      ownerId: atlas.ownerId,
+      startDate: null,
+      dueDate: null,
+    })
+    const deferred = createDeferred()
+    const realDeleteProject = repository.deleteProject.bind(repository)
+    vi.spyOn(repository, 'deleteProject').mockImplementation(
+      async (selectedProjectId, version) => {
+        await deferred.promise
+        return realDeleteProject(selectedProjectId, version)
+      },
+    )
+    const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+    queryClient.setQueryData(projectQueryKeys.projects, [
+      atlas,
+      projectC,
+      projectB,
+    ])
+    sessionStorage.setItem(workspaceProjectStorageKey, 'atlas')
+    const { result } = renderHook(() => ({
+      deletion: useDeleteProject(),
+      selection: useProjectRepository(),
+    }), { wrapper })
+
+    await act(async () => {
+      const pending = result.current.deletion.mutateAsync({
+        projectId: 'atlas',
+        version: atlas.version,
+      })
+      result.current.selection.selectProject(projectB.id)
+      deferred.resolve()
+      await pending
+    })
+
+    expect(result.current.selection.projectId).toBe(projectB.id)
+    expect(sessionStorage.getItem(workspaceProjectStorageKey)).toBe(projectB.id)
+  })
+
+  it('migrates when the user selects the deleting project while pending', async () => {
+    const repository = createMockProjectRepository()
+    const atlas = await repository.getProject('atlas')
+    const projectB = await repository.createProject({
+      name: 'B',
+      description: '',
+      ownerId: atlas.ownerId,
+      startDate: null,
+      dueDate: null,
+    })
+    const projectC = await repository.createProject({
+      name: 'C',
+      description: '',
+      ownerId: atlas.ownerId,
+      startDate: null,
+      dueDate: null,
+    })
+    const deferred = createDeferred()
+    const realDeleteProject = repository.deleteProject.bind(repository)
+    vi.spyOn(repository, 'deleteProject').mockImplementation(
+      async (selectedProjectId, version) => {
+        await deferred.promise
+        return realDeleteProject(selectedProjectId, version)
+      },
+    )
+    const { queryClient, wrapper } = createDeleteHarness(repository, projectB.id)
+    queryClient.setQueryData(projectQueryKeys.projects, [
+      atlas,
+      projectC,
+      projectB,
+    ])
+    sessionStorage.setItem(workspaceProjectStorageKey, projectB.id)
+    const { result } = renderHook(() => ({
+      deletion: useDeleteProject(),
+      selection: useProjectRepository(),
+    }), { wrapper })
+
+    await act(async () => {
+      const pending = result.current.deletion.mutateAsync({
+        projectId: 'atlas',
+        version: atlas.version,
+      })
+      result.current.selection.selectProject('atlas')
+      deferred.resolve()
+      await pending
+    })
+
+    expect(result.current.selection.projectId).toBe(projectC.id)
+    expect(sessionStorage.getItem(workspaceProjectStorageKey)).toBe(projectC.id)
+  })
+
+  it.each([
+    ['atlas', 'project-b'],
+    ['project-b', 'atlas'],
+  ] as const)(
+    'keeps concurrent deletion order %s then %s from restoring a deleted selection',
+    async (firstCompletedId, secondCompletedId) => {
+      const repository = createMockProjectRepository()
+      const atlas = await repository.getProject('atlas')
+      const projectB = await repository.createProject({
+        name: 'B',
+        description: '',
+        ownerId: atlas.ownerId,
+        startDate: null,
+        dueDate: null,
+      })
+      const projectC = await repository.createProject({
+        name: 'C',
+        description: '',
+        ownerId: atlas.ownerId,
+        startDate: null,
+        dueDate: null,
+      })
+      const deferredById = new Map([
+        ['atlas', createDeferred()],
+        [projectB.id, createDeferred()],
+      ])
+      const realDeleteProject = repository.deleteProject.bind(repository)
+      vi.spyOn(repository, 'deleteProject').mockImplementation(
+        async (selectedProjectId, version) => {
+          await deferredById.get(selectedProjectId)!.promise
+          return realDeleteProject(selectedProjectId, version)
+        },
+      )
+      const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+      queryClient.setQueryData(projectQueryKeys.projects, [
+        atlas,
+        projectB,
+        projectC,
+      ])
+      sessionStorage.setItem(workspaceProjectStorageKey, 'atlas')
+      const { result } = renderHook(() => ({
+        deletionA: useDeleteProject(),
+        deletionB: useDeleteProject(),
+        selection: useProjectRepository(),
+      }), { wrapper })
+      const idByLabel = { atlas: 'atlas', 'project-b': projectB.id }
+
+      await act(async () => {
+        const pendingById = new Map([
+          ['atlas', result.current.deletionA.mutateAsync({
+            projectId: 'atlas',
+            version: atlas.version,
+          })],
+          [projectB.id, result.current.deletionB.mutateAsync({
+            projectId: projectB.id,
+            version: projectB.version,
+          })],
+        ])
+        result.current.selection.selectProject(projectB.id)
+        const firstId = idByLabel[firstCompletedId]
+        deferredById.get(firstId)!.resolve()
+        await pendingById.get(firstId)
+        const secondId = idByLabel[secondCompletedId]
+        deferredById.get(secondId)!.resolve()
+        await pendingById.get(secondId)
+      })
+
+      expect(result.current.selection.projectId).toBe(projectC.id)
+      expect(sessionStorage.getItem(workspaceProjectStorageKey))
+        .toBe(projectC.id)
+    },
+  )
 
   it('keeps deleted project queries disabled after inactive cache GC', async () => {
     const repository = createMockProjectRepository()
@@ -446,7 +709,7 @@ describe('project deletion synchronization', () => {
     },
     {
       remainingIds: [] as string[],
-      expectedSelection: 'project_default',
+      expectedSelection: '',
     },
   ])(
     'falls back to $expectedSelection when the current project is deleted',
@@ -476,8 +739,12 @@ describe('project deletion synchronization', () => {
       }))
 
       expect(result.current.selection.projectId).toBe(expectedSelection)
-      expect(sessionStorage.getItem(workspaceProjectStorageKey))
-        .toBe(expectedSelection)
+      if (expectedSelection === '') {
+        expect(sessionStorage.getItem(workspaceProjectStorageKey)).toBeNull()
+      } else {
+        expect(sessionStorage.getItem(workspaceProjectStorageKey))
+          .toBe(expectedSelection)
+      }
     },
   )
 })

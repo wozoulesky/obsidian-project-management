@@ -105,6 +105,53 @@ describe('mock project repository', () => {
     await expect(repository.listProjects()).resolves.toEqual([first, second])
   })
 
+  it('keeps task ids and codes monotonic after another project is deleted', async () => {
+    const repository = createMockProjectRepository()
+    const atlas = await repository.getProject('atlas')
+    const disposable = await repository.createProject({
+      name: 'Disposable',
+      description: '',
+      ownerId: atlas.ownerId,
+      startDate: null,
+      dueDate: null,
+    })
+    const survivor = await repository.createProject({
+      name: 'Survivor',
+      description: '',
+      ownerId: atlas.ownerId,
+      startDate: null,
+      dueDate: null,
+    })
+    const createTasks = async (projectId: string, count: number) =>
+      Promise.all(Array.from({ length: count }, (_, index) =>
+        repository.createTask(projectId, {
+          title: `${projectId} task ${index + 1}`,
+          assigneeId: atlas.ownerId,
+          startDate: '2026-08-01',
+          dueDate: '2026-08-02',
+          priority: 'P1',
+        })))
+    const disposableTasks = await createTasks(disposable.id, 12)
+    const survivingTasks = await createTasks(survivor.id, 3)
+
+    await repository.deleteProject(disposable.id, disposable.version)
+    const laterTasks = await createTasks(survivor.id, 8)
+
+    const allTasks = await repository.listAllTasks()
+    expect(new Set(allTasks.map(({ id }) => id)).size).toBe(allTasks.length)
+    expect(new Set(allTasks.map(({ code }) => code)).size).toBe(allTasks.length)
+    const createdSequences = [
+      ...disposableTasks,
+      ...survivingTasks,
+      ...laterTasks,
+    ].map(({ id }) => Number(id.match(/^task-(\d+)$/)?.[1]))
+    expect(createdSequences.every(Number.isInteger)).toBe(true)
+    expect(createdSequences).toEqual(
+      [...createdSequences].sort((left, right) => left - right),
+    )
+    expect(laterTasks[0]?.id).not.toBe(disposableTasks[0]?.id)
+  })
+
   it('starts a fresh mock workspace with the approved dark glass settings', async () => {
     const repository = createMockProjectRepository()
 

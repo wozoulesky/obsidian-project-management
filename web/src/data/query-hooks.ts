@@ -47,6 +47,10 @@ type ProjectRepositoryContextValue = {
   repository: ProjectRepository
   projectId: string
   selectProject: (projectId: string) => void
+  selectProjectAfterDeletion: (
+    deletedProjectId: string,
+    nextProjectId: string,
+  ) => void
 }
 
 export const workspaceProjectStorageKey = 'project-os:workspace-project'
@@ -62,22 +66,43 @@ const deletedProjectsByClient = new WeakMap<
 const ProjectRepositoryContext =
   createContext<ProjectRepositoryContextValue | null>(null)
 
+function persistWorkspaceProject(projectId: string) {
+  try {
+    if (projectId === '') {
+      sessionStorage.removeItem(workspaceProjectStorageKey)
+    } else {
+      sessionStorage.setItem(workspaceProjectStorageKey, projectId)
+    }
+  } catch {
+    // Some browser privacy modes deny storage access; selection still works.
+  }
+}
+
 export function ProjectRepositoryProvider({
   children,
   repository,
   projectId,
-}: Omit<ProjectRepositoryContextValue, 'selectProject'> & {
+}: Omit<
+  ProjectRepositoryContextValue,
+  'selectProject' | 'selectProjectAfterDeletion'
+> & {
   children: ReactNode
 }) {
   const parent = useContext(ProjectRepositoryContext)
   const [selectedProjectId, setSelectedProjectId] = useState(projectId)
   const selectProject = useCallback((nextProjectId: string) => {
     setSelectedProjectId(nextProjectId)
-    try {
-      sessionStorage.setItem(workspaceProjectStorageKey, nextProjectId)
-    } catch {
-      // Some browser privacy modes deny storage access; selection still works.
-    }
+    persistWorkspaceProject(nextProjectId)
+  }, [])
+  const selectProjectAfterDeletion = useCallback((
+    deletedProjectId: string,
+    nextProjectId: string,
+  ) => {
+    setSelectedProjectId((currentProjectId) => {
+      if (currentProjectId !== deletedProjectId) return currentProjectId
+      persistWorkspaceProject(nextProjectId)
+      return nextProjectId
+    })
   }, [])
   if (parent !== null) return children
   return createElement(
@@ -87,6 +112,7 @@ export function ProjectRepositoryProvider({
         repository,
         projectId: selectedProjectId,
         selectProject,
+        selectProjectAfterDeletion,
       },
     },
     children,
@@ -98,6 +124,7 @@ export function useProjectRepository() {
     repository: projectRepository,
     projectId,
     selectProject: () => undefined,
+    selectProjectAfterDeletion: () => undefined,
   }
 }
 
@@ -105,7 +132,7 @@ export const projectQueryKeys = {
   actors: ['actors'] as const,
   currentActor: ['actors', 'current'] as const,
   activities: ['activities'] as const,
-  allTasks: ['tasks', 'all'] as const,
+  allTasks: ['tasks', { scope: 'all' }] as const,
   projects: ['projects'] as const,
   projectFor: (selectedProjectId: string) =>
     ['projects', selectedProjectId] as const,
@@ -564,12 +591,10 @@ export function useDeleteProject() {
         queryClient.removeQueries(filters)
       }
 
-      if (context.projectId === deletedProjectId) {
-        const nextProjectId = remainingProjects?.find(
-          ({ id }) => id === 'project_default',
-        )?.id ?? remainingProjects?.[0]?.id ?? 'project_default'
-        context.selectProject(nextProjectId)
-      }
+      const nextProjectId = remainingProjects?.find(
+        ({ id }) => id === 'project_default',
+      )?.id ?? remainingProjects?.[0]?.id ?? ''
+      context.selectProjectAfterDeletion(deletedProjectId, nextProjectId)
 
       await Promise.all([
         queryClient.invalidateQueries({
