@@ -494,10 +494,12 @@ export function GanttPage() {
                         }
                       >
                         <button
-                          aria-expanded={
+                          aria-controls="gantt-task-context"
+                          aria-describedby={`gantt-tree-description-${row.task.id}`}
+                          aria-label={`查看 ${row.task.title}`}
+                          aria-pressed={
                             effectiveSelectedTaskId === row.task.id
                           }
-                          aria-label={`查看 ${row.task.title}`}
                           className="gantt-task-tree__task gantt-task-tree__content"
                           id={`gantt-task-trigger-${row.task.id}`}
                           onClick={() => setSelectedTaskId(row.task.id)}
@@ -505,11 +507,19 @@ export function GanttPage() {
                         >
                           <span>
                             <small>{row.task.code}</small>
-                            <strong>{row.task.title}</strong>
+                            <strong title={row.task.title}>{row.task.title}</strong>
                           </span>
                           <span>
-                            <small>{row.task.assignee.name}</small>
+                            <small title={row.task.assignee.name}>
+                              {row.task.assignee.name}
+                            </small>
                             <strong>{row.task.progress}%</strong>
+                          </span>
+                          <span
+                            className="visually-hidden"
+                            id={`gantt-tree-description-${row.task.id}`}
+                          >
+                            负责人 {row.task.assignee.name}，进度 {row.task.progress}%
                           </span>
                         </button>
                       </div>

@@ -90,8 +90,15 @@ describe('GanttPage layout', () => {
     expect(within(context).getByRole('heading', { name: 'MCP 权限校验' }))
       .toBeVisible()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '查看 MCP 权限校验' }))
-      .toHaveAttribute('aria-expanded', 'true')
+    const selectedTreeTask = screen.getByRole('button', {
+      name: '查看 MCP 权限校验',
+    })
+    expect(selectedTreeTask).toHaveAttribute('aria-pressed', 'true')
+    expect(selectedTreeTask).not.toHaveAttribute('aria-expanded')
+    expect(selectedTreeTask).toHaveAttribute(
+      'aria-controls',
+      'gantt-task-context',
+    )
 
     expect(ganttGlassCss).toMatch(
       /\.gantt-signature\s*{[^}]*grid-template-columns:/s,
@@ -122,6 +129,33 @@ describe('GanttPage layout', () => {
       .toBeVisible()
     expect(window.location.pathname).toBe('/gantt')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('exposes selection and complete truncated task metadata to assistive tech', async () => {
+    const user = userEvent.setup()
+    mockTasks()
+    renderApp(<GanttPage />)
+
+    const treeTask = await screen.findByRole('button', {
+      name: '查看 MCP 权限校验',
+    })
+    const timelineTask = screen.getByRole('button', {
+      name: '移动 MCP 权限校验',
+    })
+    expect(treeTask).toHaveAttribute('aria-pressed', 'true')
+    expect(timelineTask).toHaveAttribute('aria-pressed', 'true')
+    expect(treeTask).toHaveAccessibleDescription('负责人 Lin，进度 62%')
+    expect(timelineTask).toHaveAccessibleDescription('负责人 Lin，进度 62%')
+    expect(within(treeTask).getByText('MCP 权限校验'))
+      .toHaveAttribute('title', 'MCP 权限校验')
+    expect(within(treeTask).getByText('Lin'))
+      .toHaveAttribute('title', 'Lin')
+
+    await user.click(screen.getByRole('button', { name: '查看 断线恢复测试' }))
+    expect(treeTask).toHaveAttribute('aria-pressed', 'false')
+    expect(timelineTask).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: '移动 断线恢复测试' }))
+      .toHaveAttribute('aria-pressed', 'true')
   })
 
   it('uses the shared glass header, real metrics, legend, and local stage', async () => {
@@ -557,6 +591,34 @@ describe('GanttPage scheduling workflow', () => {
       startDate: '2026-07-25',
       dueDate: '2026-07-30',
     }))
+    expect(await within(context).findByRole('status')).toHaveTextContent(
+      '排期已保存',
+    )
+  })
+
+  it('announces a successful progress save from the persistent context', async () => {
+    const user = userEvent.setup()
+    mockTasks()
+    vi.spyOn(projectRepository, 'updateTaskProgress').mockResolvedValue(
+      task({ progress: 75 }),
+    )
+    renderApp(<GanttPage />)
+
+    const context = await screen.findByRole('region', {
+      name: '甘特任务上下文',
+    })
+    const progress = within(context).getByLabelText('任务进度')
+    await user.clear(progress)
+    await user.type(progress, '75')
+    await user.type(
+      within(context).getByLabelText('进度备注'),
+      '完成复审修复',
+    )
+    await user.click(within(context).getByRole('button', { name: '提交进度' }))
+
+    expect(await within(context).findByRole('status')).toHaveTextContent(
+      '进度已保存',
+    )
   })
 
   it('saves progress and keeps editable values when the mutation fails', async () => {
@@ -732,7 +794,8 @@ describe('GanttPage scheduling workflow', () => {
     expect(screen.getByRole('region', { name: '甘特任务上下文' }))
       .toHaveAccessibleName('甘特任务上下文')
     await user.click(trigger)
-    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(trigger).toHaveAttribute('aria-pressed', 'true')
+    expect(trigger).not.toHaveAttribute('aria-expanded')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 

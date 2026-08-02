@@ -397,7 +397,10 @@ export function GanttTimeline({
                     style={barStyle}
                   >
                     <button
+                      aria-controls="gantt-task-context"
+                      aria-describedby={`gantt-timeline-description-${task.id}`}
                       aria-label={`移动 ${task.title}`}
+                      aria-pressed={selectedTaskId === task.id}
                       className="gantt-task-bar__move"
                       id={`gantt-timeline-trigger-${task.id}`}
                       onClick={(event) =>
@@ -412,7 +415,14 @@ export function GanttTimeline({
                       onPointerMove={updateDrag}
                       onPointerUp={endDrag}
                       type="button"
+                      title={`${task.title} · ${task.assignee.name} · ${task.progress}%`}
                     >
+                      <span
+                        className="visually-hidden"
+                        id={`gantt-timeline-description-${task.id}`}
+                      >
+                        负责人 {task.assignee.name}，进度 {task.progress}%
+                      </span>
                       <span
                         aria-hidden="true"
                         className="gantt-task-bar__progress"
