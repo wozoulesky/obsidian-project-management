@@ -2,8 +2,10 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type Query,
   type QueryClient,
   type QueryFilters,
+  type QueryState,
 } from '@tanstack/react-query'
 import type { PersistedAppSettings } from '@project-os/contracts'
 import {
@@ -699,6 +701,95 @@ type MoveTaskStatusVariables = {
   task: Task
 }
 
+type TaskMoveSnapshot = {
+  query: Query
+  originalState: QueryState
+  didOptimisticallyUpdate: boolean
+  optimisticData: unknown
+  optimisticDataUpdateCount: number
+  optimisticError: unknown
+  optimisticIsInvalidated: boolean
+  optimisticStatus: QueryState['status']
+}
+
+const pendingTaskMovesByClient = new WeakMap<
+  QueryClient,
+  Map<string, symbol>
+>()
+
+function getPendingTaskMoves(queryClient: QueryClient) {
+  const current = pendingTaskMovesByClient.get(queryClient)
+  if (current !== undefined) return current
+  const created = new Map<string, symbol>()
+  pendingTaskMovesByClient.set(queryClient, created)
+  return created
+}
+
+function releaseTaskMove(
+  queryClient: QueryClient,
+  taskId: string,
+  token: symbol,
+) {
+  const pendingMoves = pendingTaskMovesByClient.get(queryClient)
+  if (pendingMoves?.get(taskId) === token) pendingMoves.delete(taskId)
+}
+
+function rollbackTaskMoveSnapshots(snapshots: readonly TaskMoveSnapshot[]) {
+  for (const snapshot of snapshots) {
+    if (!snapshot.didOptimisticallyUpdate) continue
+    const currentState = snapshot.query.state
+    if (
+      currentState.data !== snapshot.optimisticData
+      || currentState.dataUpdateCount !== snapshot.optimisticDataUpdateCount
+    ) continue
+
+    const rollbackState: Partial<QueryState> = {
+      data: snapshot.originalState.data,
+      dataUpdateCount: snapshot.originalState.dataUpdateCount,
+      dataUpdatedAt: snapshot.originalState.dataUpdatedAt,
+    }
+    if (currentState.error === snapshot.optimisticError) {
+      rollbackState.error = snapshot.originalState.error
+    }
+    if (currentState.isInvalidated === snapshot.optimisticIsInvalidated) {
+      rollbackState.isInvalidated = snapshot.originalState.isInvalidated
+    }
+    if (currentState.status === snapshot.optimisticStatus) {
+      rollbackState.status = snapshot.originalState.status
+    }
+    snapshot.query.setState(rollbackState)
+  }
+}
+
+function invalidateTaskMoveQueries(
+  queryClient: QueryClient,
+  selectedProjectId: string,
+) {
+  const filters: readonly QueryFilters[] = [
+    { queryKey: projectQueryKeys.tasksFor(selectedProjectId), exact: true },
+    { queryKey: projectQueryKeys.allTasks, exact: true },
+    { queryKey: projectQueryKeys.ganttFor(selectedProjectId), exact: true },
+    {
+      queryKey: projectQueryKeys.requirementsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.dashboardPrefixFor(selectedProjectId),
+      exact: false,
+    },
+    {
+      queryKey: projectQueryKeys.workspaceDashboardPrefix,
+      exact: false,
+    },
+    { queryKey: projectQueryKeys.projectFor(selectedProjectId), exact: true },
+    { queryKey: projectQueryKeys.projects, exact: true },
+    { queryKey: projectQueryKeys.activities, exact: true },
+  ]
+  return Promise.all(filters.map((filter) => (
+    queryClient.invalidateQueries(filter)
+  )))
+}
+
 export function useMoveTaskStatus() {
   const queryClient = useQueryClient()
   const context = useProjectRepository()
@@ -710,62 +801,105 @@ export function useMoveTaskStatus() {
         note: `Moved to ${status} from task board`,
         version: task.version,
       }),
-    onMutate: async ({ status, task }: MoveTaskStatusVariables) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks'] })
-      const snapshots = queryClient.getQueryCache()
-        .findAll({ queryKey: ['tasks'] })
-        .map((query) => ({
-          query,
-          state: query.state,
-          didOptimisticallyUpdate: false,
-          optimisticData: undefined as unknown,
-        }))
-
-      for (const snapshot of snapshots) {
-        if (!Array.isArray(snapshot.state.data)) continue
-        const cachedTasks = snapshot.state.data as Task[]
-        let foundTask = false
-        const optimisticTasks = cachedTasks.map((candidate) => {
-          if (candidate.id !== task.id) return candidate
-          foundTask = true
-          return {
-            ...candidate,
-            status,
-            progress: progressForStatus(status, candidate.progress),
-          }
-        })
-        if (!foundTask) continue
-        snapshot.didOptimisticallyUpdate = true
-        snapshot.optimisticData = queryClient.setQueryData(
-          snapshot.query.queryKey,
-          optimisticTasks,
+    onMutate: async ({
+      projectId: variableProjectId,
+      status,
+      task,
+    }: MoveTaskStatusVariables) => {
+      if (
+        task.projectId !== undefined
+        && task.projectId !== variableProjectId
+      ) {
+        throw new Error(
+          `Task ${task.id} belongs to project ${task.projectId}, not ${variableProjectId}`,
         )
       }
+      const canonicalProjectId = task.projectId ?? variableProjectId
+      const pendingMoves = getPendingTaskMoves(queryClient)
+      if (pendingMoves.has(task.id)) {
+        throw new Error(`Task ${task.id} already has a pending status move`)
+      }
+      const token = Symbol(task.id)
+      pendingMoves.set(task.id, token)
+      let snapshots: TaskMoveSnapshot[] = []
 
-      return { snapshots }
-    },
-    onError: (_error, _variables, mutationContext) => {
-      for (const snapshot of mutationContext?.snapshots ?? []) {
-        if (
-          snapshot.didOptimisticallyUpdate
-          && snapshot.query.state.data === snapshot.optimisticData
-        ) {
-          snapshot.query.setState(snapshot.state)
+      try {
+        await queryClient.cancelQueries({ queryKey: ['tasks'] })
+        snapshots = queryClient.getQueryCache()
+          .findAll({ queryKey: ['tasks'] })
+          .map((query) => ({
+            query,
+            originalState: query.state,
+            didOptimisticallyUpdate: false,
+            optimisticData: undefined,
+            optimisticDataUpdateCount: -1,
+            optimisticError: undefined,
+            optimisticIsInvalidated: false,
+            optimisticStatus: 'pending',
+          }))
+
+        for (const snapshot of snapshots) {
+          if (!Array.isArray(snapshot.originalState.data)) continue
+          const cachedTasks = snapshot.originalState.data as Task[]
+          let foundTask = false
+          const optimisticTasks = cachedTasks.map((candidate) => {
+            if (candidate.id !== task.id) return candidate
+            foundTask = true
+            return {
+              ...candidate,
+              status,
+              progress: progressForStatus(status, candidate.progress),
+            }
+          })
+          if (!foundTask) continue
+          snapshot.didOptimisticallyUpdate = true
+          queryClient.setQueryData(snapshot.query.queryKey, optimisticTasks)
+          const optimisticState = snapshot.query.state
+          snapshot.optimisticData = optimisticState.data
+          snapshot.optimisticDataUpdateCount = optimisticState.dataUpdateCount
+          snapshot.optimisticError = optimisticState.error
+          snapshot.optimisticIsInvalidated = optimisticState.isInvalidated
+          snapshot.optimisticStatus = optimisticState.status
         }
+
+        return {
+          canonicalProjectId,
+          snapshots,
+          taskId: task.id,
+          token,
+        }
+      } catch (error) {
+        rollbackTaskMoveSnapshots(snapshots)
+        releaseTaskMove(queryClient, task.id, token)
+        throw error
       }
     },
-    onSettled: async (_data, _error, variables) => {
-      await invalidateKeys(queryClient, [
-        projectQueryKeys.tasksFor(variables.projectId),
-        projectQueryKeys.allTasks,
-        projectQueryKeys.ganttFor(variables.projectId),
-        projectQueryKeys.requirementsFor(variables.projectId),
-        projectQueryKeys.dashboardPrefixFor(variables.projectId),
-        projectQueryKeys.workspaceDashboardPrefix,
-        projectQueryKeys.projectFor(variables.projectId),
-        projectQueryKeys.projects,
-        projectQueryKeys.activities,
-      ])
+    onError: (_error, _variables, mutationContext) => {
+      if (mutationContext === undefined) return
+      const pendingMoves = pendingTaskMovesByClient.get(queryClient)
+      if (pendingMoves?.get(mutationContext.taskId) !== mutationContext.token) {
+        return
+      }
+      rollbackTaskMoveSnapshots(mutationContext.snapshots)
+    },
+    onSettled: async (_data, _error, _variables, mutationContext) => {
+      if (mutationContext === undefined) return
+      const pendingMoves = pendingTaskMovesByClient.get(queryClient)
+      if (pendingMoves?.get(mutationContext.taskId) !== mutationContext.token) {
+        return
+      }
+      try {
+        await invalidateTaskMoveQueries(
+          queryClient,
+          mutationContext.canonicalProjectId,
+        )
+      } finally {
+        releaseTaskMove(
+          queryClient,
+          mutationContext.taskId,
+          mutationContext.token,
+        )
+      }
     },
   })
 }
