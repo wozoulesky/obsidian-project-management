@@ -1,6 +1,6 @@
 import type { Task } from '../../data/domain'
 
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const ISO_DATE_PATTERN = /^(\d{4}|[+-]\d{6})-(\d{2})-(\d{2})$/
 const DAY_MS = 86_400_000
 const MIN_VISIBLE_BAR_PERCENT = 1.2
 
@@ -19,15 +19,18 @@ export interface DateProposal extends GanttTaskDates {
 }
 
 export function parseIsoDate(date: string): number | null {
-  if (!ISO_DATE_PATTERN.test(date)) return null
-  const [year, month, day] = date.split('-').map(Number)
+  const match = ISO_DATE_PATTERN.exec(date)
+  if (!match || match[1] === '-000000') return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
   const parsed = new Date(0)
   parsed.setUTCHours(0, 0, 0, 0)
-  parsed.setUTCFullYear(year!, month! - 1, day)
+  parsed.setUTCFullYear(year, month - 1, day)
   const timestamp = parsed.getTime()
   if (
     parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month! - 1 ||
+    parsed.getUTCMonth() !== month - 1 ||
     parsed.getUTCDate() !== day
   ) {
     return null
@@ -93,7 +96,9 @@ export function taskBarLayout(
 export function shiftDate(date: string, days: number): string | null {
   const timestamp = parseIsoDate(date)
   if (timestamp === null || !Number.isFinite(days)) return null
-  return new Date(timestamp + Math.trunc(days) * DAY_MS).toISOString().slice(0, 10)
+  return new Date(timestamp + Math.trunc(days) * DAY_MS)
+    .toISOString()
+    .split('T', 1)[0]!
 }
 
 export function dateDeltaFromPixels(

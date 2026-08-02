@@ -27,7 +27,7 @@ function hasValidRange(task: Task): boolean {
 }
 
 function compactDate(date: string): string {
-  return date.slice(5)
+  return date.slice(-5)
 }
 
 function dateTicks(start: string, end: string): string[] {
@@ -80,9 +80,14 @@ export function TaskTimeline({
   const todayPosition = rangeStart && rangeEnd
     ? dateToPercent(today, rangeStart, rangeEnd)
     : 0
-  const todayInRange = rangeStart && rangeEnd
-    ? parseIsoDate(today) !== null && today >= rangeStart && today < rangeEnd
-    : false
+  const todayDate = parseIsoDate(today)
+  const rangeStartDate = rangeStart ? parseIsoDate(rangeStart) : null
+  const rangeEndDate = rangeEnd ? parseIsoDate(rangeEnd) : null
+  const todayInRange = todayDate !== null
+    && rangeStartDate !== null
+    && rangeEndDate !== null
+    && todayDate >= rangeStartDate
+    && todayDate < rangeEndDate
 
   return (
     <GlassPanel

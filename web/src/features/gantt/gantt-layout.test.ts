@@ -92,6 +92,32 @@ describe('gantt date interactions', () => {
     expect(shiftDate('0099-01-31', 1)).toBe('0099-02-01')
   })
 
+  it('uses signed extended ISO dates only for internal range endpoints', () => {
+    expect(parseIsoDate('+010000-01-01')).not.toBeNull()
+    expect(parseIsoDate('-000001-12-31')).not.toBeNull()
+    expect(shiftDate('9999-12-31', 1)).toBe('+010000-01-01')
+    expect(shiftDate('+010000-01-01', -1)).toBe('9999-12-31')
+    expect(shiftDate('0000-01-01', -1)).toBe('-000001-12-31')
+    expect(
+      dateToPercent(
+        '+010000-01-01',
+        '9999-12-31',
+        '+010000-01-01',
+      ),
+    ).toBe(100)
+    expect(
+      taskBarLayout(
+        { startDate: '9999-12-31', dueDate: '9999-12-31' },
+        '9999-12-31',
+        '+010000-01-01',
+      ),
+    ).toEqual({ left: 0, width: 1.2 })
+
+    expect(parseIsoDate('10000-01-01')).toBeNull()
+    expect(parseIsoDate('+10000-01-01')).toBeNull()
+    expect(parseIsoDate('+010000-02-30')).toBeNull()
+  })
+
   it('shifts strict ISO dates in UTC across month boundaries', () => {
     expect(shiftDate('2026-07-31', 1)).toBe('2026-08-01')
     expect(shiftDate('2026-08-01', -1)).toBe('2026-07-31')

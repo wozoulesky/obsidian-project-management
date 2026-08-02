@@ -131,6 +131,13 @@ test('390px complex workspaces keep wide content inside local scroll regions', a
   await expectLocalHorizontalScroll(taskTimeline)
   await taskTimeline.focus()
   await expect(taskTimeline).toBeFocused()
+  const taskTimelineOverflow = await page.evaluate(() => ({
+    body: document.body.scrollWidth - document.body.clientWidth,
+    root:
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  }))
+  expect(taskTimelineOverflow).toEqual({ body: 0, root: 0 })
 
   await openReadyPage(page, '/gantt')
   await expectLocalHorizontalScroll(page.locator('.gantt-timeline'))

@@ -44,22 +44,32 @@ test('desktop shell and dashboard preserve the approved first viewport', async (
   expect(detail.y).toBeLessThan(900)
 })
 
-test('desktop task workspace keeps filters, fan, context, and timeline in reach', async ({
+test('desktop task timeline keeps filters, context, and local scrolling in reach', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
-  await openReadyPage(page, '/tasks')
+  await openReadyPage(page, '/tasks?view=timeline')
 
   await expect(page.getByTestId('task-filter-toolbar')).toBeVisible()
   const workspace = await box(page.getByTestId('task-workspace'))
-  const timeline = await box(page.getByRole('region', {
-    name: '独立交付时间线',
-  }))
+  const timelineRegion = page.getByRole('region', {
+    name: '任务时间线工作区',
+  })
+  const contextRegion = page.getByRole('region', { name: '智能任务上下文' })
+  const timeline = await box(timelineRegion)
+  const context = await box(contextRegion)
+  const timelineScroll = timelineRegion.locator('.task-timeline__scroll')
   expect(workspace.height).toBeGreaterThanOrEqual(350)
   expect(workspace.height).toBeLessThanOrEqual(380)
   expect(timeline.y).toBeLessThan(900)
-  await expect(page.getByRole('region', { name: '智能任务上下文' }))
-    .toBeVisible()
+  expect(context.x).toBeGreaterThanOrEqual(timeline.x + timeline.width)
+  expect(context.y).toBeCloseTo(timeline.y, 0)
+  expect(context.y).toBeLessThan(900)
+  await expect(timelineScroll).toBeVisible()
+  await expect.poll(() => timelineScroll.evaluate(
+    (element) => getComputedStyle(element).overflowX,
+  )).toBe('auto')
+  await expect(timelineScroll).toHaveAttribute('tabindex', '0')
 })
 
 test('desktop projects and actors keep their summary contexts alongside the stage', async ({

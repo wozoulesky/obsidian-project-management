@@ -190,4 +190,35 @@ describe('TaskTimeline', () => {
 
     expect(screen.queryByRole('img', { name: /今天/ })).not.toBeInTheDocument()
   })
+
+  it('renders a maximum business date with an extended exclusive endpoint', () => {
+    render(
+      <TaskTimeline
+        onSelect={vi.fn()}
+        selectedTaskId={null}
+        tasks={[
+          task({
+            id: 'max-date',
+            code: 'TASK-MAX',
+            title: '最大日期任务',
+            startDate: '9999-12-31',
+            dueDate: '9999-12-31',
+          }),
+        ]}
+        today="9999-12-31"
+      />,
+    )
+
+    const timeline = screen.getByRole('region', { name: '任务时间线工作区' })
+    expect(timeline).toHaveAttribute('data-range-start', '9999-12-31')
+    expect(timeline).toHaveAttribute('data-range-end', '+010000-01-01')
+    expect(screen.getByText('9999-12-31 至 +010000-01-01（结束日不含）'))
+      .toBeVisible()
+    expect(screen.getByRole('button', { name: '选择 TASK-MAX 最大日期任务' }))
+      .toHaveStyle({ left: '0%', width: '1.2%' })
+    expect(screen.getByRole('button', { name: '选择 TASK-MAX 最大日期任务' }))
+      .toHaveTextContent('12-31 — 12-31')
+    expect(screen.getByRole('img', { name: '今天 9999-12-31' }))
+      .toHaveStyle({ left: '0%' })
+  })
 })
