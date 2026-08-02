@@ -22,12 +22,22 @@ export function TaskProgressForm({ task }: { task: Task }) {
   const taskIdRef = useRef(task.id)
   const progressDirtyRef = useRef(false)
   const statusDirtyRef = useRef(false)
+  const progressRevisionRef = useRef(0)
+  const statusRevisionRef = useRef(0)
+  const requestTokenRef = useRef(0)
+
+  useEffect(() => () => {
+    requestTokenRef.current += 1
+  }, [])
 
   useEffect(() => {
     if (taskIdRef.current !== task.id) {
       taskIdRef.current = task.id
+      requestTokenRef.current += 1
       progressDirtyRef.current = false
       statusDirtyRef.current = false
+      progressRevisionRef.current = 0
+      statusRevisionRef.current = 0
       setProgress(String(task.progress))
       setStatus(task.status)
       setNote('')
@@ -57,6 +67,11 @@ export function TaskProgressForm({ task }: { task: Task }) {
     }
 
     setFormError('')
+    const submittedTaskId = task.id
+    const requestToken = requestTokenRef.current + 1
+    requestTokenRef.current = requestToken
+    const submittedProgressRevision = progressRevisionRef.current
+    const submittedStatusRevision = statusRevisionRef.current
     updateProgress.mutate(
       {
         taskId: task.id,
@@ -64,12 +79,29 @@ export function TaskProgressForm({ task }: { task: Task }) {
       },
       {
         onSuccess: (updatedTask) => {
-          progressDirtyRef.current = false
-          statusDirtyRef.current = false
-          setProgress(String(updatedTask.progress))
-          setStatus(updatedTask.status)
+          if (
+            taskIdRef.current !== submittedTaskId
+            || updatedTask.id !== submittedTaskId
+            || requestTokenRef.current !== requestToken
+          ) {
+            return
+          }
+          if (progressRevisionRef.current === submittedProgressRevision) {
+            progressDirtyRef.current = false
+            setProgress(String(updatedTask.progress))
+          }
+          if (statusRevisionRef.current === submittedStatusRevision) {
+            statusDirtyRef.current = false
+            setStatus(updatedTask.status)
+          }
         },
         onError: (error) => {
+          if (
+            taskIdRef.current !== submittedTaskId
+            || requestTokenRef.current !== requestToken
+          ) {
+            return
+          }
           setFormError(
             error instanceof Error ? error.message : '保存失败，请稍后重试。',
           )
@@ -92,6 +124,7 @@ export function TaskProgressForm({ task }: { task: Task }) {
           min="0"
           onChange={(event) => {
             progressDirtyRef.current = true
+            progressRevisionRef.current += 1
             setProgress(event.target.value)
           }}
           step="1"
@@ -104,6 +137,7 @@ export function TaskProgressForm({ task }: { task: Task }) {
         <select
           onChange={(event) => {
             statusDirtyRef.current = true
+            statusRevisionRef.current += 1
             setStatus(event.target.value as TaskStatus)
           }}
           value={status}
@@ -159,7 +193,7 @@ export function TaskInspector({
           <div><dt>依赖</dt><dd>{task.dependencyIds.join('、') || '无'}</dd></div>
         </dl>
         <p className="task-inspector__description">{task.description}</p>
-        <TaskProgressForm task={task} />
+        <TaskProgressForm key={task.id} task={task} />
       </div>
     </EntityInspector>
   )

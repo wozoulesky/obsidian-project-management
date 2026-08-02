@@ -120,7 +120,7 @@ export function TaskContextPanel({
               <p>暂无任务建议</p>
             )}
           </section>
-          <TaskProgressForm task={task} />
+          <TaskProgressForm key={task.id} task={task} />
         </div>
       ) : (
         <p className="task-context__empty" role="status">

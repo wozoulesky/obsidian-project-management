@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -75,6 +76,16 @@ function project(overrides: Partial<Project> = {}): Project {
     version: 1,
     ...overrides,
   }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
 }
 
 function renderTaskPage() {
@@ -1095,6 +1106,204 @@ describe('TaskPage workflow', () => {
       'same-task-submit',
       expect.objectContaining({ progress: 73, status: 'done' }),
     ))
+  })
+
+  it('ignores a successful response after switching to another task', async () => {
+    const request = deferred<Task>()
+    const firstTask = task({
+      id: 'late-success-a',
+      title: '迟到成功 A',
+      progress: 40,
+      status: 'in_progress',
+    })
+    const secondTask = task({
+      id: 'late-success-b',
+      title: '当前任务 B',
+      progress: 15,
+      status: 'not_started',
+    })
+    const updateProgress = vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    const { rerender } = renderApp(
+      <TaskInspector onClose={vi.fn()} task={firstTask} />,
+    )
+    const firstDialog = screen.getByRole('dialog', { name: firstTask.title })
+    await user.type(
+      within(firstDialog).getByRole('textbox', { name: '进度备注' }),
+      'A 的备注',
+    )
+    await user.click(within(firstDialog).getByRole('button', {
+      name: '提交进度',
+    }))
+    await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(1))
+
+    rerender(<TaskInspector onClose={vi.fn()} task={secondTask} />)
+    const secondDialog = screen.getByRole('dialog', { name: secondTask.title })
+    const secondNote = within(secondDialog).getByRole('textbox', {
+      name: '进度备注',
+    })
+    await user.type(secondNote, 'B 的草稿')
+
+    await act(async () => {
+      request.resolve({ ...firstTask, progress: 70, status: 'done' })
+      await request.promise
+    })
+
+    expect(within(secondDialog).getByRole('spinbutton', { name: '任务进度' }))
+      .toHaveValue(15)
+    expect(within(secondDialog).getByRole('combobox', { name: '状态' }))
+      .toHaveValue('not_started')
+    expect(secondNote).toHaveValue('B 的草稿')
+    expect(within(secondDialog).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('ignores a failed response after switching to another task', async () => {
+    const request = deferred<Task>()
+    const firstTask = task({ id: 'late-error-a', title: '迟到失败 A' })
+    const secondTask = task({
+      id: 'late-error-b',
+      title: '失败后的当前任务 B',
+      progress: 25,
+      status: 'done',
+    })
+    const updateProgress = vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    const { rerender } = renderApp(
+      <TaskInspector onClose={vi.fn()} task={firstTask} />,
+    )
+    const firstDialog = screen.getByRole('dialog', { name: firstTask.title })
+    await user.click(within(firstDialog).getByRole('button', {
+      name: '提交进度',
+    }))
+    await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(1))
+
+    rerender(<TaskInspector onClose={vi.fn()} task={secondTask} />)
+    const secondDialog = screen.getByRole('dialog', { name: secondTask.title })
+    const secondNote = within(secondDialog).getByRole('textbox', {
+      name: '进度备注',
+    })
+    await user.type(secondNote, '继续编辑 B')
+
+    await act(async () => {
+      request.reject(new Error('A 请求迟到失败'))
+      await request.promise.catch(() => undefined)
+    })
+
+    expect(within(secondDialog).getByRole('spinbutton', { name: '任务进度' }))
+      .toHaveValue(25)
+    expect(within(secondDialog).getByRole('combobox', { name: '状态' }))
+      .toHaveValue('done')
+    expect(secondNote).toHaveValue('继续编辑 B')
+    expect(within(secondDialog).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('preserves progress edits made after a request was submitted', async () => {
+    const request = deferred<Task>()
+    const submittedTask = task({
+      id: 'post-submit-progress',
+      progress: 40,
+      status: 'in_progress',
+    })
+    vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    renderApp(<TaskInspector onClose={vi.fn()} task={submittedTask} />)
+    const dialog = screen.getByRole('dialog', { name: submittedTask.title })
+    const progress = within(dialog).getByRole('spinbutton', {
+      name: '任务进度',
+    })
+    await user.clear(progress)
+    await user.type(progress, '70')
+    await user.click(within(dialog).getByRole('button', {
+      name: '提交进度',
+    }))
+    await user.clear(progress)
+    await user.type(progress, '80')
+
+    await act(async () => {
+      request.resolve({ ...submittedTask, progress: 70 })
+      await request.promise
+    })
+
+    expect(progress).toHaveValue(80)
+  })
+
+  it('preserves status edits made after a request was submitted', async () => {
+    const request = deferred<Task>()
+    const submittedTask = task({
+      id: 'post-submit-status',
+      progress: 40,
+      status: 'in_progress',
+    })
+    vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockReturnValue(request.promise)
+    const user = userEvent.setup()
+    renderApp(<TaskInspector onClose={vi.fn()} task={submittedTask} />)
+    const dialog = screen.getByRole('dialog', { name: submittedTask.title })
+    const status = within(dialog).getByRole('combobox', { name: '状态' })
+    await user.selectOptions(status, 'done')
+    await user.click(within(dialog).getByRole('button', {
+      name: '提交进度',
+    }))
+    await user.selectOptions(status, 'overdue')
+
+    await act(async () => {
+      request.resolve({ ...submittedTask, status: 'done' })
+      await request.promise
+    })
+
+    expect(status).toHaveValue('overdue')
+  })
+
+  it('lets only the latest consecutive request report errors or own fields', async () => {
+    const oldSuccess = deferred<Task>()
+    const oldFailure = deferred<Task>()
+    const latestRequest = deferred<Task>()
+    const requests = [oldSuccess, oldFailure, latestRequest]
+    const submittedTask = task({
+      id: 'consecutive-submit',
+      progress: 40,
+      status: 'in_progress',
+    })
+    vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockImplementation(() => requests.shift()!.promise)
+    const user = userEvent.setup()
+    renderApp(<TaskInspector onClose={vi.fn()} task={submittedTask} />)
+    const dialog = screen.getByRole('dialog', { name: submittedTask.title })
+    const progress = within(dialog).getByRole('spinbutton', {
+      name: '任务进度',
+    })
+    const submit = within(dialog).getByRole('button', { name: '提交进度' })
+    const form = submit.closest('form')
+    expect(form).not.toBeNull()
+
+    await user.clear(progress)
+    await user.type(progress, '70')
+    fireEvent.submit(form!)
+    await user.clear(progress)
+    await user.type(progress, '75')
+    fireEvent.submit(form!)
+    await user.clear(progress)
+    await user.type(progress, '80')
+    fireEvent.submit(form!)
+
+    await act(async () => {
+      latestRequest.resolve({ ...submittedTask, progress: 80 })
+      await latestRequest.promise
+    })
+    await act(async () => {
+      oldSuccess.resolve({ ...submittedTask, progress: 70 })
+      await oldSuccess.promise
+    })
+    await act(async () => {
+      oldFailure.reject(new Error('旧请求迟到失败'))
+      await oldFailure.promise.catch(() => undefined)
+    })
+
+    expect(progress).toHaveValue(80)
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('uses the shared overdue status label in the progress form', () => {
