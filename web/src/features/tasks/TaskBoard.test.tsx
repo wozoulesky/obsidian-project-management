@@ -209,7 +209,97 @@ describe('TaskBoard', () => {
       .toHaveLength(1)
   })
 
-  it('replaces the live message node for consecutive identical failures', async () => {
+  it('keeps both failure announcements when two moves settle in one batch', async () => {
+    let rejectAlpha!: (reason: Error) => void
+    let rejectBeta!: (reason: Error) => void
+    const alphaMove = new Promise<void>((_resolve, reject) => {
+      rejectAlpha = reject
+    })
+    const betaMove = new Promise<void>((_resolve, reject) => {
+      rejectBeta = reject
+    })
+    const onMoveTask = vi.fn<(task: Task, status: TaskStatus) => Promise<void>>()
+      .mockImplementation((selectedTask) => (
+        selectedTask.id === 'task-alpha' ? alphaMove : betaMove
+      ))
+    const { container } = renderBoard({ onMoveTask })
+
+    act(() => {
+      fireEvent.change(
+        screen.getByRole('combobox', { name: '移动 接口联调 到' }),
+        { target: { value: 'done' } },
+      )
+      fireEvent.change(
+        screen.getByRole('combobox', { name: '移动 发布检查 到' }),
+        { target: { value: 'done' } },
+      )
+    })
+
+    await act(async () => {
+      rejectAlpha(new Error('alpha conflict'))
+      rejectBeta(new Error('beta conflict'))
+      await Promise.allSettled([alphaMove, betaMove])
+    })
+
+    const liveRegion = container.querySelector('.task-board__announcement')!
+    const messages = liveRegion.querySelectorAll('[data-announcement-id]')
+    expect(container.querySelectorAll('.task-board__announcement'))
+      .toHaveLength(1)
+    expect(messages).toHaveLength(2)
+    expect(new Set(Array.from(messages, (message) => (
+      message.getAttribute('data-announcement-id')
+    ))).size).toBe(2)
+    expect(messages[0]).toHaveTextContent('接口联调')
+    expect(messages[1]).toHaveTextContent('发布检查')
+  })
+
+  it('keeps success and failure announcements when two moves settle in one batch', async () => {
+    let resolveAlpha!: () => void
+    let rejectBeta!: (reason: Error) => void
+    const alphaMove = new Promise<void>((resolve) => {
+      resolveAlpha = resolve
+    })
+    const betaMove = new Promise<void>((_resolve, reject) => {
+      rejectBeta = reject
+    })
+    const onMoveTask = vi.fn<(task: Task, status: TaskStatus) => Promise<void>>()
+      .mockImplementation((selectedTask) => (
+        selectedTask.id === 'task-alpha' ? alphaMove : betaMove
+      ))
+    const { container } = renderBoard({ onMoveTask })
+
+    act(() => {
+      fireEvent.change(
+        screen.getByRole('combobox', { name: '移动 接口联调 到' }),
+        { target: { value: 'done' } },
+      )
+      fireEvent.change(
+        screen.getByRole('combobox', { name: '移动 发布检查 到' }),
+        { target: { value: 'done' } },
+      )
+    })
+
+    await act(async () => {
+      resolveAlpha()
+      rejectBeta(new Error('beta conflict'))
+      await Promise.allSettled([alphaMove, betaMove])
+    })
+
+    const liveRegion = container.querySelector('.task-board__announcement')!
+    const messages = liveRegion.querySelectorAll('[data-announcement-id]')
+    expect(container.querySelectorAll('.task-board__announcement'))
+      .toHaveLength(1)
+    expect(messages).toHaveLength(2)
+    expect(new Set(Array.from(messages, (message) => (
+      message.getAttribute('data-announcement-id')
+    ))).size).toBe(2)
+    expect(messages[0]).toHaveTextContent('接口联调')
+    expect(messages[0]).toHaveTextContent('已完成')
+    expect(messages[1]).toHaveTextContent('发布检查')
+    expect(messages[1]).toHaveTextContent('失败')
+  })
+
+  it('appends a unique live message node for consecutive identical failures', async () => {
     const onMoveTask = vi.fn<(task: Task, status: TaskStatus) => Promise<void>>()
       .mockRejectedValue(new Error('conflict'))
     const user = userEvent.setup()
@@ -228,13 +318,37 @@ describe('TaskBoard', () => {
     await user.selectOptions(moveControl, 'overdue')
     await waitFor(() => expect(onMoveTask).toHaveBeenCalledTimes(2))
     await waitFor(() => {
-      const secondMessage = screen.getByText(
+      const messages = screen.getAllByText(
         '移动 接口联调 失败，任务已恢复到原状态',
       )
+      expect(messages).toHaveLength(2)
+      const secondMessage = messages[1]!
       expect(secondMessage).not.toBe(firstMessage)
       expect(secondMessage.getAttribute('data-announcement-id'))
         .not.toBe(firstId)
     })
+  })
+
+  it('keeps only the twelve most recent live announcements', async () => {
+    const onMoveTask = vi.fn<(task: Task, status: TaskStatus) => Promise<void>>()
+      .mockRejectedValue(new Error('conflict'))
+    const { container } = renderBoard({ onMoveTask })
+    const moveControl = screen.getByRole('combobox', {
+      name: '移动 接口联调 到',
+    })
+
+    for (let index = 1; index <= 13; index += 1) {
+      fireEvent.change(moveControl, {
+        target: { value: index % 2 === 0 ? 'overdue' : 'done' },
+      })
+      await waitFor(() => expect(onMoveTask).toHaveBeenCalledTimes(index))
+      await waitFor(() => expect(moveControl).toBeEnabled())
+    }
+
+    const messages = container.querySelectorAll('[data-announcement-id]')
+    expect(messages).toHaveLength(12)
+    expect(messages[0]).toHaveAttribute('data-announcement-id', '2')
+    expect(messages[11]).toHaveAttribute('data-announcement-id', '13')
   })
 
   it('disables movement controls only for the pending task', async () => {

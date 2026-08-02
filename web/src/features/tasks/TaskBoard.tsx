@@ -204,19 +204,22 @@ export function TaskBoard({
     useSensor(PointerSensor),
     useSensor(KeyboardSensor),
   )
-  const [announcement, setAnnouncement] = useState<{
+  const [announcements, setAnnouncements] = useState<readonly {
     id: number
     message: string
-  } | null>(null)
+  }[]>([])
   const [pendingTaskIds, setPendingTaskIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
   const pendingMoves = useRef(new Map<string, symbol>())
   const announce = useCallback((message: string) => {
-    setAnnouncement((current) => ({
-      id: (current?.id ?? 0) + 1,
-      message,
-    }))
+    setAnnouncements((current) => {
+      const announcement = {
+        id: (current.at(-1)?.id ?? 0) + 1,
+        message,
+      }
+      return [...current, announcement].slice(-12)
+    })
   }, [])
   const moveTask = useCallback(async (task: Task, status: TaskStatus) => {
     if (pendingMoves.current.has(task.id)) return
@@ -284,14 +287,14 @@ export function TaskBoard({
         </div>
       </DndContext>
       <p aria-live="polite" className="task-board__announcement" role="status">
-        {announcement ? (
+        {announcements.map((announcement) => (
           <span
             data-announcement-id={announcement.id}
             key={announcement.id}
           >
             {announcement.message}
           </span>
-        ) : null}
+        ))}
       </p>
     </GlassPanel>
   )
