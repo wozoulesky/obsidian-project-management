@@ -218,6 +218,18 @@ export const createProjectInputSchema = projectSchema.omit({
 })
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>
 
+export const deleteProjectInputSchema = z.object({
+  version: versionSchema,
+}).strict()
+export type DeleteProjectInput = z.infer<typeof deleteProjectInputSchema>
+
+export const deleteProjectResultSchema = z.object({
+  id: idSchema,
+  name: z.string().min(1),
+  deletedAt: timestampSchema,
+}).strict()
+export type DeleteProjectResult = z.infer<typeof deleteProjectResultSchema>
+
 export const projectMembershipRoleSchema = z.enum(['owner', 'member'])
 export type ProjectMembershipRole = z.infer<
   typeof projectMembershipRoleSchema
@@ -330,6 +342,7 @@ export const activityOperationSchema = z.enum([
   'actor.register',
   'project.create',
   'project.update',
+  'project.delete',
   'project.member.add',
   'task.create',
   'task.update',

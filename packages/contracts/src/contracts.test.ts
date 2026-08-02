@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import * as contracts from './index.js'
+import {
+  activityOperationSchema,
+  deleteProjectInputSchema,
+  deleteProjectResultSchema,
+} from './index.js'
 
 const persistedHuman = {
   id: 'actor-1',
@@ -135,6 +140,31 @@ describe('shared contracts', () => {
   it('exposes project identity and owner fields', () => {
     expect(contracts.projectSchema.shape.ownerId).toBeDefined()
     expect(contracts.projectSchema.shape.id).toBeDefined()
+  })
+})
+
+describe('project deletion contracts', () => {
+  it('validates deletion input, result, and activity operation', () => {
+    expect(deleteProjectInputSchema.parse({ version: 2 })).toEqual({
+      version: 2,
+    })
+    expect(deleteProjectInputSchema.safeParse({ version: 0 }).success).toBe(
+      false,
+    )
+    expect(
+      deleteProjectResultSchema.parse({
+        id: 'project_demo',
+        name: 'Demo',
+        deletedAt: '2026-08-02T08:00:00.000Z',
+      }),
+    ).toEqual({
+      id: 'project_demo',
+      name: 'Demo',
+      deletedAt: '2026-08-02T08:00:00.000Z',
+    })
+    expect(activityOperationSchema.parse('project.delete')).toBe(
+      'project.delete',
+    )
   })
 })
 
