@@ -1,5 +1,7 @@
 import {
   createProjectInputSchema,
+  deleteProjectInputSchema,
+  deleteProjectResultSchema,
   persistedProjectMemberSchema,
   persistedProjectSchema,
   projectStatusSchema,
@@ -191,6 +193,22 @@ export const projectRoutes: AppRouteModule = {
         ),
       )
       sendSuccess(response, project)
+    })
+
+    router.delete('/projects/:id', (request, response) => {
+      const { id } = projectIdParamsSchema.parse(request.params)
+      const input = deleteProjectInputSchema.parse(request.body)
+      const context = getContext()
+      const result = callService(
+        deleteProjectResultSchema,
+        () => context.services.projects.delete(
+          id,
+          input.version,
+          requestActorId(context),
+          'web',
+        ),
+      )
+      sendSuccess(response, result)
     })
 
     router.get('/projects/:projectId/members', (request, response) => {

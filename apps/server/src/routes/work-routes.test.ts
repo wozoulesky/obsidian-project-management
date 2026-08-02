@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import {
   apiErrorEnvelopeSchema,
   apiSuccessEnvelopeSchema,
+  deleteProjectResultSchema,
   persistedActorSchema,
   persistedProjectMemberSchema,
   persistedProjectSchema,
@@ -470,6 +471,162 @@ describe('project routes', () => {
 
     expect(missing.body.error.code).toBe('ACTOR_NOT_FOUND')
     expect(deactivated.body.error.code).toBe('ACTOR_INACTIVE')
+  })
+
+  it('deletes a project and returns strict counts while retaining its audit', async () => {
+    const { api, context } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const project = await createProject(api, owner.id)
+    await createTask(api, project.id, owner.id)
+
+    const response = await api
+      .delete(`/api/v1/projects/${project.id}`)
+      .send({ version: project.version })
+      .expect(200)
+
+    expect(
+      apiSuccessEnvelopeSchema(deleteProjectResultSchema).parse(response.body),
+    ).toEqual(response.body)
+    expect(response.body.data).toEqual({
+      id: project.id,
+      name: project.name,
+      deletedAt: expect.any(String),
+      deletedCounts: {
+        project_members: 1,
+        tasks: 1,
+        requirements: 0,
+        defects: 0,
+        sessions: 0,
+        handoffs: 0,
+        deliverables: 0,
+      },
+    })
+    expect(new Date(response.body.data.deletedAt).toISOString())
+      .toBe(response.body.data.deletedAt)
+    await api.get(`/api/v1/projects/${project.id}`).expect(404)
+    expect(context.services.activities.list({ entityId: project.id }))
+      .toContainEqual(expect.objectContaining({
+        operation: 'project.delete',
+        entityId: project.id,
+        projectId: null,
+        source: 'web',
+      }))
+  })
+
+  it.each([
+    ['missing version', {}],
+    ['zero version', { version: 0 }],
+    ['unknown field', { version: 1, unexpected: true }],
+  ])('rejects deletion with %s', async (_name, body) => {
+    const { api } = createApi()
+    const project = defaultSeedDocument.projects[0]!
+
+    const response = await api
+      .delete(`/api/v1/projects/${project.id}`)
+      .send(body)
+      .expect(400)
+
+    expect(apiErrorEnvelopeSchema.parse(response.body)).toEqual(response.body)
+    expect(response.body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns not found when deleting a missing project', async () => {
+    const { api } = createApi()
+
+    const response = await api
+      .delete('/api/v1/projects/project_missing')
+      .send({ version: 1 })
+      .expect(404)
+
+    expect(response.body.error.code).toBe('PROJECT_NOT_FOUND')
+  })
+
+  it('forbids an unrelated active human member from deleting a project', async () => {
+    const outsiderId = 'actor_unrelated_member'
+    const context = createContext(true, outsiderId)
+    const owner = defaultSeedDocument.actors[0]!
+    const timestamp = '2026-08-02T00:00:00.000Z'
+    context.database.prepare(`
+      INSERT INTO actors (
+        id, name, kind, role, status, client, capabilities_json,
+        registered_at, last_active_at, version
+      ) VALUES (?, 'Unrelated member', 'human', 'member', 'active', NULL,
+        '[]', ?, NULL, 1)
+    `).run(outsiderId, timestamp)
+    const project = context.services.projects.create({
+      name: 'Owner project',
+      description: '',
+      ownerId: owner.id,
+      startDate: null,
+      dueDate: null,
+    }, owner.id, 'web')
+    const api = request(createApp({ context }))
+
+    const response = await api
+      .delete(`/api/v1/projects/${project.id}`)
+      .send({ version: project.version })
+      .expect(403)
+
+    expect(response.body.error.code).toBe('PROJECT_DELETE_FORBIDDEN')
+    expect(context.services.projects.get(project.id)).toEqual(project)
+  })
+
+  it('protects the default project from deletion', async () => {
+    const { api } = createApi()
+    const project = defaultSeedDocument.projects[0]!
+
+    const response = await api
+      .delete(`/api/v1/projects/${project.id}`)
+      .send({ version: project.version })
+      .expect(409)
+
+    expect(response.body.error.code).toBe('DEFAULT_PROJECT_PROTECTED')
+  })
+
+  it('rejects stale deletion without changing the project', async () => {
+    const { api } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const project = await createProject(api, owner.id)
+    const updated = await api.patch(`/api/v1/projects/${project.id}`).send({
+      description: 'Current description',
+      version: project.version,
+    }).expect(200)
+
+    const response = await api
+      .delete(`/api/v1/projects/${project.id}`)
+      .send({ version: project.version })
+      .expect(409)
+
+    expect(response.body.error.code).toBe('PROJECT_VERSION_CONFLICT')
+    const fetched = await api.get(`/api/v1/projects/${project.id}`).expect(200)
+    expect(fetched.body.data).toEqual(updated.body.data)
+  })
+
+  it('sanitizes an unexpected project deletion failure', async () => {
+    const { api, context } = createApi()
+    const owner = defaultSeedDocument.actors[0]!
+    const project = await createProject(api, owner.id)
+    context.database.exec(`
+      CREATE TRIGGER fail_project_delete_route
+      BEFORE DELETE ON projects
+      BEGIN
+        SELECT RAISE(ABORT, 'forced project deletion failure');
+      END;
+    `)
+
+    const response = await api
+      .delete(`/api/v1/projects/${project.id}`)
+      .send({ version: project.version })
+      .expect(500)
+
+    expect(response.body.error).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: {},
+    })
+    expect(JSON.stringify(response.body))
+      .not.toMatch(/forced project deletion failure|sqlite|trigger/i)
+    expect(context.services.projects.get(project.id)).toEqual(project)
   })
 })
 
