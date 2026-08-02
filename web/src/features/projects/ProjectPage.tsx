@@ -27,6 +27,9 @@ import {
 } from './project-risk'
 import './projects-glass.css'
 
+const projectNoticePrefix = '已永久删除项目 '
+const invisibleCharacters = ['\u200b', '\u200c', '\u200d', '\ufeff']
+
 export function ProjectPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -40,8 +43,15 @@ export function ProjectPage() {
     const notice = location.state.projectNotice
     if (
       typeof notice !== 'string'
-      || !/^已永久删除项目 [^<>]+$/.test(notice)
+      || !notice.startsWith(projectNoticePrefix)
       || notice.length > 200
+    ) return null
+    const projectName = notice.slice(projectNoticePrefix.length)
+    if (
+      !projectName.trim()
+      || projectName.includes('<')
+      || projectName.includes('>')
+      || invisibleCharacters.some((character) => projectName.includes(character))
       || Array.from(notice).some((character) => character.charCodeAt(0) < 32)
     ) return null
     return notice
