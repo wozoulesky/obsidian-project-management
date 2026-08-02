@@ -25,6 +25,7 @@ import { CreateTaskDialog } from './CreateTaskDialog'
 import { MilestoneTrack } from './MilestoneTrack'
 import { deriveMilestones } from './milestone-derivation'
 import { projectRisk } from './project-risk'
+import './projects-glass.css'
 
 const projectStatusLabels = {
   not_started: '未开始',

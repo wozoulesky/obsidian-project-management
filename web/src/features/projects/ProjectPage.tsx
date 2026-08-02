@@ -228,32 +228,32 @@ export function ProjectPage() {
               />
             </label>
           </div>
-          {filteredProjects.length > 0 ? (
-            <div className="project-portfolio-layout">
-              <GlassPanel ariaLabel="玻璃项目矩阵" className="project-matrix-panel">
-                <div className="project-matrix-panel__heading">
-                  <div>
-                    <h2>玻璃项目矩阵</h2>
-                    <span>{filteredProjects.length} / {projectsQuery.data?.length ?? 0} 个项目</span>
-                  </div>
-                  <div aria-label="项目健康筛选" className="project-health-filters" role="group">
-                    {([
-                      ['all', '全部'],
-                      ['正常', '正常'],
-                      ['关注', '关注'],
-                      ['高风险', '高风险'],
-                    ] as const).map(([value, label]) => (
-                      <button
-                        aria-pressed={healthFilter === value}
-                        key={value}
-                        onClick={() => setHealthFilter(value)}
-                        type="button"
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+          <div className="project-portfolio-layout">
+            <GlassPanel ariaLabel="玻璃项目矩阵" className="project-matrix-panel">
+              <div className="project-matrix-panel__heading">
+                <div>
+                  <h2>玻璃项目矩阵</h2>
+                  <span>{filteredProjects.length} / {projectsQuery.data?.length ?? 0} 个项目</span>
                 </div>
+                <div aria-label="项目健康筛选" className="project-health-filters" role="group">
+                  {([
+                    ['all', '全部'],
+                    ['正常', '正常'],
+                    ['关注', '关注'],
+                    ['高风险', '高风险'],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      aria-pressed={healthFilter === value}
+                      key={value}
+                      onClick={() => setHealthFilter(value)}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {filteredProjects.length > 0 ? (
                 <div className="project-matrix-scroll" tabIndex={0}>
                   <div className="project-grid">
                     {filteredProjects.map((project) => (
@@ -269,24 +269,24 @@ export function ProjectPage() {
                     ))}
                   </div>
                 </div>
-              </GlassPanel>
-              <ProjectSummaryPanel
-                owner={
-                  selectedProject
-                    ? actorById.get(selectedProject.ownerId)
-                    : undefined
-                }
-                project={selectedProject}
-                tasks={
-                  selectedProject
-                    ? tasksByProject.get(selectedProject.id) ?? []
-                    : []
-                }
-              />
-            </div>
-          ) : (
-            <EmptyState title="没有符合当前筛选条件的项目" />
-          )}
+              ) : (
+                <EmptyState title="没有符合当前筛选条件的项目" />
+              )}
+            </GlassPanel>
+            <ProjectSummaryPanel
+              owner={
+                selectedProject
+                  ? actorById.get(selectedProject.ownerId)
+                  : undefined
+              }
+              project={selectedProject}
+              tasks={
+                selectedProject
+                  ? tasksByProject.get(selectedProject.id) ?? []
+                  : []
+              }
+            />
+          </div>
         </>
       ) : null}
 

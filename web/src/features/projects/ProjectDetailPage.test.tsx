@@ -13,6 +13,7 @@ import type {
 } from '../../data/domain'
 import { projectRepository } from '../../data/query-hooks'
 import { ProjectDetailPage } from './ProjectDetailPage'
+import projectDetailSource from './ProjectDetailPage.tsx?raw'
 
 const owner: Actor = {
   id: 'owner-active',
@@ -152,6 +153,10 @@ function getDeliverableMetric() {
 }
 
 describe('ProjectDetailPage', () => {
+  it('loads shared project surface styles from its independent lazy route', () => {
+    expect(projectDetailSource).toContain("import './projects-glass.css'")
+  })
+
   it('selects milestones in a continuous track and updates persistent context without routing', async () => {
     const user = userEvent.setup()
     mockDetail()

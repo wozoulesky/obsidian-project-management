@@ -153,6 +153,25 @@ describe('ProjectPage', () => {
     expect(window.location.pathname).toBe('/projects')
   })
 
+  it('keeps health controls available when a filter has zero results', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    renderApp(<ProjectPage />, { route: '/projects' })
+
+    const filters = await screen.findByRole('group', {
+      name: '项目健康筛选',
+    })
+    await user.click(within(filters).getByRole('button', { name: '关注' }))
+
+    expect(screen.getByText('没有符合当前筛选条件的项目')).toBeVisible()
+    expect(screen.getByRole('group', { name: '项目健康筛选' })).toBeVisible()
+
+    await user.click(within(filters).getByRole('button', { name: '全部' }))
+
+    expect(screen.getByRole('article', { name: 'Atlas 迁移' })).toBeVisible()
+    expect(screen.getByRole('article', { name: 'Borealis 发布' })).toBeVisible()
+  })
+
   it('selects an evidence-based summary without navigating and keeps a real detail link', async () => {
     const user = userEvent.setup()
     mockPortfolio()
