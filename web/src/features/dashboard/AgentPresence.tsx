@@ -32,10 +32,12 @@ export function AgentPresence({
   isPending = false,
   onSelect,
   onRetry = () => undefined,
+  projectScope,
   selectedActorId = null,
   sessions,
 }: RelayStateProps & {
   onSelect?: (session: Session) => void
+  projectScope: string
   selectedActorId?: string | null
   sessions?: Session[]
 }) {
@@ -48,6 +50,7 @@ export function AgentPresence({
         <div>
           <p className="dashboard-card__eyebrow">PRESENCE</p>
           <h2>协作者状态</h2>
+          <p className="dashboard-card__scope">{projectScope}</p>
         </div>
         <Badge tone="primary">
           {sessions?.filter(({ status }) => status === 'active').length ?? 0}{' '}

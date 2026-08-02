@@ -10,7 +10,7 @@ import { PageHeader } from '../../components/layout/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
-import type { RiskItem, Session } from '../../data/domain'
+import type { Deliverable, RiskItem, Session } from '../../data/domain'
 import {
   useProjectDeliverables,
   useProjectRepository,
@@ -22,7 +22,6 @@ import { ActivityFeed } from './ActivityFeed'
 import { AgentPresence } from './AgentPresence'
 import { MetricBand } from './MetricBand'
 import { PortfolioHealthStage } from './PortfolioHealthStage'
-import { RecentDeliverables } from './RecentDeliverables'
 import './dashboard-glass.css'
 
 type DashboardPeriod = 7 | 30 | 90
@@ -40,6 +39,28 @@ const periodOptions = periods.map((days) => ({
 const riskLevelWeight: Record<RiskItem['level'], number> = {
   critical: 0,
   warning: 1,
+}
+
+function representativeAgentSessions(
+  sessions: Session[] | undefined,
+): Session[] | undefined {
+  if (sessions === undefined) return undefined
+
+  const representatives = new Map<string, Session>()
+  for (const session of sessions) {
+    const current = representatives.get(session.agentId)
+    if (
+      current === undefined
+      || (session.status === 'active' && current.status !== 'active')
+      || (
+        (session.status === 'active') === (current.status === 'active')
+        && session.lastActiveAt > current.lastActiveAt
+      )
+    ) {
+      representatives.set(session.agentId, session)
+    }
+  }
+  return [...representatives.values()]
 }
 
 function priorityRisk(risks: RiskItem[]): RiskItem | undefined {
@@ -203,6 +224,76 @@ function DashboardContextPanel({
   )
 }
 
+function DashboardDeliverables({
+  dataUpdatedAt,
+  deliverables,
+  error,
+  isError,
+  isFetching,
+  isPending,
+  onRetry,
+  projectScope,
+}: {
+  dataUpdatedAt?: number
+  deliverables?: Deliverable[]
+  error?: unknown
+  isError: boolean
+  isFetching: boolean
+  isPending: boolean
+  onRetry: () => unknown
+  projectScope: string
+}) {
+  return (
+    <section
+      aria-label="最近交付物"
+      className="glass-panel dashboard-card relay-card"
+    >
+      <div className="dashboard-card__header">
+        <div>
+          <p className="dashboard-card__eyebrow">DELIVERABLES</p>
+          <h2>最近交付物</h2>
+          <p className="dashboard-card__scope">{projectScope}</p>
+        </div>
+        <Badge>{deliverables?.length ?? 0} 项</Badge>
+      </div>
+      {isPending && deliverables === undefined ? (
+        <LoadingState label="正在加载最近交付物" />
+      ) : isError && deliverables === undefined ? (
+        <ErrorState
+          error={error}
+          isRetrying={isFetching}
+          onRetry={onRetry}
+        />
+      ) : deliverables?.length ? (
+        <>
+          <RefreshState
+            dataUpdatedAt={dataUpdatedAt}
+            error={error}
+            isError={isError}
+            isFetching={isFetching}
+            label="正在刷新最近交付物"
+          />
+          <ol className="recent-deliverables">
+            {deliverables.map((deliverable) => (
+              <li className="recent-deliverables__item" key={deliverable.id}>
+                <div className="recent-deliverables__heading">
+                  <strong>{deliverable.title}</strong>
+                  <Badge>{deliverable.kind}</Badge>
+                </div>
+                <code>{deliverable.ref}</code>
+                {deliverable.note ? <p>{deliverable.note}</p> : null}
+                <span>{deliverable.createdBy.name}</span>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : (
+        <EmptyState title="当前项目还没有交付物" />
+      )}
+    </section>
+  )
+}
+
 export function DashboardPage() {
   const [period, setPeriod] = useState<DashboardPeriod>(30)
   const [requestedSelection, setRequestedSelection] =
@@ -244,16 +335,20 @@ export function DashboardPage() {
   }
   if (!snapshot || !portfolio) return null
 
+  const actorSessions = representativeAgentSessions(sessions.data)
+  const projectName = portfolio.find(({ id }) => id === projectId)?.name
+    ?? projectId
+  const currentProjectScope = `${projectName} · 当前项目`
   const selection = resolveSelection(
     requestedSelection,
     snapshot.risks,
-    sessions.data,
+    actorSessions,
   )
   const selectedRisk = selection?.type === 'risk'
     ? snapshot.risks.find(({ id }) => id === selection.id) ?? null
     : null
   const selectedSession = selection?.type === 'actor'
-    ? sessions.data?.find(({ agentId }) => agentId === selection.id) ?? null
+    ? actorSessions?.find(({ agentId }) => agentId === selection.id) ?? null
     : null
   const overviewError = dashboard.error ?? projects.error
 
@@ -313,8 +408,9 @@ export function DashboardPage() {
               type: 'actor',
               id: session.agentId,
             })}
+            projectScope={currentProjectScope}
             selectedActorId={selection?.type === 'actor' ? selection.id : null}
-            sessions={sessions.data}
+            sessions={actorSessions}
           />
         </div>
         <DashboardContextPanel
@@ -324,7 +420,7 @@ export function DashboardPage() {
       </div>
 
       <div className="dashboard-feed-grid" data-testid="dashboard-feed-grid">
-        <RecentDeliverables
+        <DashboardDeliverables
           dataUpdatedAt={deliverables.dataUpdatedAt}
           deliverables={deliverables.data}
           error={deliverables.error}
@@ -332,6 +428,7 @@ export function DashboardPage() {
           isFetching={deliverables.isFetching}
           isPending={deliverables.isPending}
           onRetry={() => deliverables.refetch()}
+          projectScope={currentProjectScope}
         />
         <GlassPanel ariaLabel="活动流" className="dashboard-activity-panel">
           <div className="dashboard-card__header">

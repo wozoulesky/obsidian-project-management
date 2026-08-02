@@ -22,9 +22,9 @@
 
 .portfolio-health-stage {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   min-height: 286px;
-  padding: 18px;
+  padding: 14px;
 }
 
 .dashboard-panel-heading,
@@ -61,7 +61,7 @@
 .health-trend-card,
 .portfolio-health-projects {
   min-width: 0;
-  padding: 14px;
+  padding: 10px;
   background: color-mix(in srgb, var(--glass-surface-raised) 82%, transparent);
   border: 1px solid var(--glass-line);
   border-radius: var(--radius-md);
@@ -70,7 +70,7 @@
 .health-trend-card {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 .health-trend-card__heading strong {
@@ -86,7 +86,7 @@
   grid-template-columns: repeat(7, minmax(0, 1fr));
   align-items: end;
   gap: 7px;
-  height: 130px;
+  height: 110px;
 }
 
 .health-trend-column {
@@ -131,7 +131,7 @@
 .portfolio-health-lanes {
   display: grid;
   gap: 8px;
-  max-height: 154px;
+  max-height: 134px;
   margin: 0;
   padding: 0;
   overflow-y: auto;
@@ -144,7 +144,7 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 9px 11px;
+  padding: 7px 9px;
   background: color-mix(in srgb, var(--glass-surface-raised) 76%, transparent);
   border: 1px solid var(--glass-line);
   border-radius: 11px;
@@ -172,7 +172,7 @@
 
 .dashboard-detail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.58fr) minmax(260px, 0.72fr);
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
   gap: 14px;
   min-width: 0;
 }
@@ -212,6 +212,12 @@
 .dashboard-card__header h3 {
   margin: 0;
   font-size: 0.9375rem;
+}
+
+.dashboard-card__scope {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
 }
 
 .dashboard-select-list,

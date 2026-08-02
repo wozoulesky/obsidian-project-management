@@ -133,6 +133,68 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('region', { name: '项目指标' })).toBeVisible()
   })
 
+  it('deduplicates actor sessions and selects the latest active representative', async () => {
+    const snapshot = await projectRepository.getWorkspaceDashboard(30)
+    const sessions = await projectRepository.listProjectSessions('atlas')
+    const active = sessions.find(({ status }) => status === 'active')!
+    const abandoned = sessions.find(({ status }) => status === 'abandoned')!
+    vi.spyOn(projectRepository, 'getWorkspaceDashboard').mockResolvedValueOnce({
+      ...snapshot,
+      risks: [],
+    })
+    vi.spyOn(projectRepository, 'listProjectSessions').mockResolvedValueOnce([
+      {
+        ...active,
+        id: 'session-dev-abandoned-newest',
+        intent: '不应作为代表的离场会话',
+        status: 'abandoned',
+        taskIds: ['wrong-abandoned'],
+        lastActiveAt: '2026-07-29T04:10:00.000Z',
+      },
+      active,
+      {
+        ...active,
+        id: 'session-dev-active-latest',
+        intent: '最新活跃会话',
+        taskIds: ['task-a', 'task-b', 'task-c'],
+        lastActiveAt: '2026-07-29T03:10:00.000Z',
+      },
+      abandoned,
+    ])
+
+    renderApp(<DashboardPage />)
+
+    const presence = await screen.findByRole('region', { name: '协作者状态' })
+    expect(
+      within(presence).getAllByRole('button', {
+        name: '选择协作者：dev-agent',
+      }),
+    ).toHaveLength(1)
+    expect(within(presence).getByText('1 个活跃')).toBeVisible()
+    expect(within(presence).getByText('最新活跃会话')).toBeVisible()
+    const context = screen.getByRole('region', { name: '上下文摘要' })
+    expect(within(context).getByText('3 个认领任务')).toBeVisible()
+    expect(within(context).getByText('最新活跃会话')).toBeVisible()
+  })
+
+  it('labels project-scoped presence and deliverables with the current project', async () => {
+    renderApp(<DashboardPage />)
+
+    const presence = await screen.findByRole('region', { name: '协作者状态' })
+    const deliverables = screen.getByRole('region', { name: '最近交付物' })
+    expect(within(presence).getByText('Atlas · 当前项目')).toBeVisible()
+    expect(within(deliverables).getByText('Atlas · 当前项目')).toBeVisible()
+  })
+
+  it('exposes the dates, actuals and plans behind the compact trend graphic', async () => {
+    renderApp(<DashboardPage />)
+
+    const trend = await screen.findByRole('img', {
+      name: /06\/30 实际 3，计划 4/,
+    })
+    expect(trend).toHaveAccessibleName(/07\/28 实际 34，计划 40/)
+  })
+
   it('re-resolves the shared context when the dashboard snapshot changes', async () => {
     const user = userEvent.setup()
     const baseline = await projectRepository.getWorkspaceDashboard(30)

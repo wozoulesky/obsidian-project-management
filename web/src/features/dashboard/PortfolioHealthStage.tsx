@@ -29,6 +29,11 @@ export function PortfolioHealthStage({
     ...trend.flatMap(({ actual, planned }) => [actual, planned]),
   )
   const latestTrend = trend.at(-1)
+  const trendDescription = trend.length
+    ? trend.map(({ actual, date, planned }) =>
+        `${shortDate(date)} 实际 ${actual}，计划 ${planned}`,
+      ).join('；')
+    : '暂无趋势数据'
 
   return (
     <GlassPanel
@@ -59,7 +64,7 @@ export function PortfolioHealthStage({
             </span>
           </div>
           <div
-            aria-label="最近七期实际交付柱状图"
+            aria-label={`最近七期实际交付柱状图：${trendDescription}`}
             className="health-trend-bars"
             role="img"
           >
