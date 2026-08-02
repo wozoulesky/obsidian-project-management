@@ -8,8 +8,13 @@ import {
 import { MetricGrid } from '../../components/layout/MetricGrid'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { GlassPanel } from '../../components/ui/GlassPanel'
-import type { Task } from '../../data/domain'
-import { useTasks } from '../../data/query-hooks'
+import type { Task, TaskStatus } from '../../data/domain'
+import {
+  useMoveTaskStatus,
+  useProjectRepository,
+  useTasks,
+} from '../../data/query-hooks'
+import { TaskBoard } from './TaskBoard'
 import { TaskCompactList } from './TaskCompactList'
 import { TaskContextPanel } from './TaskContextPanel'
 import { filterTasks, TaskFilters } from './TaskFilters'
@@ -48,6 +53,8 @@ function taskMetrics(tasks: readonly Task[], today: string) {
 
 export function TaskPage() {
   const tasksQuery = useTasks()
+  const moveStatus = useMoveTaskStatus()
+  const { projectId: workspaceProjectId } = useProjectRepository()
   const [searchParams, setSearchParams] = useSearchParams()
   const now = new Date()
   const today = [
@@ -82,6 +89,13 @@ export function TaskPage() {
   const selectTask = (taskId: string) => {
     setSelectedTaskId(taskId)
   }
+
+  const moveTask = (task: Task, status: TaskStatus) =>
+    moveStatus.mutateAsync({
+      projectId: task.projectId ?? workspaceProjectId,
+      status,
+      task,
+    }).then(() => undefined)
 
   if (tasksQuery.isPending && !tasksQuery.data) {
     return (
@@ -162,13 +176,21 @@ export function TaskPage() {
               tasks={filteredTasks}
             />
           </>
+        ) : view === 'board' ? (
+          <TaskBoard
+            dataSlot="board"
+            onMoveTask={moveTask}
+            onSelect={selectTask}
+            selectedTaskId={selectedTaskId}
+            tasks={filteredTasks}
+          />
         ) : (
           <GlassPanel
-            ariaLabel={view === 'board' ? '任务看板工作区' : '任务时间线工作区'}
-            data-slot={view}
+            ariaLabel="任务时间线工作区"
+            data-slot="timeline"
             style={{ gridColumn: '1 / span 2' }}
           >
-            <p>{view === 'board' ? '任务看板' : '任务时间线'}将在下一阶段接入。</p>
+            <p>任务时间线将在下一阶段接入。</p>
           </GlassPanel>
         )}
         <TaskContextPanel
