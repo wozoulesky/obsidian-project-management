@@ -429,7 +429,6 @@ export function ActorPage() {
           <details
             aria-label="协作者管理目录"
             className="glass-panel actor-directory-panel"
-            open
             role="group"
           >
             <summary className="actor-directory-panel__heading">

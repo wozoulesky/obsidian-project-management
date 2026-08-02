@@ -108,68 +108,75 @@ export function ActorNetwork({
         </div>
       </div>
 
-      <div
-        aria-label="协作者关系图，可在窄屏横向滚动"
-        className="actor-network-scroll"
-        tabIndex={0}
-      >
-        <div className="actor-network-canvas">
-          <svg
-            aria-hidden="true"
-            className="actor-network-connectors"
-            preserveAspectRatio="none"
-            viewBox="0 0 100 100"
-          >
-            {edges.map((edge) => {
-              const from = positions.get(edge.from)!
-              const to = positions.get(edge.to)!
+      {actors.length === 0 ? (
+        <div className="actor-network-empty" role="status">
+          <strong>没有匹配协作者</strong>
+          <span>请切换类型筛选。</span>
+        </div>
+      ) : (
+        <div
+          aria-label="协作者关系图，可在窄屏横向滚动"
+          className="actor-network-scroll"
+          tabIndex={0}
+        >
+          <div className="actor-network-canvas">
+            <svg
+              aria-hidden="true"
+              className="actor-network-connectors"
+              preserveAspectRatio="none"
+              viewBox="0 0 100 100"
+            >
+              {edges.map((edge) => {
+                const from = positions.get(edge.from)!
+                const to = positions.get(edge.to)!
+                return (
+                  <line
+                    key={`${edge.from}-${edge.to}`}
+                    x1={from.x}
+                    x2={to.x}
+                    y1={from.y}
+                    y2={to.y}
+                  />
+                )
+              })}
+            </svg>
+            {actors.map((actor) => {
+              const position = positions.get(actor.id)!
+              const isCurrent = actor.id === currentActorId
+              const unfinished = unfinishedByActor.get(actor.id) ?? 0
               return (
-                <line
-                  key={`${edge.from}-${edge.to}`}
-                  x1={from.x}
-                  x2={to.x}
-                  y1={from.y}
-                  y2={to.y}
-                />
+                <button
+                  aria-label={`查看 ${actor.name} 协作摘要${isCurrent ? '，当前操作者' : ''}`}
+                  aria-pressed={selectedActorId === actor.id}
+                  className="actor-network-node"
+                  key={actor.id}
+                  onClick={() => onSelectActor(actor.id)}
+                  style={{
+                    '--actor-x': `${position.x}%`,
+                    '--actor-y': `${position.y}%`,
+                  } as CSSProperties}
+                  type="button"
+                >
+                  <span className="actor-network-node__heading">
+                    <strong>{actor.name}</strong>
+                    {isCurrent ? <em>当前操作者</em> : null}
+                  </span>
+                  <span>{actor.kind === 'agent' ? 'Agent' : '人类'} · {unfinished} 项未完成</span>
+                  <span className="actor-network-node__skills">
+                    {(actor.capabilities ?? []).length
+                      ? actor.capabilities!.map((capability) => (
+                          <small key={capability}>{capability}</small>
+                        ))
+                      : <small>暂无技能</small>}
+                  </span>
+                </button>
               )
             })}
-          </svg>
-          {actors.map((actor) => {
-            const position = positions.get(actor.id)!
-            const isCurrent = actor.id === currentActorId
-            const unfinished = unfinishedByActor.get(actor.id) ?? 0
-            return (
-              <button
-                aria-label={`查看 ${actor.name} 协作摘要${isCurrent ? '，当前操作者' : ''}`}
-                aria-pressed={selectedActorId === actor.id}
-                className="actor-network-node"
-                key={actor.id}
-                onClick={() => onSelectActor(actor.id)}
-                style={{
-                  '--actor-x': `${position.x}%`,
-                  '--actor-y': `${position.y}%`,
-                } as CSSProperties}
-                type="button"
-              >
-                <span className="actor-network-node__heading">
-                  <strong>{actor.name}</strong>
-                  {isCurrent ? <em>当前操作者</em> : null}
-                </span>
-                <span>{actor.kind === 'agent' ? 'Agent' : '人类'} · {unfinished} 项未完成</span>
-                <span className="actor-network-node__skills">
-                  {(actor.capabilities ?? []).length
-                    ? actor.capabilities!.map((capability) => (
-                        <small key={capability}>{capability}</small>
-                      ))
-                    : <small>暂无技能</small>}
-                </span>
-              </button>
-            )
-          })}
+          </div>
         </div>
-      </div>
+      )}
 
-      {edges.length === 0 ? (
+      {actors.length > 0 && edges.length === 0 ? (
         <p className="actor-network-panel__empty">
           当前没有可由项目与任务证据确认的协作关系。
         </p>

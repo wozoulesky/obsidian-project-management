@@ -84,6 +84,17 @@ function arrangeDirectory() {
   vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue(tasks)
 }
 
+async function expandManagementDirectory(
+  user = userEvent.setup(),
+): Promise<void> {
+  const summaryLabel = await screen.findByText('管理目录')
+  const summary = summaryLabel.closest('summary')
+  if (!summary) throw new Error('管理目录摘要不存在')
+  if (!summary.closest('details')?.hasAttribute('open')) {
+    await user.click(summary)
+  }
+}
+
 describe('ActorPage', () => {
   it('shows four honest workspace metrics and defaults context to the current actor', async () => {
     arrangeDirectory()
@@ -175,6 +186,7 @@ describe('ActorPage', () => {
 
   it('keeps the nine-column management directory in a collapsible secondary region', async () => {
     arrangeDirectory()
+    const user = userEvent.setup()
 
     renderApp(<ActorPage />)
 
@@ -182,9 +194,32 @@ describe('ActorPage', () => {
       name: '协作者管理目录',
     })
     expect(within(directory).getByText('管理目录')).toBeVisible()
+    expect(directory).not.toHaveAttribute('open')
+    expect(within(directory).getByRole('table', { name: '负责人目录' }))
+      .not.toBeVisible()
+
+    await expandManagementDirectory(user)
+
     expect(within(directory).getByRole('table', { name: '负责人目录' }))
       .toBeVisible()
     expect(within(directory).getAllByRole('columnheader')).toHaveLength(9)
+  })
+
+  it('replaces an empty filtered network with guidance instead of a blank canvas', async () => {
+    vi.spyOn(projectRepository, 'listActors').mockResolvedValue([actors[0]!])
+    vi.spyOn(projectRepository, 'getCurrentActor').mockResolvedValue(actors[0]!)
+    vi.spyOn(projectRepository, 'listProjects').mockResolvedValue([])
+    vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue([])
+    const user = userEvent.setup()
+
+    renderApp(<ActorPage />)
+    const filters = await screen.findByRole('group', { name: '协作者类型筛选' })
+    await user.click(within(filters).getByRole('button', { name: 'Agent' }))
+
+    const network = screen.getByRole('region', { name: '协作者关系网络' })
+    expect(within(network).getByText('没有匹配协作者')).toBeVisible()
+    expect(within(network).getByText('请切换类型筛选。')).toBeVisible()
+    expect(network.querySelector('.actor-network-canvas')).not.toBeInTheDocument()
   })
 
   it('draws only evidence-backed edges and marks the current actor accessibly', async () => {
@@ -211,6 +246,7 @@ describe('ActorPage', () => {
     expect(relationships).toHaveTextContent(
       'Lin 与 dev-agent 通过 Atlas 的任务 MCP 权限校验协作',
     )
+    expect(relationships).not.toBeVisible()
   })
 
   it('does not invent an edge when projects and tasks share no evidence', async () => {
@@ -233,6 +269,7 @@ describe('ActorPage', () => {
     arrangeDirectory()
 
     renderApp(<ActorPage />)
+    await expandManagementDirectory()
 
     const row = await screen.findByRole('row', { name: /dev-agent/ })
     expect(within(row).getByText('Agent')).toBeVisible()
@@ -297,6 +334,7 @@ describe('ActorPage', () => {
     const user = userEvent.setup()
 
     renderApp(<ActorPage />)
+    await expandManagementDirectory(user)
     const row = await screen.findByRole('row', { name: /Lin/ })
     await user.click(within(row).getByRole('button', { name: '编辑 Lin' }))
     const name = screen.getByLabelText('姓名')
@@ -324,6 +362,7 @@ describe('ActorPage', () => {
     const user = userEvent.setup()
 
     renderApp(<ActorPage />)
+    await expandManagementDirectory(user)
     const row = await screen.findByRole('row', { name: /Lin/ })
     await user.click(
       within(row).getByRole('button', { name: '停用 Lin' }),
@@ -348,6 +387,7 @@ describe('ActorPage', () => {
       .mockResolvedValue(undefined)
 
     renderApp(<ActorPage />)
+    await expandManagementDirectory(user)
     const row = await screen.findByRole('row', { name: /dev-agent/ })
     await user.click(
       within(row).getByRole('button', { name: '复制 dev-agent 的 Agent ID' }),
@@ -370,6 +410,7 @@ describe('ActorPage', () => {
     const user = userEvent.setup()
 
     renderApp(<ActorPage />)
+    await expandManagementDirectory(user)
     const row = await screen.findByRole('row', { name: /dev-agent/ })
     expect(within(row).queryByRole('button', { name: '编辑 dev-agent' }))
       .not.toBeInTheDocument()
@@ -401,6 +442,7 @@ describe('ActorPage', () => {
     vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue([])
 
     renderApp(<ActorPage />)
+    await expandManagementDirectory()
 
     const row = await screen.findByRole('row', { name: /Inactive Lin/ })
     expect(row).toHaveAttribute('aria-disabled', 'true')
@@ -460,6 +502,7 @@ describe('ActorPage', () => {
     const user = userEvent.setup()
 
     renderApp(<ActorPage />)
+    await expandManagementDirectory(user)
     expect(await screen.findByRole('row', { name: /dev-agent/ })).toBeVisible()
     await user.click(screen.getByRole('button', { name: '新增负责人' }))
     await user.type(screen.getByLabelText('姓名'), 'Ming')

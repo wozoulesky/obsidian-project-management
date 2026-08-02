@@ -94,6 +94,28 @@
   outline-offset: 2px;
 }
 
+.actor-network-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  min-height: 7.5rem;
+  padding: 24px;
+  color: var(--text-secondary);
+  text-align: center;
+  background: color-mix(in srgb, var(--glass-surface-raised) 66%, transparent);
+  border: 1px dashed var(--glass-line-bright);
+  border-radius: var(--radius-md);
+}
+
+.actor-network-empty strong {
+  color: var(--text-primary);
+}
+
+.actor-network-empty span {
+  font-size: 0.75rem;
+}
+
 .actor-network-canvas {
   position: relative;
   min-width: 38rem;
@@ -191,6 +213,20 @@
 .actor-network-panel__empty {
   margin: 0;
   text-align: center;
+}
+
+.actor-network-panel .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  opacity: 0;
+  white-space: nowrap;
+  border: 0;
 }
 
 .actor-context-panel {
