@@ -907,6 +907,64 @@ describe('migration 002 relay schema', () => {
     ])
   })
 
+  it('preserves activity rowids and cursors from v1 through current', () => {
+    const database = createV1RelayFixture()
+    opened.push(database)
+    const insertActivity = database.prepare(`
+      INSERT INTO activities (
+        rowid, id, actor_id, project_id, source, operation, entity_type,
+        entity_id, action, note, details_json, created_at
+      ) VALUES (?, ?, 'actor-v1', 'project-v1', 'mcp', 'task.update',
+        'task', ?, ?, NULL, '{}', ?)
+    `)
+    insertActivity.run(
+      20,
+      'activity-v1-latest',
+      'task-v1-latest',
+      'latest insertion',
+      '2026-07-29T08:07:00.000Z',
+    )
+    insertActivity.run(
+      5,
+      'activity-v1-middle',
+      'task-v1-middle',
+      'middle insertion',
+      '2026-07-29T08:06:00.000Z',
+    )
+    const rowidsBefore = database.prepare(`
+      SELECT rowid, id FROM activities ORDER BY rowid
+    `).all()
+    const latestCursorBefore = new ActivityService(database).latestCursor()
+    const cursor = database.prepare(`
+      SELECT rowid AS sequence
+      FROM activities
+      WHERE id = 'activity-v1'
+    `).get() as { sequence: number }
+    const newerBefore = database.prepare(`
+      SELECT id
+      FROM activities
+      WHERE rowid > ?
+      ORDER BY rowid
+    `).all(cursor.sequence).map(({ id }) => id)
+    expect(latestCursorBefore).toBe('activity-v1-latest')
+    expect(newerBefore).toEqual([
+      'activity-v1-middle',
+      'activity-v1-latest',
+    ])
+
+    runMigrations(database)
+
+    expect(database.prepare(`
+      SELECT rowid, id FROM activities ORDER BY rowid
+    `).all()).toEqual(rowidsBefore)
+    const activitiesAfter = new ActivityService(database)
+    expect(activitiesAfter.latestCursor()).toBe(latestCursorBefore)
+    expect(activitiesAfter.listNewer({
+      after: 'activity-v1',
+      limit: 10,
+    }).map(({ id }) => id)).toEqual(newerBefore)
+  })
+
   it('adds the nullable actor briefing waterline and relay indexes', () => {
     const database = createTestDatabase()
     opened.push(database)
