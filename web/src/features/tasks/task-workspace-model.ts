@@ -8,7 +8,7 @@ export const taskStatuses = [
   'in_progress',
   'done',
   'overdue',
-] satisfies TaskStatus[]
+] as const satisfies readonly TaskStatus[]
 
 export const taskStatusLabels = {
   not_started: '未开始',
@@ -17,20 +17,14 @@ export const taskStatusLabels = {
   overdue: '已逾期',
 } satisfies Record<TaskStatus, string>
 
-const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const DAY_MS = 86_400_000
 
 function parseIsoDate(value: string): number | null {
-  const match = ISO_DATE_PATTERN.exec(value)
-  if (!match) return null
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  const timestamp = Date.UTC(year, month - 1, day)
-  const parsed = new Date(timestamp)
-  return parsed.getUTCFullYear() === year
-      && parsed.getUTCMonth() === month - 1
-      && parsed.getUTCDate() === day
+  if (!ISO_DATE_PATTERN.test(value)) return null
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`)
+  return Number.isFinite(timestamp)
+      && new Date(timestamp).toISOString().slice(0, 10) === value
     ? timestamp
     : null
 }
@@ -63,7 +57,8 @@ export function taskInsights(task: Task, today: string): string[] {
     insights.push('临近截止日期且进度偏低。')
   }
 
-  if (task.assigneeId === undefined) {
+  const assigneeId = task.assigneeId ?? task.assignee?.id
+  if (!assigneeId) {
     insights.push('尚未分配负责人。')
   }
 

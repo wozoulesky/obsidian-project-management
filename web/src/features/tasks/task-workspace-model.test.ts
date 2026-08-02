@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import type { Task } from '../../data/domain'
 import { createFixtureSeed } from '../../data/fixtures'
@@ -26,6 +26,14 @@ function fixtureTask(overrides: Partial<Task> = {}): Task {
   }
 }
 
+function malformedUnassignedTask(overrides: Partial<Task> = {}): Task {
+  // Defensive boundary coverage for malformed/legacy input missing both fields.
+  const task: Partial<Task> = fixtureTask(overrides)
+  delete task.assignee
+  delete task.assigneeId
+  return task as Task
+}
+
 describe('task workspace views', () => {
   it('defines every supported view in stable order', () => {
     expect(taskViews).toEqual(['fan', 'board', 'timeline'])
@@ -44,6 +52,15 @@ describe('task workspace views', () => {
 })
 
 describe('task workspace statuses', () => {
+  it('exposes statuses as a readonly tuple', () => {
+    expectTypeOf(taskStatuses).toEqualTypeOf<readonly [
+      'not_started',
+      'in_progress',
+      'done',
+      'overdue',
+    ]>()
+  })
+
   it('defines statuses and Chinese labels in stable order', () => {
     expect(taskStatuses).toEqual([
       'not_started',
@@ -112,8 +129,16 @@ describe('taskInsights', () => {
     ])
   })
 
-  it('reports a task without an assigneeId', () => {
-    expect(taskInsights(fixtureTask({ assigneeId: undefined }), TODAY)).toEqual([
+  it('uses the canonical assignee from an unchanged fixture task', () => {
+    const task = createFixtureSeed().tasks[0]
+    if (!task) throw new Error('expected the first fixture task')
+
+    expect(task.assigneeId).toBeUndefined()
+    expect(taskInsights(task, TODAY)).not.toContain('尚未分配负责人。')
+  })
+
+  it('defensively reports malformed legacy input without any assignee', () => {
+    expect(taskInsights(malformedUnassignedTask(), TODAY)).toEqual([
       '尚未分配负责人。',
     ])
   })
@@ -128,8 +153,7 @@ describe('taskInsights', () => {
   })
 
   it('combines independent insights in stable order', () => {
-    expect(taskInsights(fixtureTask({
-      assigneeId: undefined,
+    expect(taskInsights(malformedUnassignedTask({
       dependencyIds: ['task-001', 'task-002'],
       dueDate: '2026-08-02',
     }), TODAY)).toEqual([
@@ -159,6 +183,26 @@ describe('taskInsights', () => {
       dueDate: '2026-08-01',
       progress: 0,
     }), 'not-a-date')).toEqual([
+      '当前任务未发现明确风险。',
+    ])
+  })
+
+  it.each([
+    ['0000-01-01', '0000-01-01'],
+    ['0099-12-31', '0099-12-31'],
+    ['0100-01-01', '0100-01-01'],
+    ['0000-02-29', '0000-02-29'],
+  ])('supports valid early ISO dates from %s through %s', (today, dueDate) => {
+    expect(taskInsights(fixtureTask({ dueDate, progress: 0 }), today)).toEqual([
+      '临近截止日期且进度偏低。',
+    ])
+  })
+
+  it.each([
+    ['0099-02-29', '0099-02-28'],
+    ['0100-02-29', '0100-02-28'],
+  ])('rejects invalid non-leap date %s', (dueDate, today) => {
+    expect(taskInsights(fixtureTask({ dueDate, progress: 0 }), today)).toEqual([
       '当前任务未发现明确风险。',
     ])
   })

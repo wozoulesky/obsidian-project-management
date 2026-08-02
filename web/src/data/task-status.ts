@@ -6,5 +6,6 @@ export function progressForStatus(
 ): number {
   if (status === 'not_started') return 0
   if (status === 'done') return 100
-  return Math.min(99, Math.max(1, currentProgress))
+  if (!Number.isFinite(currentProgress)) return 1
+  return Math.min(99, Math.max(1, Math.round(currentProgress)))
 }
