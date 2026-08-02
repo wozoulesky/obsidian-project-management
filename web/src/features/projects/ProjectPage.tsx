@@ -71,12 +71,20 @@ export function ProjectPage() {
   )
 
   useEffect(() => {
-    if (location.state === null) return
+    if (
+      !projectNotice
+      || typeof location.state !== 'object'
+      || location.state === null
+      || !('projectNotice' in location.state)
+    ) return
+    const remainingState = Object.fromEntries(
+      Object.entries(location.state).filter(([key]) => key !== 'projectNotice'),
+    )
     void navigate(`${location.pathname}${location.search}`, {
       replace: true,
-      state: null,
+      state: Object.keys(remainingState).length > 0 ? remainingState : null,
     })
-  }, [location.pathname, location.search, location.state, navigate])
+  }, [location.pathname, location.search, location.state, navigate, projectNotice])
 
   const updateFilter = (key: 'owner' | 'q', value: string) => {
     const next = new URLSearchParams(searchParams)

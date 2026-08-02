@@ -701,6 +701,7 @@
 
   .project-delete-dialog__panel {
     max-height: calc(100vh - var(--space-4));
+    max-height: calc(100dvh - var(--space-4));
     padding: var(--space-4);
   }
 

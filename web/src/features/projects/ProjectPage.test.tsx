@@ -154,6 +154,22 @@ describe('ProjectPage', () => {
     expect(screen.queryByText(notice)).not.toBeInTheDocument()
   })
 
+  it('consumes only a valid deletion notice and preserves unrelated route state', async () => {
+    mockPortfolio()
+    const notice = `已永久删除项目 ${projects[0]!.name}`
+    const state = { projectNotice: notice, returnTo: '/x' }
+
+    renderApp(<ProjectPageWithNavigationState state={state} />, {
+      route: '/notice-setup',
+    })
+
+    expect(await screen.findByText(notice)).toHaveAttribute('role', 'status')
+    await vi.waitFor(() => {
+      expect(window.history.state.usr).toEqual({ returnTo: '/x' })
+    })
+    expect(state).toEqual({ projectNotice: notice, returnTo: '/x' })
+  })
+
   it.each([
     ['non-string', { projectNotice: { text: '伪造消息' } }],
     ['unexpected message', { projectNotice: '<script>alert(1)</script>' }],
@@ -181,6 +197,7 @@ describe('ProjectPage', () => {
 
     await screen.findByRole('article', { name: projects[0]!.name })
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(window.history.state.usr).toEqual(state)
   })
 
   it('shows honest portfolio metrics and filters the matrix by derived health', async () => {

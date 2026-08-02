@@ -47,6 +47,10 @@ export function DeleteProjectDialog({
     if (errorMessage) errorRef.current?.focus()
   }, [errorMessage])
 
+  useEffect(() => {
+    if (deleteProject.isPending) dialogRef.current?.focus()
+  }, [deleteProject.isPending])
+
   const close = () => {
     if (submissionRef.current || deleteProject.isPending) return
     onClose()
@@ -88,7 +92,11 @@ export function DeleteProjectDialog({
     )
     const first = focusable[0]
     const last = focusable.at(-1)
-    if (!first || !last) return
+    if (!first || !last) {
+      event.preventDefault()
+      dialogRef.current?.focus()
+      return
+    }
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault()
       last.focus()
@@ -107,6 +115,7 @@ export function DeleteProjectDialog({
       onKeyDown={handleKeyDown}
       ref={dialogRef}
       role="dialog"
+      tabIndex={-1}
     >
       <form
         aria-busy={deleteProject.isPending}

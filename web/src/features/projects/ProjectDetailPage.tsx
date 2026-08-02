@@ -160,6 +160,7 @@ export function ProjectDetailPage() {
   const actionsRef = useRef<HTMLDivElement | null>(null)
   const actionsTriggerRef = useRef<HTMLButtonElement | null>(null)
   const deleteOpenerRef = useRef<HTMLButtonElement | null>(null)
+  const protectedItemRef = useRef<HTMLParagraphElement | null>(null)
 
   const actorById = useMemo(
     () => new Map((actorsQuery.data ?? []).map((actor) => [actor.id, actor])),
@@ -181,6 +182,7 @@ export function ProjectDetailPage() {
   const canDelete = Boolean(
     project
     && currentActor?.kind === 'human'
+    && currentActor.status === 'active'
     && !isDefaultProject
     && (
       currentActor.role === 'owner'
@@ -201,19 +203,24 @@ export function ProjectDetailPage() {
 
   useEffect(() => {
     if (actionsMenuOpen && !deleteDialogOpen) {
-      deleteOpenerRef.current?.focus()
+      const firstMenuItem = deleteOpenerRef.current ?? protectedItemRef.current
+      firstMenuItem?.focus()
     }
   }, [actionsMenuOpen, deleteDialogOpen])
 
   const coreQueries = [
     projectsQuery,
     projectQuery,
-    currentActorQuery,
     actorsQuery,
     membersQuery,
     tasksQuery,
   ]
-  const allQueries = [...coreQueries, handoffsQuery, deliverablesQuery]
+  const allQueries = [
+    ...coreQueries,
+    currentActorQuery,
+    handoffsQuery,
+    deliverablesQuery,
+  ]
   const initialErrorQuery = coreQueries.find(
     (query) => query.isError && query.data === undefined,
   )
@@ -240,11 +247,11 @@ export function ProjectDetailPage() {
     }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     const items = Array.from(
-      actionsRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [],
+      actionsRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
     )
     if (!items.length) return
     event.preventDefault()
-    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement)
     const direction = event.key === 'ArrowDown' ? 1 : -1
     items[(currentIndex + direction + items.length) % items.length]?.focus()
   }
@@ -315,7 +322,19 @@ export function ProjectDetailPage() {
                   新建任务
                 </Button>
                 {canDelete || isDefaultProject ? (
-                  <div className="project-detail__more" ref={actionsRef}>
+                  <div
+                    className="project-detail__more"
+                    onBlur={(event) => {
+                      if (deleteDialogOpen) return
+                      if (
+                        !event.relatedTarget
+                        || !actionsRef.current?.contains(event.relatedTarget)
+                      ) {
+                        setActionsMenuOpen(false)
+                      }
+                    }}
+                    ref={actionsRef}
+                  >
                     <Button
                       aria-expanded={actionsMenuOpen}
                       aria-haspopup="menu"
@@ -348,7 +367,14 @@ export function ProjectDetailPage() {
                         role="menu"
                       >
                         {isDefaultProject ? (
-                          <p>默认项目受保护，无法删除</p>
+                          <p
+                            aria-disabled="true"
+                            ref={protectedItemRef}
+                            role="menuitem"
+                            tabIndex={-1}
+                          >
+                            默认项目受保护，无法删除
+                          </p>
                         ) : (
                           <button
                             className="project-detail__delete-action"

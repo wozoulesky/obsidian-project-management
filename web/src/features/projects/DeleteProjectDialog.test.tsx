@@ -115,7 +115,18 @@ describe('DeleteProjectDialog', () => {
     })
     const deleteProject = vi.spyOn(projectRepository, 'deleteProject')
       .mockReturnValue(deletion)
-    const { onClose, onDeleted } = renderDialog()
+    const onClose = vi.fn()
+    const onDeleted = vi.fn()
+    renderApp(
+      <>
+        <button type="button">背景操作</button>
+        <DeleteProjectDialog
+          onClose={onClose}
+          onDeleted={onDeleted}
+          project={project}
+        />
+      </>,
+    )
     const confirmation = screen.getByLabelText(`输入 ${project.name} 以确认`)
     await user.type(confirmation, project.name)
 
@@ -124,6 +135,15 @@ describe('DeleteProjectDialog', () => {
     expect(screen.getByRole('button', { name: '正在永久删除…' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '关闭永久删除项目' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '取消' })).toBeDisabled()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAttribute('tabindex', '-1')
+    await vi.waitFor(() => expect(dialog).toHaveFocus())
+
+    await user.tab()
+    expect(dialog).toHaveFocus()
+    expect(screen.getByRole('button', { name: '背景操作' })).not.toHaveFocus()
+    await user.tab({ shift: true })
+    expect(dialog).toHaveFocus()
 
     await user.keyboard('{Escape}')
     await user.click(screen.getByRole('button', { name: '关闭永久删除项目' }))

@@ -14,6 +14,7 @@ import type {
 import { projectRepository } from '../../data/query-hooks'
 import { ProjectDetailPage } from './ProjectDetailPage'
 import projectDetailSource from './ProjectDetailPage.tsx?raw'
+import projectsGlassSource from './projects-glass.css?raw'
 
 const owner: Actor = {
   id: 'owner-active',
@@ -173,6 +174,49 @@ describe('ProjectDetailPage', () => {
     expect(projectDetailSource).toContain("import './projects-glass.css'")
   })
 
+  it('keeps a 100vh fallback before the mobile dynamic viewport height', () => {
+    const fallback = 'max-height: calc(100vh - var(--space-4));'
+    const dynamicViewport = 'max-height: calc(100dvh - var(--space-4));'
+    expect(projectsGlassSource.indexOf(fallback)).toBeGreaterThan(-1)
+    expect(projectsGlassSource.indexOf(dynamicViewport)).toBeGreaterThan(
+      projectsGlassSource.indexOf(fallback),
+    )
+  })
+
+  it('renders readable project detail while current actor identity is pending', async () => {
+    mockDetail()
+    vi.mocked(projectRepository.getCurrentActor).mockImplementation(
+      () => new Promise<Actor>(() => undefined),
+    )
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    expect(await screen.findByRole('heading', {
+      level: 1,
+      name: project.name,
+    })).toBeVisible()
+    expect(screen.getByText(project.description)).toBeVisible()
+    expect(screen.queryByRole('button', { name: '更多操作' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('renders readable project detail when current actor identity fails', async () => {
+    mockDetail()
+    vi.mocked(projectRepository.getCurrentActor).mockRejectedValue(
+      new Error('当前身份不可用'),
+    )
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    expect(await screen.findByRole('heading', {
+      level: 1,
+      name: project.name,
+    })).toBeVisible()
+    expect(screen.getByText(project.description)).toBeVisible()
+    expect(screen.queryByRole('button', { name: '更多操作' }))
+      .not.toBeInTheDocument()
+  })
+
   it.each([
     {
       label: 'system owner',
@@ -206,6 +250,26 @@ describe('ProjectDetailPage', () => {
         client: 'Codex',
       } satisfies Actor,
       projectOwnerId: 'dev-agent-owner',
+      visible: false,
+    },
+    {
+      label: 'inactive system owner',
+      actor: {
+        ...owner,
+        id: 'inactive-system-owner',
+        status: 'inactive',
+      } satisfies Actor,
+      projectOwnerId: owner.id,
+      visible: false,
+    },
+    {
+      label: 'inactive project primary owner',
+      actor: {
+        ...owner,
+        role: 'member',
+        status: 'inactive',
+      } satisfies Actor,
+      projectOwnerId: owner.id,
       visible: false,
     },
   ])('shows delete access correctly for $label', async ({
@@ -269,6 +333,20 @@ describe('ProjectDetailPage', () => {
     expect(screen.getByRole('menuitem', { name: '删除项目' })).toHaveFocus()
   })
 
+  it('closes the actions menu when Tab moves focus outside it', async () => {
+    const user = userEvent.setup()
+    mockDetail()
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+    const trigger = await screen.findByRole('button', { name: '更多操作' })
+
+    await user.click(trigger)
+    expect(screen.getByRole('menuitem', { name: '删除项目' })).toHaveFocus()
+    await user.tab()
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
+
   it('explains that the default project is protected without a delete action', async () => {
     const user = userEvent.setup()
     const defaultProject = {
@@ -288,7 +366,13 @@ describe('ProjectDetailPage', () => {
 
     await user.click(await screen.findByRole('button', { name: '更多操作' }))
     const menu = screen.getByRole('menu')
-    expect(within(menu).getByText('默认项目受保护，无法删除')).toBeVisible()
+    const explanation = within(menu).getByRole('menuitem', {
+      name: '默认项目受保护，无法删除',
+    })
+    expect(explanation).toHaveAttribute('aria-disabled', 'true')
+    expect(explanation).toHaveAttribute('tabindex', '-1')
+    expect(explanation).toHaveFocus()
+    expect(explanation.tagName).toBe('P')
     expect(within(menu).queryByRole('menuitem', { name: '删除项目' }))
       .not.toBeInTheDocument()
 
