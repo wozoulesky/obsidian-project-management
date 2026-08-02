@@ -1,6 +1,5 @@
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Task } from '../../data/domain'
-import { TaskFilters } from './TaskFilters'
 
 const statusLabels: Record<Task['status'], string> = {
   not_started: '未开始',
@@ -37,7 +36,6 @@ export function TaskCompactList({
         </div>
         <span>{tasks.length} 项</span>
       </header>
-      <TaskFilters tasks={allTasks} />
       <div className="task-list-scroll">
         {tasks.length === 0 ? (
           <p className="task-list-empty" role="status">

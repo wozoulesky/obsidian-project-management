@@ -13,7 +13,7 @@ import { useTasks } from '../../data/query-hooks'
 import { DeliveryTimeline } from './DeliveryTimeline'
 import { TaskCompactList } from './TaskCompactList'
 import { TaskContextPanel } from './TaskContextPanel'
-import { filterTasks } from './TaskFilters'
+import { filterTasks, TaskFilters } from './TaskFilters'
 import { prioritizeFanTasks, TaskFan } from './TaskFan'
 import './tasks-glass.css'
 
@@ -137,6 +137,9 @@ export function TaskPage() {
           </GlassPanel>
         ))}
       </MetricGrid>
+      <div className="task-filter-toolbar" data-testid="task-filter-toolbar">
+        <TaskFilters tasks={tasks} />
+      </div>
       <div className="task-workspace" data-testid="task-workspace">
         <TaskCompactList
           allTasks={tasks}

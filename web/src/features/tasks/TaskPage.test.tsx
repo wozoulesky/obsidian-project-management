@@ -21,6 +21,7 @@ import {
   projectRepository,
 } from '../../data/query-hooks'
 import { filterTasks } from './TaskFilters'
+import { TaskContextPanel } from './TaskContextPanel'
 import { TaskInspector } from './TaskInspector'
 import { TaskPage } from './TaskPage'
 import { TaskTable } from './TaskTable'
@@ -153,14 +154,19 @@ describe('TaskPage workflow', () => {
     const { container } = renderApp(<TaskPage />)
 
     const workspace = await screen.findByTestId('task-workspace')
+    const filterToolbar = screen.getByTestId('task-filter-toolbar')
+    expect(
+      within(filterToolbar).getByRole('region', { name: '任务筛选' }),
+    ).toBeVisible()
     expect(
       Array.from(workspace.children).map((node) =>
         node.getAttribute('data-slot'),
       ),
     ).toEqual(['list', 'fan', 'context'])
-    expect(
-      within(workspace).getByRole('region', { name: '任务列表' }),
-    ).toBeVisible()
+    const list = within(workspace).getByRole('region', { name: '任务列表' })
+    expect(list).toBeVisible()
+    expect(within(list).queryByRole('region', { name: '任务筛选' }))
+      .not.toBeInTheDocument()
     expect(
       within(workspace).getByRole('region', { name: '关键任务扇面' }),
     ).toBeVisible()
@@ -168,6 +174,8 @@ describe('TaskPage workflow', () => {
       name: '智能任务上下文',
     })
     expect(context).toHaveTextContent('首要风险任务')
+    expect(context.querySelector('.task-context__scroll')).toBeVisible()
+    expect(context).toHaveTextContent('项目 atlas')
     const synchronizedTriggers = within(workspace).getAllByRole('button', {
       name: /首要风险任务/,
     })
@@ -180,6 +188,20 @@ describe('TaskPage workflow', () => {
 
     const timeline = screen.getByRole('region', { name: '独立交付时间线' })
     expect(timeline).toBe(container.querySelector('.task-workspace')?.nextElementSibling)
+    expect(filterToolbar.nextElementSibling).toBe(workspace)
+  })
+
+  it('shortens opaque project ids in the persistent context', () => {
+    const opaqueProjectId = '7ff2589e-b92c-44e2-812c-00997cdd4527'
+    renderApp(
+      <TaskContextPanel
+        task={task({ projectId: opaqueProjectId })}
+      />,
+    )
+
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    expect(context).not.toHaveTextContent(opaqueProjectId)
+    expect(context).toHaveTextContent('项目 7ff2589e…4527')
   })
 
   it('uses the shared glass header and derives four metrics from task data', async () => {
@@ -375,6 +397,15 @@ describe('TaskPage workflow', () => {
     )
     expect(tasksGlassCss).toMatch(
       /\.task-fan__scroll,[^}]*\.delivery-timeline__scroll\s*{[^}]*overflow-x:\s*auto/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-workspace\s*{[^}]*height:\s*clamp\(350px,\s*42vh,\s*380px\)/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-context__scroll\s*{[^}]*min-height:\s*0[^}]*overflow-y:\s*auto/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-filter-toolbar\s+\.task-filters\s*{[^}]*grid-template-columns:[^}]*overflow:\s*visible/s,
     )
   })
 

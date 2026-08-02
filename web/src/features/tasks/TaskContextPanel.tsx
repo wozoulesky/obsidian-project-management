@@ -15,6 +15,13 @@ export interface TaskContextPanelProps {
   task: Task | null
 }
 
+function projectLabel(projectId: string): string {
+  const readableId = projectId.length > 24
+    ? `${projectId.slice(0, 8)}…${projectId.slice(-4)}`
+    : projectId
+  return `项目 ${readableId}`
+}
+
 export function TaskContextPanel({
   dataSlot,
   task,
@@ -37,11 +44,14 @@ export function TaskContextPanel({
         </span>
       </header>
       {task ? (
-        <div className="task-context__body">
+        <div className="task-context__scroll">
           <dl className="task-context__details">
             <div><dt>编号</dt><dd>{task.code}</dd></div>
             <div><dt>负责人</dt><dd>{task.assignee.name}</dd></div>
-            <div><dt>所属项目</dt><dd>{task.projectId ?? projectId}</dd></div>
+            <div>
+              <dt>所属项目</dt>
+              <dd>{projectLabel(task.projectId ?? projectId)}</dd>
+            </div>
             <div><dt>优先级</dt><dd>{task.priority}</dd></div>
             <div><dt>截止日期</dt><dd>{task.dueDate}</dd></div>
             <div>

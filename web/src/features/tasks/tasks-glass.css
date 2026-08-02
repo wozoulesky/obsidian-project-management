@@ -382,6 +382,7 @@
 /* Approved task-console signature workspace. */
 .task-workspace {
   display: grid;
+  height: clamp(350px, 42vh, 380px);
   min-width: 0;
   grid-template-columns: minmax(210px, 0.46fr) minmax(0, 1fr) minmax(250px, 0.5fr);
   gap: 14px;
@@ -390,8 +391,12 @@
 .task-list-panel,
 .task-fan-stage,
 .task-context {
+  display: grid;
+  height: 100%;
   min-width: 0;
-  min-height: 350px;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .task-list-panel,
@@ -431,27 +436,30 @@
   font-variant-numeric: tabular-nums;
 }
 
-.task-list-panel .task-filters {
-  display: flex;
-  max-width: 100%;
+.task-filter-toolbar {
+  min-width: 0;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--glass-surface-raised) 82%, transparent);
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+}
+
+.task-filter-toolbar .task-filters {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto repeat(4, minmax(110px, 1fr));
   align-items: end;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding-bottom: 5px;
-  overflow-x: auto;
+  gap: 8px;
+  padding: 0;
+  overflow: visible;
 }
 
-.task-list-panel .task-filters > * {
-  min-width: 6.75rem;
-  flex: 0 0 auto;
-}
-
-.task-list-panel .task-filters__overdue {
-  min-width: auto;
+.task-filter-toolbar .task-filters > * {
+  min-width: 0;
 }
 
 .task-list-scroll {
-  max-height: 226px;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-color: color-mix(in srgb, var(--primary) 34%, transparent) transparent;
   scrollbar-width: thin;
@@ -537,6 +545,7 @@
 }
 
 .task-fan__scroll {
+  min-height: 0;
   overflow-y: hidden;
 }
 
@@ -630,6 +639,14 @@
   line-height: 1.55;
 }
 
+.task-context__scroll {
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
+  scrollbar-color: color-mix(in srgb, var(--primary) 34%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
 .task-context .task-inspector__form {
   gap: 8px;
 }
@@ -716,16 +733,31 @@
 
 @media (max-width: 1180px) {
   .task-workspace {
+    height: auto;
     grid-template-columns: minmax(210px, 0.44fr) minmax(0, 1fr);
   }
 
+  .task-list-panel,
+  .task-fan-stage {
+    min-height: 350px;
+  }
+
   .task-context {
+    height: auto;
     min-height: auto;
     grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 760px) {
+  .task-filter-toolbar .task-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .task-filter-toolbar .task-filters__overdue {
+    grid-column: 1 / -1;
+  }
+
   .task-workspace {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -736,6 +768,14 @@
 }
 
 @media (max-width: 600px) {
+  .task-filter-toolbar .task-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .task-filter-toolbar .task-filters__overdue {
+    grid-column: auto;
+  }
+
   .task-fan__scroll {
     scroll-snap-type: x mandatory;
   }
