@@ -456,7 +456,19 @@ describe('TaskPage workflow', () => {
       /\.task-page\s*{[^}]*overflow-x:\s*clip/s,
     )
     expect(tasksGlassCss).toMatch(
-      /\.task-fan__scroll,[^}]*\.delivery-timeline__scroll\s*{[^}]*overflow-x:\s*auto/s,
+      /\.task-timeline__scroll\s*{[^}]*min-width:\s*0[^}]*overflow-x:\s*auto[^}]*overscroll-behavior-inline:\s*contain/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-timeline__chart\s*{[^}]*position:\s*relative[^}]*min-width:\s*46rem/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-timeline__track\s*{[^}]*position:\s*relative[^}]*min-width:\s*28rem/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-timeline__bar\s*{[^}]*position:\s*absolute/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-timeline__today\s*{[^}]*position:\s*absolute/s,
     )
     expect(tasksGlassCss).toMatch(
       /\.task-workspace\s*{[^}]*height:\s*clamp\(350px,\s*42vh,\s*380px\)/s,

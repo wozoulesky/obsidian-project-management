@@ -125,7 +125,12 @@ test('390px complex workspaces keep wide content inside local scroll regions', a
 
   await openReadyPage(page, '/tasks')
   await expectLocalHorizontalScroll(page.locator('.task-fan__scroll'))
-  await expectLocalHorizontalScroll(page.locator('.delivery-timeline__scroll'))
+
+  await openReadyPage(page, '/tasks?view=timeline')
+  const taskTimeline = page.locator('.task-timeline__scroll')
+  await expectLocalHorizontalScroll(taskTimeline)
+  await taskTimeline.focus()
+  await expect(taskTimeline).toBeFocused()
 
   await openReadyPage(page, '/gantt')
   await expectLocalHorizontalScroll(page.locator('.gantt-timeline'))
