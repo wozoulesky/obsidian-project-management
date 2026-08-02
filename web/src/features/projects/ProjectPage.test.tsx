@@ -1,5 +1,7 @@
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderApp } from '../../app/test-utils'
@@ -73,7 +75,54 @@ function mockPortfolio() {
   vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue([])
 }
 
+function ProjectPageWithNavigationState({ state }: { state: unknown }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (location.pathname === '/notice-setup') {
+      navigate('/projects?owner=owner-active', { replace: true, state })
+    }
+  }, [location.pathname, navigate, state])
+
+  return location.pathname === '/projects' ? <ProjectPage /> : null
+}
+
 describe('ProjectPage', () => {
+  it('consumes a valid deletion notice once while preserving the current render', async () => {
+    mockPortfolio()
+    const notice = `已永久删除项目 ${projects[0]!.name}`
+
+    renderApp(<ProjectPageWithNavigationState state={{ projectNotice: notice }} />, {
+      route: '/notice-setup',
+    })
+
+    const renderedNotice = await screen.findByText(notice)
+    expect(renderedNotice).toHaveAttribute('role', 'status')
+    expect(window.location.pathname).toBe('/projects')
+    expect(window.location.search).toBe('?owner=owner-active')
+    expect(window.history.state.usr).toBeNull()
+    expect(renderedNotice).toHaveTextContent(notice)
+  })
+
+  it.each([
+    ['non-string', { projectNotice: { text: '伪造消息' } }],
+    ['unexpected message', { projectNotice: '<script>alert(1)</script>' }],
+    [
+      'prefixed markup',
+      { projectNotice: '已永久删除项目 <img src=x onerror=alert(1)>' },
+    ],
+    ['unrelated state', { anotherKey: '已永久删除项目 Atlas' }],
+  ])('does not render a %s project notice', async (_, state) => {
+    mockPortfolio()
+    renderApp(<ProjectPageWithNavigationState state={state} />, {
+      route: '/notice-setup',
+    })
+
+    await screen.findByRole('article', { name: projects[0]!.name })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
   it('shows honest portfolio metrics and filters the matrix by derived health', async () => {
     const user = userEvent.setup()
     const today = new Date()

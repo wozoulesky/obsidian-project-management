@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   EmptyState,
@@ -28,10 +28,24 @@ import {
 import './projects-glass.css'
 
 export function ProjectPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const projectsQuery = useProjects()
   const actorsQuery = useActors()
   const tasksQuery = useAllTasks()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [projectNotice] = useState(() => {
+    if (typeof location.state !== 'object' || location.state === null) return null
+    if (!('projectNotice' in location.state)) return null
+    const notice = location.state.projectNotice
+    if (
+      typeof notice !== 'string'
+      || !/^已永久删除项目 [^<>]+$/.test(notice)
+      || notice.length > 200
+      || Array.from(notice).some((character) => character.charCodeAt(0) < 32)
+    ) return null
+    return notice
+  })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [healthFilter, setHealthFilter] = useState<'all' | ProjectHealth>('all')
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
@@ -46,6 +60,14 @@ export function ProjectPage() {
     () => new Map(actors.map((actor) => [actor.id, actor])),
     [actors],
   )
+
+  useEffect(() => {
+    if (location.state === null) return
+    void navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    })
+  }, [location.pathname, location.search, location.state, navigate])
 
   const updateFilter = (key: 'owner' | 'q', value: string) => {
     const next = new URLSearchParams(searchParams)
@@ -171,6 +193,10 @@ export function ProjectPage() {
         subtitle="按负责人和关键词筛选真实项目，并在不离开矩阵的情况下查看摘要。"
         title={<span id="project-page-title">全部项目</span>}
       />
+
+      {projectNotice ? (
+        <p className="project-page__notice" role="status">{projectNotice}</p>
+      ) : null}
 
       {isPending ? <LoadingState label="正在加载项目" /> : null}
       {!isPending && initialErrorQuery ? (
