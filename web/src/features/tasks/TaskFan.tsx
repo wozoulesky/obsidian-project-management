@@ -10,28 +10,59 @@ const statusLabels: Record<Task['status'], string> = {
   overdue: '逾期',
 }
 
+const statusRank: Record<Task['status'], number> = {
+  overdue: 0,
+  in_progress: 1,
+  not_started: 2,
+  done: 3,
+}
+
+const priorityRank: Record<Task['priority'], number> = {
+  P0: 0,
+  P1: 1,
+  P2: 2,
+  P3: 3,
+}
+
+// Kept pure so list, fan and URL fallback can share one deterministic order.
+// eslint-disable-next-line react-refresh/only-export-components
+export function prioritizeFanTasks(tasks: readonly Task[]): Task[] {
+  return [...tasks].sort((left, right) =>
+    statusRank[left.status] - statusRank[right.status]
+    || priorityRank[left.priority] - priorityRank[right.priority]
+    || left.dueDate.localeCompare(right.dueDate)
+    || left.id.localeCompare(right.id),
+  )
+}
+
 export interface TaskFanProps {
+  dataSlot?: string
   onSelect: (taskId: string, triggerId: string) => void
   selectedTaskId: string | null
   tasks: readonly Task[]
 }
 
 export function TaskFan({
+  dataSlot,
   onSelect,
   selectedTaskId,
   tasks,
 }: TaskFanProps) {
-  const visibleTasks = tasks.slice(0, 6)
+  const visibleTasks = prioritizeFanTasks(tasks).slice(0, 6)
   const listStyle = {
     '--task-fan-count': Math.max(visibleTasks.length, 1),
   } as CSSProperties
 
   return (
-    <GlassPanel ariaLabel="任务扇面" className="task-fan">
+    <GlassPanel
+      ariaLabel="关键任务扇面"
+      className="task-fan task-fan-stage"
+      data-slot={dataSlot}
+    >
       <header className="task-fan__header">
         <div>
           <p>PRIORITY STACK</p>
-          <h2>任务扇面</h2>
+          <h2>关键任务扇面</h2>
         </div>
         <span>{visibleTasks.length} / 最多 6 项</span>
       </header>

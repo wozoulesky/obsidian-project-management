@@ -19,7 +19,7 @@ export interface TaskInspectorProps {
   task: Task
 }
 
-function TaskInspectorFields({ task }: { task: Task }) {
+export function TaskProgressForm({ task }: { task: Task }) {
   const updateProgress = useUpdateTaskProgress()
   const [progress, setProgress] = useState(String(task.progress))
   const [status, setStatus] = useState<TaskStatus>(task.status)
@@ -56,85 +56,56 @@ function TaskInspectorFields({ task }: { task: Task }) {
   }
 
   return (
-    <div className="task-inspector">
-      <dl className="task-inspector__details">
-        <div>
-          <dt>编号</dt>
-          <dd>{task.code}</dd>
-        </div>
-        <div>
-          <dt>负责人</dt>
-          <dd>{task.assignee.name}</dd>
-        </div>
-        <div>
-          <dt>开始日期</dt>
-          <dd>{task.startDate}</dd>
-        </div>
-        <div>
-          <dt>截止日期</dt>
-          <dd>{task.dueDate}</dd>
-        </div>
-        <div>
-          <dt>优先级</dt>
-          <dd>{task.priority}</dd>
-        </div>
-        <div>
-          <dt>依赖</dt>
-          <dd>{task.dependencyIds.join('、') || '无'}</dd>
-        </div>
-      </dl>
-      <p className="task-inspector__description">{task.description}</p>
-      <form
-        className="task-inspector__form"
-        noValidate
-        onSubmit={handleSubmit}
-      >
-        <label>
-          任务进度
-          <input
-            inputMode="numeric"
-            max="100"
-            min="0"
-            onChange={(event) => setProgress(event.target.value)}
-            step="1"
-            type="number"
-            value={progress}
-          />
-        </label>
-        <label>
-          状态
-          <select
-            onChange={(event) =>
-              setStatus(event.target.value as TaskStatus)
-            }
-            value={status}
-          >
-            {Object.entries(statusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          进度备注
-          <textarea
-            onChange={(event) => setNote(event.target.value)}
-            rows={3}
-            value={note}
-          />
-        </label>
-        {formError ? <p role="alert">{formError}</p> : null}
-        <Button
-          aria-label="提交进度"
-          disabled={updateProgress.isPending}
-          type="submit"
-          variant="primary"
+    <form
+      className="task-inspector__form"
+      noValidate
+      onSubmit={handleSubmit}
+    >
+      <label>
+        任务进度
+        <input
+          inputMode="numeric"
+          max="100"
+          min="0"
+          onChange={(event) => setProgress(event.target.value)}
+          step="1"
+          type="number"
+          value={progress}
+        />
+      </label>
+      <label>
+        状态
+        <select
+          onChange={(event) =>
+            setStatus(event.target.value as TaskStatus)
+          }
+          value={status}
         >
-          {updateProgress.isPending ? '正在提交…' : '提交进度'}
-        </Button>
-      </form>
-    </div>
+          {Object.entries(statusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        进度备注
+        <textarea
+          onChange={(event) => setNote(event.target.value)}
+          rows={3}
+          value={note}
+        />
+      </label>
+      {formError ? <p role="alert">{formError}</p> : null}
+      <Button
+        aria-label="提交进度"
+        disabled={updateProgress.isPending}
+        type="submit"
+        variant="primary"
+      >
+        {updateProgress.isPending ? '正在提交…' : '提交进度'}
+      </Button>
+    </form>
   )
 }
 
@@ -151,7 +122,18 @@ export function TaskInspector({
       returnFocusId={returnFocusId ?? `task-trigger-${task.id}`}
       title={task.title}
     >
-      <TaskInspectorFields key={task.id} task={task} />
+      <div className="task-inspector">
+        <dl className="task-inspector__details">
+          <div><dt>编号</dt><dd>{task.code}</dd></div>
+          <div><dt>负责人</dt><dd>{task.assignee.name}</dd></div>
+          <div><dt>开始日期</dt><dd>{task.startDate}</dd></div>
+          <div><dt>截止日期</dt><dd>{task.dueDate}</dd></div>
+          <div><dt>优先级</dt><dd>{task.priority}</dd></div>
+          <div><dt>依赖</dt><dd>{task.dependencyIds.join('、') || '无'}</dd></div>
+        </dl>
+        <p className="task-inspector__description">{task.description}</p>
+        <TaskProgressForm key={task.id} task={task} />
+      </div>
     </EntityInspector>
   )
 }

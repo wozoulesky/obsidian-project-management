@@ -1,8 +1,6 @@
-import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import {
-  EmptyState,
   ErrorState,
   LoadingState,
   RefreshState,
@@ -13,10 +11,10 @@ import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Task } from '../../data/domain'
 import { useTasks } from '../../data/query-hooks'
 import { DeliveryTimeline } from './DeliveryTimeline'
-import { filterTasks, TaskFilters } from './TaskFilters'
-import { TaskFan } from './TaskFan'
-import { TaskInspector } from './TaskInspector'
-import { TaskTable } from './TaskTable'
+import { TaskCompactList } from './TaskCompactList'
+import { TaskContextPanel } from './TaskContextPanel'
+import { filterTasks } from './TaskFilters'
+import { prioritizeFanTasks, TaskFan } from './TaskFan'
 import './tasks-glass.css'
 
 const metricCopy = {
@@ -50,10 +48,6 @@ function taskMetrics(tasks: readonly Task[], today: string) {
 export function TaskPage() {
   const tasksQuery = useTasks()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectionTrigger, setSelectionTrigger] = useState<{
-    id: string
-    taskId: string
-  } | null>(null)
   const now = new Date()
   const today = [
     String(now.getFullYear()).padStart(4, '0'),
@@ -62,9 +56,13 @@ export function TaskPage() {
   ].join('-')
   const tasks = tasksQuery.data ?? []
   const filteredTasks = filterTasks(tasks, searchParams)
-  const selectedTaskId = searchParams.get('selected')
+  const requestedTaskId = searchParams.get('selected')
+  const prioritizedTasks = prioritizeFanTasks(filteredTasks)
   const selectedTask =
-    filteredTasks.find((task) => task.id === selectedTaskId) ?? null
+    filteredTasks.find((task) => task.id === requestedTaskId)
+    ?? prioritizedTasks[0]
+    ?? null
+  const selectedTaskId = selectedTask?.id ?? null
   const metrics = taskMetrics(filteredTasks, today)
 
   const setSelectedTaskId = (taskId: string | null) => {
@@ -79,8 +77,7 @@ export function TaskPage() {
     })
   }
 
-  const selectTask = (taskId: string, triggerId: string) => {
-    setSelectionTrigger({ id: triggerId, taskId })
+  const selectTask = (taskId: string) => {
     setSelectedTaskId(taskId)
   }
 
@@ -140,52 +137,30 @@ export function TaskPage() {
           </GlassPanel>
         ))}
       </MetricGrid>
-      <div className="task-console__hero">
-        <TaskFan
+      <div className="task-workspace" data-testid="task-workspace">
+        <TaskCompactList
+          allTasks={tasks}
+          dataSlot="list"
           onSelect={selectTask}
           selectedTaskId={selectedTaskId}
           tasks={filteredTasks}
         />
-        <DeliveryTimeline
+        <TaskFan
+          dataSlot="fan"
+          onSelect={selectTask}
           selectedTaskId={selectedTaskId}
           tasks={filteredTasks}
         />
+        <TaskContextPanel
+          dataSlot="context"
+          task={selectedTask}
+        />
       </div>
-      <GlassPanel ariaLabel="任务清单" className="task-console__list">
-        <header className="task-console__list-header">
-          <div>
-            <p>FULL TASK INDEX</p>
-            <h2>全部任务</h2>
-          </div>
-          <span>{filteredTasks.length} 项结果</span>
-        </header>
-        <TaskFilters tasks={tasks} />
-        <div className="data-grid-with-inspector task-page__workspace">
-          {tasks.length === 0 ? (
-            <EmptyState title="当前项目暂无任务" />
-          ) : filteredTasks.length === 0 ? (
-            <p className="task-page__empty">没有符合筛选条件的任务。</p>
-          ) : (
-            <TaskTable
-              onSelect={selectTask}
-              selectedTaskId={selectedTaskId}
-              tasks={filteredTasks}
-            />
-          )}
-          {selectedTask ? (
-            <TaskInspector
-              fallbackFocusId="task-page-heading"
-              onClose={() => setSelectedTaskId(null)}
-              returnFocusId={
-                selectionTrigger?.taskId === selectedTask.id
-                  ? selectionTrigger.id
-                  : undefined
-              }
-              task={selectedTask}
-            />
-          ) : null}
-        </div>
-      </GlassPanel>
+      <DeliveryTimeline
+        onSelect={selectTask}
+        selectedTaskId={selectedTaskId}
+        tasks={filteredTasks}
+      />
     </section>
   )
 }

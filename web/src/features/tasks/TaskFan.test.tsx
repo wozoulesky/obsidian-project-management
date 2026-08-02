@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Task } from '../../data/domain'
-import { TaskFan } from './TaskFan'
+import { prioritizeFanTasks, TaskFan } from './TaskFan'
 import tasksGlassCss from './tasks-glass.css?raw'
 
 function task(index: number): Task {
@@ -26,6 +26,36 @@ function task(index: number): Task {
 afterEach(cleanup)
 
 describe('TaskFan', () => {
+  it('prioritizes status, priority, due date, and id before limiting to six', () => {
+    const source = [
+      {
+        ...task(9),
+        id: 'done-p3',
+        priority: 'P3' as const,
+        status: 'done' as const,
+        dueDate: '2026-07-01',
+      },
+      {
+        ...task(9),
+        id: 'overdue-p0',
+        priority: 'P0' as const,
+        status: 'overdue' as const,
+        dueDate: '2026-07-30',
+      },
+      {
+        ...task(9),
+        id: 'active-p0',
+        priority: 'P0' as const,
+        status: 'in_progress' as const,
+        dueDate: '2026-07-02',
+      },
+    ]
+
+    expect(prioritizeFanTasks(source).slice(0, 2).map(({ id }) => id))
+      .toEqual(['overdue-p0', 'active-p0'])
+    expect(prioritizeFanTasks(source)).toHaveLength(3)
+  })
+
   it('renders only the first six tasks and gives every card its own button', () => {
     const { container } = render(
       <TaskFan
@@ -35,7 +65,7 @@ describe('TaskFan', () => {
       />,
     )
 
-    const fan = screen.getByRole('region', { name: '任务扇面' })
+    const fan = screen.getByRole('region', { name: '关键任务扇面' })
     expect(within(fan).getAllByRole('button')).toHaveLength(6)
     expect(within(fan).queryByText('扇面任务 7')).not.toBeInTheDocument()
     const cards = container.querySelectorAll('.task-fan__item')
