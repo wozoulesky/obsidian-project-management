@@ -8,7 +8,9 @@ import type { PersistedAppSettings } from '@project-os/contracts'
 import {
   createContext,
   createElement,
+  useCallback,
   useContext,
+  useState,
   type ReactNode,
 } from 'react'
 
@@ -40,7 +42,10 @@ export {
 type ProjectRepositoryContextValue = {
   repository: ProjectRepository
   projectId: string
+  selectProject: (projectId: string) => void
 }
+
+export const workspaceProjectStorageKey = 'project-os:workspace-project'
 
 const ProjectRepositoryContext =
   createContext<ProjectRepositoryContextValue | null>(null)
@@ -49,12 +54,29 @@ export function ProjectRepositoryProvider({
   children,
   repository,
   projectId,
-}: ProjectRepositoryContextValue & { children: ReactNode }) {
+}: Omit<ProjectRepositoryContextValue, 'selectProject'> & {
+  children: ReactNode
+}) {
   const parent = useContext(ProjectRepositoryContext)
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId)
+  const selectProject = useCallback((nextProjectId: string) => {
+    setSelectedProjectId(nextProjectId)
+    try {
+      sessionStorage.setItem(workspaceProjectStorageKey, nextProjectId)
+    } catch {
+      // Some browser privacy modes deny storage access; selection still works.
+    }
+  }, [])
   if (parent !== null) return children
   return createElement(
     ProjectRepositoryContext.Provider,
-    { value: { repository, projectId } },
+    {
+      value: {
+        repository,
+        projectId: selectedProjectId,
+        selectProject,
+      },
+    },
     children,
   )
 }
@@ -63,6 +85,7 @@ export function useProjectRepository() {
   return useContext(ProjectRepositoryContext) ?? {
     repository: projectRepository,
     projectId,
+    selectProject: () => undefined,
   }
 }
 

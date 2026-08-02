@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  ProjectRepositoryProvider,
   projectQueryKeys,
   projectRepository,
   useProjectDeliverables,
@@ -14,6 +15,8 @@ import {
   useCreateTask,
   useCreateTaskFromDefect,
   useCurrentActor,
+  useProjectRepository,
+  useTasks,
   useUpdateRequirementStatus,
   useUpdateTaskDates,
   useUpdateTaskProgress,
@@ -225,6 +228,53 @@ describe('repository query invalidation', () => {
     expect(isInvalidated(projectQueryKeys.gantt)).toBe(true)
     expect(isInvalidated(projectQueryKeys.defects)).toBe(true)
     expect(isInvalidated(projectQueryKeys.dashboard(7))).toBe(true)
+  })
+})
+
+describe('workspace project scope', () => {
+  it('refetches tasks into a separate cache when the project changes', async () => {
+    sessionStorage.removeItem('project-os:workspace-project')
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const listTasks = vi.spyOn(projectRepository, 'listTasks')
+      .mockImplementation(async (selectedProjectId) => ([{
+        id: `${selectedProjectId}-task`,
+      }] as Awaited<ReturnType<typeof projectRepository.listTasks>>))
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <ProjectRepositoryProvider
+          repository={projectRepository}
+          projectId="project_default"
+        >
+          {children}
+        </ProjectRepositoryProvider>
+      </QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => ({
+      repository: useProjectRepository(),
+      tasks: useTasks(),
+    }), { wrapper })
+
+    await waitFor(() => expect(result.current.tasks.data).toEqual([{
+      id: 'project_default-task',
+    }]))
+
+    act(() => result.current.repository.selectProject('atlas'))
+
+    await waitFor(() => expect(result.current.tasks.data).toEqual([{
+      id: 'atlas-task',
+    }]))
+    expect(listTasks).toHaveBeenNthCalledWith(1, 'project_default')
+    expect(listTasks).toHaveBeenNthCalledWith(2, 'atlas')
+    expect(queryClient.getQueryData(
+      projectQueryKeys.tasksFor('project_default'),
+    )).toEqual([{ id: 'project_default-task' }])
+    expect(queryClient.getQueryData(projectQueryKeys.tasksFor('atlas')))
+      .toEqual([{ id: 'atlas-task' }])
+    expect(sessionStorage.getItem('project-os:workspace-project'))
+      .toBe('atlas')
   })
 })
 
