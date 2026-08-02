@@ -104,42 +104,54 @@ export function DataSettings() {
   return (
     <section aria-labelledby="data-settings-title" className="settings-card">
       <header>
-        <h2 id="data-settings-title">数据</h2>
+        <h3 id="data-settings-title">备份与迁移</h3>
         <p>创建可恢复的 SQLite 备份，或导入导出不含访问令牌的 JSON。</p>
       </header>
-      <div className="settings-actions settings-actions--wrap">
-        <button
-          className="button button--secondary"
-          disabled={createBackup.isPending}
-          onClick={() => void create()}
-          type="button"
-        >
-          创建备份
-        </button>
-        <button
-          className="button button--secondary"
-          disabled={backupFilename === '' || restoreBackup.isPending}
-          onClick={() => void restore()}
-          type="button"
-        >
-          恢复此备份
-        </button>
-        <button
-          className="button button--secondary"
-          onClick={() => void exportData()}
-          type="button"
-        >
-          导出 JSON
-        </button>
-        <label className="button button--secondary settings-file">
-          导入 JSON
-          <input
-            accept="application/json,.json"
-            aria-label="选择要导入的 JSON 文件"
-            onChange={(event) => void importFile(event)}
-            type="file"
-          />
-        </label>
+      <div className="settings-operation-grid">
+        <section className="settings-operation-group" aria-label="SQLite 备份">
+          <strong>SQLite 备份</strong>
+          <p>创建恢复点，必要时回到本次备份。</p>
+          <div className="settings-actions settings-actions--wrap">
+            <button
+              className="button button--secondary"
+              disabled={createBackup.isPending}
+              onClick={() => void create()}
+              type="button"
+            >
+              创建备份
+            </button>
+            <button
+              className="button button--secondary"
+              disabled={backupFilename === '' || restoreBackup.isPending}
+              onClick={() => void restore()}
+              type="button"
+            >
+              恢复此备份
+            </button>
+          </div>
+        </section>
+        <section className="settings-operation-group" aria-label="JSON 迁移">
+          <strong>JSON 迁移</strong>
+          <p>导入或导出不含访问令牌的业务数据。</p>
+          <div className="settings-actions settings-actions--wrap">
+            <button
+              className="button button--secondary"
+              onClick={() => void exportData()}
+              type="button"
+            >
+              导出 JSON
+            </button>
+            <label className="button button--secondary settings-file">
+              导入 JSON
+              <input
+                accept="application/json,.json"
+                aria-label="选择要导入的 JSON 文件"
+                onChange={(event) => void importFile(event)}
+                type="file"
+              />
+            </label>
+          </div>
+        </section>
       </div>
       {backupFilename && (
         <p className="settings-code">

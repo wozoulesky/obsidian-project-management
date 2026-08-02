@@ -56,13 +56,26 @@ export function SettingsPage() {
             <GlassPanel
               ariaLabel={`${category.label}设置`}
               aria-labelledby={`settings-tab-${category.id}`}
-              className="settings-page__panel"
+              className={`settings-page__panel${
+                active ? ' settings-page__panel--active' : ''
+              }`}
               hidden={!active}
               id={`settings-panel-${category.id}`}
               key={category.id}
               role="tabpanel"
               tabIndex={active ? 0 : -1}
             >
+              <header className="settings-panel-heading">
+                <div>
+                  <h2 id={`settings-panel-heading-${category.id}`}>
+                    {category.label}
+                  </h2>
+                  <p>{category.description}</p>
+                </div>
+                <span className="settings-panel-heading__meta">
+                  {category.meta}
+                </span>
+              </header>
               <SettingsCategoryContent category={category.id} />
             </GlassPanel>
           )

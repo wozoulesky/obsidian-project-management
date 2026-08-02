@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderApp } from '../../app/test-utils'
 import { projectRepository } from '../../data/query-hooks'
 import { SettingsPage } from './SettingsPage'
+import settingsGlassCss from './settings-glass.css?raw'
 
 describe('SettingsPage', () => {
   beforeEach(() => {
@@ -21,6 +22,78 @@ describe('SettingsPage', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('shows one active panel whose primary heading follows the selected tab', async () => {
+    const user = userEvent.setup()
+    renderApp(<SettingsPage />)
+
+    const navigation = await screen.findByRole('tablist', {
+      name: '设置分类',
+    })
+    for (const name of ['外观', '数据', 'MCP', 'Skills']) {
+      await user.click(within(navigation).getByRole('tab', { name }))
+      const visiblePanels = screen.getAllByRole('tabpanel')
+      expect(visiblePanels).toHaveLength(1)
+      expect(visiblePanels[0]).toHaveClass(
+        'settings-page__panel',
+        'settings-page__panel--active',
+      )
+      expect(within(visiblePanels[0]!).getByRole('heading', {
+        level: 2,
+        name,
+      })).toBeVisible()
+      expect(
+        visiblePanels[0]!.querySelector('.settings-panel-heading__meta'),
+      ).toBeInTheDocument()
+    }
+  })
+
+  it('uses a compact desktop stage, two-column controls, and mobile tabs', async () => {
+    renderApp(<SettingsPage />)
+
+    const appearancePanel = await screen.findByRole('tabpanel', {
+      name: '外观',
+    })
+    expect(appearancePanel.querySelectorAll('.settings-control-row'))
+      .toHaveLength(4)
+    expect(appearancePanel.querySelector('.settings-control-grid'))
+      .toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /快照/ }))
+      .not.toBeInTheDocument()
+
+    expect(settingsGlassCss).toMatch(
+      /\.settings-page__panel\s*{[^}]*min-height:\s*27rem/s,
+    )
+    expect(settingsGlassCss).toMatch(
+      /\.settings-control-grid\s*{[^}]*grid-template-columns:\s*repeat\(2,/s,
+    )
+    expect(settingsGlassCss).toMatch(
+      /\.settings-actions\s*{[^}]*justify-content:\s*flex-end/s,
+    )
+    expect(settingsGlassCss).toMatch(
+      /@media \(width < 48rem\)[\s\S]*\.settings-category-nav\s*{[^}]*overflow-x:\s*auto/s,
+    )
+    expect(settingsGlassCss).toMatch(
+      /@media \(width < 48rem\)[\s\S]*\.settings-control-grid\s*{[^}]*grid-template-columns:\s*1fr/s,
+    )
+  })
+
+  it('keeps secondary MCP and Skills tools collapsed by default', async () => {
+    const user = userEvent.setup()
+    renderApp(<SettingsPage />)
+
+    await user.click(await screen.findByRole('tab', { name: 'MCP' }))
+    const tokenHistory = screen.getByRole('group', {
+      name: '已签发令牌',
+    })
+    expect(tokenHistory).not.toHaveAttribute('open')
+
+    await user.click(screen.getByRole('tab', { name: 'Skills' }))
+    const moreClients = screen.getByRole('group', {
+      name: '更多客户端配置',
+    })
+    expect(moreClients).not.toHaveAttribute('open')
   })
 
   it('keeps every category panel mounted and links each tab to a stable panel', async () => {
