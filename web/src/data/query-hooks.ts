@@ -761,12 +761,40 @@ function rollbackTaskMoveSnapshots(snapshots: readonly TaskMoveSnapshot[]) {
   }
 }
 
+function taskMoveQueryCandidates(
+  queryClient: QueryClient,
+  selectedProjectId: string,
+  taskId: string,
+) {
+  const queryCache = queryClient.getQueryCache()
+  const projectTaskQueries = queryCache.findAll({
+    queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+  })
+  const allTasksQuery = queryCache.find({
+    queryKey: projectQueryKeys.allTasks,
+    exact: true,
+  })
+  return [
+    ...projectTaskQueries,
+    ...(allTasksQuery === undefined ? [] : [allTasksQuery]),
+  ].filter(({ state }) => (
+    Array.isArray(state.data)
+    && (state.data as Task[]).some((candidate) => candidate.id === taskId)
+  ))
+}
+
 function invalidateTaskMoveQueries(
   queryClient: QueryClient,
   selectedProjectId: string,
 ) {
+  const taskListFilters: QueryFilters[] = queryClient.getQueryCache()
+    .findAll({ queryKey: projectQueryKeys.tasksFor(selectedProjectId) })
+    .filter(({ state }) => (
+      state.data === undefined || Array.isArray(state.data)
+    ))
+    .map(({ queryKey }) => ({ queryKey, exact: true }))
   const filters: readonly QueryFilters[] = [
-    { queryKey: projectQueryKeys.tasksFor(selectedProjectId), exact: true },
+    ...taskListFilters,
     { queryKey: projectQueryKeys.allTasks, exact: true },
     { queryKey: projectQueryKeys.ganttFor(selectedProjectId), exact: true },
     {
@@ -824,9 +852,21 @@ export function useMoveTaskStatus() {
       let snapshots: TaskMoveSnapshot[] = []
 
       try {
-        await queryClient.cancelQueries({ queryKey: ['tasks'] })
-        snapshots = queryClient.getQueryCache()
-          .findAll({ queryKey: ['tasks'] })
+        const candidates = taskMoveQueryCandidates(
+          queryClient,
+          canonicalProjectId,
+          task.id,
+        )
+        await Promise.all(candidates.map(({ queryKey }) => (
+          queryClient.cancelQueries({ queryKey, exact: true })
+        )))
+        snapshots = candidates
+          .filter(({ state }) => (
+            Array.isArray(state.data)
+            && (state.data as Task[]).some(
+              (candidate) => candidate.id === task.id,
+            )
+          ))
           .map((query) => ({
             query,
             originalState: query.state,
@@ -869,8 +909,12 @@ export function useMoveTaskStatus() {
           token,
         }
       } catch (error) {
-        rollbackTaskMoveSnapshots(snapshots)
-        releaseTaskMove(queryClient, task.id, token)
+        try {
+          rollbackTaskMoveSnapshots(snapshots)
+        } finally {
+          snapshots.length = 0
+          releaseTaskMove(queryClient, task.id, token)
+        }
         throw error
       }
     },
@@ -878,6 +922,7 @@ export function useMoveTaskStatus() {
       if (mutationContext === undefined) return
       const pendingMoves = pendingTaskMovesByClient.get(queryClient)
       if (pendingMoves?.get(mutationContext.taskId) !== mutationContext.token) {
+        mutationContext.snapshots.length = 0
         return
       }
       rollbackTaskMoveSnapshots(mutationContext.snapshots)
@@ -894,6 +939,7 @@ export function useMoveTaskStatus() {
           mutationContext.canonicalProjectId,
         )
       } finally {
+        mutationContext.snapshots.length = 0
         releaseTaskMove(
           queryClient,
           mutationContext.taskId,
