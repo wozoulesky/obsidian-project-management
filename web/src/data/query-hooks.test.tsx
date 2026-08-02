@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
+import type { Task, TaskStatus } from './domain'
 import {
   ProjectRepositoryProvider,
   projectId,
@@ -25,6 +26,7 @@ import {
   useProjectRepository,
   useProjects,
   useImportData,
+  useMoveTaskStatus,
   useRestoreBackup,
   useTasks,
   useUpdateRequirementStatus,
@@ -41,6 +43,16 @@ function createDeferred() {
     resolve = resolvePromise
   })
   return { promise, resolve }
+}
+
+function createDeferredResult<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
 }
 
 function createHarness() {
@@ -747,6 +759,308 @@ describe('project deletion synchronization', () => {
       }
     },
   )
+})
+
+describe('optimistic task status moves', () => {
+  const moveInvalidationKeys = (selectedProjectId: string) => [
+    projectQueryKeys.tasksFor(selectedProjectId),
+    projectQueryKeys.allTasks,
+    projectQueryKeys.ganttFor(selectedProjectId),
+    projectQueryKeys.requirementsFor(selectedProjectId),
+    projectQueryKeys.dashboardFor(selectedProjectId, 7),
+    projectQueryKeys.workspaceDashboardFor(7),
+    projectQueryKeys.projectFor(selectedProjectId),
+    projectQueryKeys.projects,
+    projectQueryKeys.activities,
+  ] as const
+
+  function seedMoveInvalidationCaches(
+    queryClient: QueryClient,
+    selectedProjectId: string,
+  ) {
+    for (const queryKey of moveInvalidationKeys(selectedProjectId)) {
+      if (queryClient.getQueryState(queryKey) === undefined) {
+        queryClient.setQueryData(queryKey, { seeded: true })
+      }
+    }
+  }
+
+  function expectMoveCachesInvalidated(
+    queryClient: QueryClient,
+    selectedProjectId: string,
+  ) {
+    for (const queryKey of moveInvalidationKeys(selectedProjectId)) {
+      expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true)
+    }
+  }
+
+  it('cancels task queries before updating every cached task copy', async () => {
+    const repository = createMockProjectRepository()
+    const tasks = await repository.listTasks('atlas')
+    const task = { ...tasks[0], version: 7 }
+    const otherTask = { ...tasks[1], id: 'other-task' }
+    const projectTasks = [task, otherTask]
+    const allTasks = [{ ...task, progress: 17 }, otherTask]
+    const filteredTasks = [otherTask, { ...task, progress: 64 }]
+    const filteredKey = ['tasks', 'atlas', { assignee: 'human-lin' }] as const
+    const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+    queryClient.setQueryData(projectQueryKeys.tasksFor('atlas'), projectTasks)
+    queryClient.setQueryData(projectQueryKeys.allTasks, allTasks)
+    queryClient.setQueryData(filteredKey, filteredTasks)
+    seedMoveInvalidationCaches(queryClient, 'atlas')
+    const cancellation = createDeferred()
+    const serverResponse = createDeferredResult<Task>()
+    const cancelQueries = vi.spyOn(queryClient, 'cancelQueries')
+      .mockReturnValue(cancellation.promise)
+    const updateTaskProgress = vi.spyOn(repository, 'updateTaskProgress')
+      .mockReturnValue(serverResponse.promise)
+    const { result } = renderHook(() => useMoveTaskStatus(), { wrapper })
+    let mutation!: Promise<Task>
+
+    act(() => {
+      mutation = result.current.mutateAsync({
+        projectId: 'atlas',
+        status: 'done',
+        task,
+      })
+    })
+
+    await waitFor(() => expect(cancelQueries).toHaveBeenCalledWith({
+      queryKey: ['tasks'],
+    }))
+    expect(queryClient.getQueryData(projectQueryKeys.tasksFor('atlas')))
+      .toBe(projectTasks)
+    expect(updateTaskProgress).not.toHaveBeenCalled()
+
+    await act(async () => {
+      cancellation.resolve()
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(updateTaskProgress).toHaveBeenCalledWith(
+      task.id,
+      {
+        progress: 100,
+        status: 'done',
+        note: 'Moved to done from task board',
+        version: task.version,
+      },
+    ))
+
+    for (const queryKey of [
+      projectQueryKeys.tasksFor('atlas'),
+      projectQueryKeys.allTasks,
+      filteredKey,
+    ]) {
+      const cachedTasks = queryClient.getQueryData<Task[]>(queryKey)
+      expect(cachedTasks?.find(({ id }) => id === task.id)).toMatchObject({
+        status: 'done',
+        progress: 100,
+        version: task.version,
+      })
+      expect(cachedTasks?.find(({ id }) => id === otherTask.id))
+        .toBe(otherTask)
+    }
+
+    const returnedTask = { ...task, status: 'done' as const, progress: 100,
+      version: 99 }
+    await act(async () => {
+      serverResponse.resolve(returnedTask)
+      await expect(mutation).resolves.toEqual(returnedTask)
+    })
+    expectMoveCachesInvalidated(queryClient, 'atlas')
+  })
+
+  it('restores exact task snapshots after a rejected move', async () => {
+    const repository = createMockProjectRepository()
+    const tasks = await repository.listTasks('atlas')
+    const task = { ...tasks[0], version: 11 }
+    const otherTask = { ...tasks[1], id: 'rollback-other' }
+    const projectTasks = [task, otherTask]
+    const allTasks = [otherTask, { ...task, progress: 46, version: 23 }]
+    const filteredTasks = [{ ...task, progress: 88, version: 41 }]
+    const filteredKey = ['tasks', 'atlas', 'filtered'] as const
+    const metadataKey = ['tasks', 'metadata'] as const
+    const emptyKey = ['tasks', 'empty'] as const
+    const unrelatedKey = ['settings', 'move-test'] as const
+    const metadata = { total: 2 }
+    const unrelated = { theme: 'dark' }
+    const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+    queryClient.setQueryData(
+      projectQueryKeys.tasksFor('atlas'),
+      projectTasks,
+      { updatedAt: 101 },
+    )
+    queryClient.setQueryData(projectQueryKeys.allTasks, allTasks, {
+      updatedAt: 202,
+    })
+    queryClient.setQueryData(filteredKey, filteredTasks, { updatedAt: 303 })
+    queryClient.setQueryData(metadataKey, metadata, { updatedAt: 404 })
+    queryClient.setQueryData(unrelatedKey, unrelated, { updatedAt: 505 })
+    queryClient.getQueryCache().build(queryClient, {
+      queryKey: emptyKey,
+      queryFn: async () => [] as Task[],
+    })
+    seedMoveInvalidationCaches(queryClient, 'atlas')
+    const snapshots = [
+      projectQueryKeys.tasksFor('atlas'),
+      projectQueryKeys.allTasks,
+      filteredKey,
+    ].map((queryKey) => ({
+      queryKey,
+      data: queryClient.getQueryData(queryKey),
+      state: queryClient.getQueryState(queryKey),
+    }))
+    const emptyState = queryClient.getQueryState(emptyKey)
+    const rejection = createDeferredResult<Task>()
+    vi.spyOn(repository, 'updateTaskProgress').mockReturnValue(rejection.promise)
+    const { result } = renderHook(() => useMoveTaskStatus(), { wrapper })
+    let mutation!: Promise<Task>
+
+    act(() => {
+      mutation = result.current.mutateAsync({
+        projectId: 'atlas',
+        status: 'done',
+        task,
+      })
+    })
+    const observedMutation = mutation.catch((error: unknown) => error)
+    await waitFor(() => expect(
+      queryClient.getQueryData<Task[]>(filteredKey)?.[0].status,
+    ).toBe('done'))
+
+    const error = new Error('move rejected')
+    await act(async () => {
+      rejection.reject(error)
+      await observedMutation
+    })
+    await expect(observedMutation).resolves.toBe(error)
+
+    for (const snapshot of snapshots) {
+      expect(queryClient.getQueryData(snapshot.queryKey)).toBe(snapshot.data)
+      expect(queryClient.getQueryState(snapshot.queryKey)?.dataUpdatedAt)
+        .toBe(snapshot.state?.dataUpdatedAt)
+      expect(queryClient.getQueryState(snapshot.queryKey)?.dataUpdateCount)
+        .toBe(snapshot.state?.dataUpdateCount)
+    }
+    expect(queryClient.getQueryData<Task[]>(projectQueryKeys.tasksFor('atlas'))
+      ?.[0]).toMatchObject({
+        status: task.status,
+        progress: task.progress,
+        version: task.version,
+      })
+    expect(queryClient.getQueryData(metadataKey)).toBe(metadata)
+    expect(queryClient.getQueryState(metadataKey)?.dataUpdatedAt).toBe(404)
+    expect(queryClient.getQueryData(emptyKey)).toBeUndefined()
+    expect(queryClient.getQueryState(emptyKey)?.dataUpdatedAt)
+      .toBe(emptyState?.dataUpdatedAt)
+    expect(queryClient.getQueryData(unrelatedKey)).toBe(unrelated)
+    expect(queryClient.getQueryState(unrelatedKey)).toMatchObject({
+      dataUpdatedAt: 505,
+      isInvalidated: false,
+    })
+    expectMoveCachesInvalidated(queryClient, 'atlas')
+  })
+
+  it.each([
+    { status: 'not_started', currentProgress: 73, expectedProgress: 0 },
+    { status: 'in_progress', currentProgress: 0, expectedProgress: 1 },
+    { status: 'overdue', currentProgress: 100, expectedProgress: 99 },
+  ] satisfies Array<{
+    status: TaskStatus
+    currentProgress: number
+    expectedProgress: number
+  }>)(
+    'normalizes progress when moving a task to $status',
+    async ({ status, currentProgress, expectedProgress }) => {
+      const repository = createMockProjectRepository()
+      const [fixtureTask] = await repository.listTasks('atlas')
+      const task = { ...fixtureTask, progress: currentProgress, version: 13 }
+      const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+      queryClient.setQueryData(projectQueryKeys.tasksFor('atlas'), [task])
+      const updateTaskProgress = vi.spyOn(repository, 'updateTaskProgress')
+        .mockResolvedValue({ ...task, status, progress: expectedProgress })
+      const { result } = renderHook(() => useMoveTaskStatus(), { wrapper })
+
+      await act(() => result.current.mutateAsync({
+        projectId: 'atlas',
+        status,
+        task,
+      }))
+
+      expect(updateTaskProgress).toHaveBeenCalledWith(task.id, {
+        progress: expectedProgress,
+        status,
+        note: `Moved to ${status} from task board`,
+        version: task.version,
+      })
+      expect(queryClient.getQueryData<Task[]>(
+        projectQueryKeys.tasksFor('atlas'),
+      )?.[0]).toMatchObject({
+        status,
+        progress: expectedProgress,
+        version: task.version,
+      })
+    },
+  )
+
+  it('does not let an older failed move replace a newer optimistic result', async () => {
+    const repository = createMockProjectRepository()
+    const [fixtureTask] = await repository.listTasks('atlas')
+    const task = { ...fixtureTask, version: 17 }
+    const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
+    queryClient.setQueryData(projectQueryKeys.tasksFor('atlas'), [task])
+    const older = createDeferredResult<Task>()
+    const newer = createDeferredResult<Task>()
+    vi.spyOn(repository, 'updateTaskProgress')
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise)
+    const { result } = renderHook(() => useMoveTaskStatus(), { wrapper })
+    let olderMutation!: Promise<Task>
+
+    act(() => {
+      olderMutation = result.current.mutateAsync({
+        projectId: 'atlas',
+        status: 'done',
+        task,
+      })
+    })
+    const observedOlderMutation = olderMutation.catch((error: unknown) => error)
+    await waitFor(() => expect(queryClient.getQueryData<Task[]>(
+      projectQueryKeys.tasksFor('atlas'),
+    )?.[0].status).toBe('done'))
+    const firstOptimisticTask = queryClient.getQueryData<Task[]>(
+      projectQueryKeys.tasksFor('atlas'),
+    )![0]
+    let newerMutation!: Promise<Task>
+    act(() => {
+      newerMutation = result.current.mutateAsync({
+        projectId: 'atlas',
+        status: 'in_progress',
+        task: firstOptimisticTask,
+      })
+    })
+    await waitFor(() => expect(queryClient.getQueryData<Task[]>(
+      projectQueryKeys.tasksFor('atlas'),
+    )?.[0]).toMatchObject({ status: 'in_progress', progress: 99 }))
+
+    await act(async () => {
+      newer.resolve({
+        ...firstOptimisticTask,
+        status: 'in_progress',
+        progress: 99,
+        version: 99,
+      })
+      await newerMutation
+    })
+    await act(async () => {
+      older.reject(new Error('older move failed'))
+      await observedOlderMutation
+    })
+
+    expect(queryClient.getQueryData<Task[]>(
+      projectQueryKeys.tasksFor('atlas'),
+    )?.[0]).toMatchObject({ status: 'in_progress', progress: 99 })
+  })
 })
 
 describe('repository query invalidation', () => {

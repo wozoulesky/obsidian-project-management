@@ -23,6 +23,7 @@ import type {
   Task,
   TaskDateInput,
   TaskProgressInput,
+  TaskStatus,
 } from './domain'
 import type {
   CreateHumanActorInput,
@@ -36,6 +37,7 @@ import {
   projectRepository,
   resetProjectRepositoryForTests,
 } from '#repository-default'
+import { progressForStatus } from './task-status'
 
 export {
   projectId,
@@ -687,6 +689,83 @@ export function useUpdateTaskProgress() {
           projectQueryKeys.activities,
         ],
       )
+    },
+  })
+}
+
+type MoveTaskStatusVariables = {
+  projectId: string
+  status: TaskStatus
+  task: Task
+}
+
+export function useMoveTaskStatus() {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: ({ status, task }: MoveTaskStatusVariables) =>
+      context.repository.updateTaskProgress(task.id, {
+        progress: progressForStatus(status, task.progress),
+        status,
+        note: `Moved to ${status} from task board`,
+        version: task.version,
+      }),
+    onMutate: async ({ status, task }: MoveTaskStatusVariables) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] })
+      const snapshots = queryClient.getQueryCache()
+        .findAll({ queryKey: ['tasks'] })
+        .map((query) => ({
+          query,
+          state: query.state,
+          didOptimisticallyUpdate: false,
+          optimisticData: undefined as unknown,
+        }))
+
+      for (const snapshot of snapshots) {
+        if (!Array.isArray(snapshot.state.data)) continue
+        const cachedTasks = snapshot.state.data as Task[]
+        let foundTask = false
+        const optimisticTasks = cachedTasks.map((candidate) => {
+          if (candidate.id !== task.id) return candidate
+          foundTask = true
+          return {
+            ...candidate,
+            status,
+            progress: progressForStatus(status, candidate.progress),
+          }
+        })
+        if (!foundTask) continue
+        snapshot.didOptimisticallyUpdate = true
+        snapshot.optimisticData = queryClient.setQueryData(
+          snapshot.query.queryKey,
+          optimisticTasks,
+        )
+      }
+
+      return { snapshots }
+    },
+    onError: (_error, _variables, mutationContext) => {
+      for (const snapshot of mutationContext?.snapshots ?? []) {
+        if (
+          snapshot.didOptimisticallyUpdate
+          && snapshot.query.state.data === snapshot.optimisticData
+        ) {
+          snapshot.query.setState(snapshot.state)
+        }
+      }
+    },
+    onSettled: async (_data, _error, variables) => {
+      await invalidateKeys(queryClient, [
+        projectQueryKeys.tasksFor(variables.projectId),
+        projectQueryKeys.allTasks,
+        projectQueryKeys.ganttFor(variables.projectId),
+        projectQueryKeys.requirementsFor(variables.projectId),
+        projectQueryKeys.dashboardPrefixFor(variables.projectId),
+        projectQueryKeys.workspaceDashboardPrefix,
+        projectQueryKeys.projectFor(variables.projectId),
+        projectQueryKeys.projects,
+        projectQueryKeys.activities,
+      ])
     },
   })
 }
