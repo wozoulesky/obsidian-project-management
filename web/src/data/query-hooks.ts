@@ -12,6 +12,7 @@ import {
   useCallback,
   useContext,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
 
@@ -49,7 +50,14 @@ type ProjectRepositoryContextValue = {
 }
 
 export const workspaceProjectStorageKey = 'project-os:workspace-project'
-const deletedProjectIdsByClient = new WeakMap<QueryClient, Set<string>>()
+type DeletedProjectRegistry = {
+  ids: Set<string>
+  listeners: Set<() => void>
+}
+const deletedProjectsByClient = new WeakMap<
+  QueryClient,
+  DeletedProjectRegistry
+>()
 
 const ProjectRepositoryContext =
   createContext<ProjectRepositoryContextValue | null>(null)
@@ -141,24 +149,73 @@ export const projectQueryKeys = {
 
 function useProjectQueryEnabled(selectedProjectId: string): boolean {
   const queryClient = useQueryClient()
+  const subscribe = useCallback((listener: () => void) => {
+    const registry = getDeletedProjectRegistry(queryClient)
+    registry.listeners.add(listener)
+    return () => {
+      registry.listeners.delete(listener)
+    }
+  }, [queryClient])
+  const getSnapshot = useCallback(
+    () => deletedProjectsByClient
+      .get(queryClient)
+      ?.ids.has(selectedProjectId) ?? false,
+    [queryClient, selectedProjectId],
+  )
+  const isDeleted = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    () => false,
+  )
   return (
     selectedProjectId !== ''
-    && !deletedProjectIdsByClient.get(queryClient)?.has(selectedProjectId)
+    && !isDeleted
   )
+}
+
+function getDeletedProjectRegistry(
+  queryClient: QueryClient,
+): DeletedProjectRegistry {
+  const current = deletedProjectsByClient.get(queryClient)
+  if (current !== undefined) return current
+  const created: DeletedProjectRegistry = {
+    ids: new Set(),
+    listeners: new Set(),
+  }
+  deletedProjectsByClient.set(queryClient, created)
+  return created
+}
+
+function notifyDeletedProjectListeners(registry: DeletedProjectRegistry) {
+  for (const listener of registry.listeners) listener()
 }
 
 function markProjectDeleted(
   queryClient: QueryClient,
   selectedProjectId: string,
 ) {
-  const deletedProjectIds = deletedProjectIdsByClient.get(queryClient)
-    ?? new Set<string>()
-  deletedProjectIds.add(selectedProjectId)
-  deletedProjectIdsByClient.set(queryClient, deletedProjectIds)
+  const registry = getDeletedProjectRegistry(queryClient)
+  if (!registry.ids.has(selectedProjectId)) {
+    registry.ids.add(selectedProjectId)
+    notifyDeletedProjectListeners(registry)
+  }
 }
 
 function clearDeletedProjects(queryClient: QueryClient) {
-  deletedProjectIdsByClient.delete(queryClient)
+  const registry = deletedProjectsByClient.get(queryClient)
+  if (registry === undefined || registry.ids.size === 0) return
+  registry.ids.clear()
+  notifyDeletedProjectListeners(registry)
+}
+
+function clearDeletedProject(
+  queryClient: QueryClient,
+  selectedProjectId: string,
+) {
+  const registry = deletedProjectsByClient.get(queryClient)
+  if (registry?.ids.delete(selectedProjectId)) {
+    notifyDeletedProjectListeners(registry)
+  }
 }
 
 export function projectOwnedQueryKeys(
@@ -460,7 +517,8 @@ export function useCreateProject() {
   return useMutation({
     mutationFn: (input: CreateProjectInput) =>
       context.repository.createProject(input),
-    onSuccess: async () => {
+    onSuccess: async (createdProject) => {
+      clearDeletedProject(queryClient, createdProject.id)
       await invalidateKeys(queryClient, [
         projectQueryKeys.projects,
         projectQueryKeys.actors,

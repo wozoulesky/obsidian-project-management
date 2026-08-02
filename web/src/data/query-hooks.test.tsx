@@ -9,6 +9,7 @@ import {
   projectOwnedQueryKeys,
   projectQueryKeys,
   projectRepository,
+  useAllTasks,
   useDeleteProject,
   useProjectDeliverables,
   useProjectHandoffs,
@@ -21,6 +22,7 @@ import {
   useDashboard,
   useProject,
   useProjectRepository,
+  useProjects,
   useImportData,
   useRestoreBackup,
   useTasks,
@@ -195,6 +197,61 @@ describe('project deletion synchronization', () => {
     expect(getProject).not.toHaveBeenCalled()
   })
 
+  it('refetches active aggregates without refetching the deleted scope', async () => {
+    const repository = createMockProjectRepository()
+    const { queryClient, wrapper } = createDeleteHarness(
+      repository,
+      'project_default',
+    )
+    const [atlas, allTasks, dashboard] = await Promise.all([
+      repository.getProject('atlas'),
+      repository.listAllTasks(),
+      repository.getWorkspaceDashboard(7),
+    ])
+    queryClient.setQueryData(projectQueryKeys.projects, [atlas])
+    queryClient.setQueryData(projectQueryKeys.allTasks, allTasks)
+    queryClient.setQueryData(
+      projectQueryKeys.workspaceDashboardFor(7),
+      dashboard,
+    )
+    queryClient.setQueryData(projectQueryKeys.projectFor('atlas'), atlas)
+    const listProjects = vi.spyOn(repository, 'listProjects')
+    const listAllTasks = vi.spyOn(repository, 'listAllTasks')
+    const getWorkspaceDashboard = vi.spyOn(
+      repository,
+      'getWorkspaceDashboard',
+    )
+    const getProject = vi.spyOn(repository, 'getProject')
+    const { result } = renderHook(() => ({
+      projects: useProjects(),
+      allTasks: useAllTasks(),
+      dashboard: useWorkspaceDashboard(7),
+      deletedProject: useProject('atlas'),
+      deletion: useDeleteProject(),
+    }), { wrapper })
+    expect(listProjects).not.toHaveBeenCalled()
+    expect(listAllTasks).not.toHaveBeenCalled()
+    expect(getWorkspaceDashboard).not.toHaveBeenCalled()
+    expect(getProject).not.toHaveBeenCalled()
+
+    await act(() => result.current.deletion.mutateAsync({
+      projectId: 'atlas',
+      version: 1,
+    }))
+
+    expect(listProjects).toHaveBeenCalledTimes(1)
+    expect(listAllTasks).toHaveBeenCalledTimes(1)
+    expect(getWorkspaceDashboard).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(result.current.projects.data).toEqual([]))
+    await waitFor(() => expect(result.current.allTasks.data).toEqual([]))
+    await waitFor(() => expect(
+      result.current.dashboard.data?.metrics.totalTasks,
+    ).toBe(0))
+    expect(result.current.deletedProject.fetchStatus).toBe('idle')
+    expect(result.current.deletedProject.error).toBeNull()
+    expect(getProject).not.toHaveBeenCalled()
+  })
+
   it('leaves cache, storage, and selection untouched when deletion fails', async () => {
     const repository = createMockProjectRepository()
     const { queryClient, wrapper } = createDeleteHarness(repository, 'atlas')
@@ -326,6 +383,61 @@ describe('project deletion synchronization', () => {
       await waitFor(() => expect(getProject).toHaveBeenCalledWith('atlas'))
     },
   )
+
+  it('re-enables a scoped query when creation restores the same id', async () => {
+    const repository = createMockProjectRepository()
+    const atlas = await repository.getProject('atlas')
+    const otherProject = await repository.createProject({
+      name: 'Borealis',
+      description: '',
+      ownerId: atlas.ownerId,
+      startDate: null,
+      dueDate: null,
+    })
+    const { wrapper } = createDeleteHarness(
+      repository,
+      'project_default',
+    )
+    const deletion = renderHook(() => useDeleteProject(), { wrapper })
+    await act(() => deletion.result.current.mutateAsync({
+      projectId: 'atlas',
+      version: 1,
+    }))
+    await act(() => deletion.result.current.mutateAsync({
+      projectId: otherProject.id,
+      version: otherProject.version,
+    }))
+    const restoredAtlas = { ...atlas, name: 'Restored Atlas' }
+    vi.spyOn(repository, 'createProject').mockResolvedValue(restoredAtlas)
+    const getProject = vi.spyOn(repository, 'getProject')
+      .mockImplementation(async (selectedProjectId) => {
+        if (selectedProjectId === 'atlas') return restoredAtlas
+        throw new Error(`Project not found: ${selectedProjectId}`)
+      })
+    const project = renderHook(() => useProject('atlas'), { wrapper })
+    const otherProjectHook = renderHook(
+      () => useProject(otherProject.id),
+      { wrapper },
+    )
+    const creation = renderHook(() => useCreateProject(), { wrapper })
+    expect(project.result.current.fetchStatus).toBe('idle')
+    expect(otherProjectHook.result.current.fetchStatus).toBe('idle')
+    expect(getProject).not.toHaveBeenCalled()
+
+    await act(() => creation.result.current.mutateAsync({
+      name: 'Restored Atlas',
+      description: '',
+      ownerId: atlas.ownerId,
+      startDate: atlas.startDate,
+      dueDate: atlas.dueDate,
+    }))
+
+    await waitFor(() => expect(getProject).toHaveBeenCalledWith('atlas'))
+    expect(getProject).toHaveBeenCalledTimes(1)
+    expect(project.result.current.data).toEqual(restoredAtlas)
+    expect(otherProjectHook.result.current.fetchStatus).toBe('idle')
+    expect(otherProjectHook.result.current.error).toBeNull()
+  })
 
   it.each([
     {
