@@ -16,6 +16,28 @@ export const statusOrder = [
   'not_a_defect',
 ] as const satisfies readonly DefectStatus[]
 
+export const defectStages = [
+  { id: 'pending', label: '待处理', statuses: ['open'] },
+  { id: 'repairing', label: '修复中', statuses: ['fixing', 'verifying'] },
+  {
+    id: 'resolved',
+    label: '已解决',
+    statuses: ['closed', 'rejected', 'not_a_defect'],
+  },
+] as const satisfies ReadonlyArray<{
+  id: string
+  label: string
+  statuses: readonly DefectStatus[]
+}>
+
+export type DefectStage = (typeof defectStages)[number]['id']
+
+export function defectStageForStatus(status: DefectStatus): DefectStage {
+  return defectStages.find((stage) =>
+    stage.statuses.some((candidate) => candidate === status),
+  )?.id ?? 'resolved'
+}
+
 export const severityLabels: Record<Severity, string> = {
   fatal: '致命',
   serious: '严重',

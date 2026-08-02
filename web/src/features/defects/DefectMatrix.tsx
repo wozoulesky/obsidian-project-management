@@ -1,9 +1,10 @@
 import type { Defect, Severity } from '../../data/domain'
 import {
+  defectStageForStatus,
+  defectStages,
   severityLabels,
   severityOrder,
   statusLabels,
-  statusOrder,
 } from './defect-matrix-config'
 
 function toneForSeverity(severity: Severity) {
@@ -31,12 +32,15 @@ export function DefectMatrix({
       role="region"
       tabIndex={0}
     >
-      <table aria-label="缺陷严重度与状态矩阵" className="defect-matrix">
+      <table
+        aria-label="缺陷严重度与处理阶段矩阵"
+        className="defect-matrix"
+      >
         <thead>
           <tr>
-            <th scope="col">严重度 / 状态</th>
-            {statusOrder.map((status) => (
-              <th key={status} scope="col">{statusLabels[status]}</th>
+            <th scope="col">严重度 / 处理阶段</th>
+            {defectStages.map((stage) => (
+              <th key={stage.id} scope="col">{stage.label}</th>
             ))}
           </tr>
         </thead>
@@ -44,23 +48,23 @@ export function DefectMatrix({
           {severityOrder.map((severity) => (
             <tr key={severity}>
               <th scope="row">{severityLabels[severity]}</th>
-              {statusOrder.map((status) => {
+              {defectStages.map((stage) => {
                 const cellDefects = defects.filter(
                   (defect) =>
-                    defect.severity === severity && defect.status === status,
+                    defect.severity === severity &&
+                    defectStageForStatus(defect.status) === stage.id,
                 )
                 return (
                   <td
-                    aria-label={`${severityLabels[severity]} · ${statusLabels[status]}`}
-                    key={status}
+                    aria-label={`${severityLabels[severity]} · ${stage.label}`}
+                    key={stage.id}
                   >
                     <div className="defect-matrix__cell-stack">
                       {cellDefects.map((defect) => {
                         const selected = defect.id === selectedDefectId
                         return (
                           <button
-                            aria-controls={`defect-inspector-${defect.id}`}
-                            aria-expanded={selected}
+                            aria-controls="defect-context"
                             aria-label={`查看 ${defect.title}`}
                             aria-pressed={selected}
                             className={`defect-matrix__card defect-matrix__card--${toneForSeverity(severity)}`}
@@ -71,7 +75,9 @@ export function DefectMatrix({
                           >
                             <span className="defect-matrix__code">{defect.code}</span>
                             <strong>{defect.title}</strong>
-                            <small>{defect.assignee.name}</small>
+                            <small>
+                              {statusLabels[defect.status]} · {defect.assignee.name}
+                            </small>
                           </button>
                         )
                       })}
