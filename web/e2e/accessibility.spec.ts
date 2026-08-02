@@ -115,3 +115,14 @@ test('dark create project validation errors remain accessible', async ({
   await expect(dialog.getByText('请选择有效负责人')).toBeVisible()
   await expectNoSeriousOrCriticalViolations(page)
 })
+
+test('compact task detail drawer has no serious or critical violations', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/tasks')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await page.getByRole('button', { name: '查看任务详情' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expectNoSeriousOrCriticalViolations(page)
+})

@@ -95,6 +95,13 @@ function renderBoard({
 }
 
 describe('TaskBoard', () => {
+  it('leaves workspace placement to the shared responsive stylesheet', () => {
+    renderBoard()
+
+    expect(screen.getByRole('region', { name: '任务看板工作区' }))
+      .not.toHaveAttribute('style')
+  })
+
   it('renders four status columns and real task fields', async () => {
     const user = userEvent.setup()
     const { onSelect } = renderBoard({ selectedTaskId: 'task-alpha' })

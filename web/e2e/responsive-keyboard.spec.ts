@@ -167,7 +167,7 @@ test('390px task selections open one keyboard-operable detail drawer', async ({
   await expect(trigger).toHaveAttribute('aria-pressed', 'true')
   await expect(trigger).toBeFocused()
 
-  const opener = page.getByRole('button', { name: '查看任务详情' })
+  const opener = page.locator('.task-context-drawer__trigger')
   await expect(opener).toBeVisible()
   await expect(opener).toHaveAttribute('aria-expanded', 'false')
   await opener.focus()
@@ -179,6 +179,23 @@ test('390px task selections open one keyboard-operable detail drawer', async ({
   await expect(page.locator('.task-context')).toHaveCount(1)
   await expect(drawer.getByRole('button', { name: '关闭任务详情' }))
     .toBeFocused()
+  await expect(page.locator('.app-rail')).toHaveAttribute('inert', '')
+  await expect(page.getByTestId('task-view-stage')).toHaveAttribute('inert', '')
+  await expect(page.locator('.app-main')).not.toHaveAttribute('inert')
+  await expect.poll(() => page.locator('.app-main').evaluate(
+    (element) => getComputedStyle(element).overflow,
+  )).toBe('hidden')
+  const dashboardLink = page.locator('.app-rail a').filter({
+    hasText: '仪表盘',
+  })
+  await dashboardLink.evaluate((element) => element.focus())
+  await expect(drawer.getByRole('button', { name: '关闭任务详情' }))
+    .toBeFocused()
+  await expect(dashboardLink.click({ timeout: 500 }).then(
+    () => 'clicked',
+    () => 'blocked',
+  )).resolves.toBe('blocked')
+  await expect(page).toHaveURL(/\/tasks/)
   const drawerBox = await drawer.boundingBox()
   expect(drawerBox).not.toBeNull()
   expect(drawerBox!.x).toBeGreaterThanOrEqual(0)
@@ -198,6 +215,22 @@ test('390px task selections open one keyboard-operable detail drawer', async ({
       document.documentElement.clientWidth,
   }))
   expect(overflow).toEqual({ body: 0, root: 0 })
+
+  await opener.press('Enter')
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.setViewportSize({ width: 761, height: 844 })
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.locator('.app-rail')).not.toHaveAttribute('inert')
+  await expect.poll(() => page.locator('.app-main').evaluate(
+    (element) => getComputedStyle(element).overflow,
+  )).not.toBe('hidden')
+  await expect(opener).not.toBeFocused()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(opener).toBeVisible()
+  await opener.click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
 })
 
 test('390px Gantt keeps local timeline scrolling and its selected scale', async ({

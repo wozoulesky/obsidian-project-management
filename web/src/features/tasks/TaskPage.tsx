@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 
 import {
   ErrorState,
@@ -25,6 +25,33 @@ import { parseTaskView } from './task-workspace-model'
 import { TaskTimeline } from './TaskTimeline'
 import { TaskViewSwitch } from './TaskViewSwitch'
 import './tasks-glass.css'
+
+const compactTaskLayoutQuery = '(max-width: 760px)'
+
+type PreservedModalTarget = {
+  ariaHidden: string | null
+  element: HTMLElement
+  inert: string | null
+}
+
+function preserveAndIsolate(element: HTMLElement): PreservedModalTarget {
+  const preserved = {
+    ariaHidden: element.getAttribute('aria-hidden'),
+    element,
+    inert: element.getAttribute('inert'),
+  }
+  element.setAttribute('aria-hidden', 'true')
+  element.setAttribute('inert', '')
+  return preserved
+}
+
+function restoreModalTarget({ ariaHidden, element, inert }: PreservedModalTarget) {
+  if (ariaHidden === null) element.removeAttribute('aria-hidden')
+  else element.setAttribute('aria-hidden', ariaHidden)
+
+  if (inert === null) element.removeAttribute('inert')
+  else element.setAttribute('inert', inert)
+}
 
 const metricCopy = {
   today: { label: '今日待办', empty: '今日清零', active: '今日聚焦' },
@@ -62,15 +89,36 @@ function projectFallbackName(projectId: string): string {
 }
 
 export function TaskPage() {
+  const location = useLocation()
   const tasksQuery = useTasks()
   const projectsQuery = useProjects()
   const moveStatus = useMoveTaskStatus()
   const { projectId: workspaceProjectId } = useProjectRepository()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [contextDrawerOpen, setContextDrawerOpen] = useState(false)
+  const locationSignature = [
+    location.pathname,
+    location.search,
+    location.hash,
+  ].join('|')
+  const [isCompactLayout, setIsCompactLayout] = useState(() =>
+    typeof window.matchMedia === 'function'
+      ? window.matchMedia(compactTaskLayoutQuery).matches
+      : false,
+  )
+  const [contextDrawer, setContextDrawer] = useState(() => ({
+    locationSignature,
+    open: false,
+  }))
   const contextPanelId = useId()
+  const taskPageRef = useRef<HTMLElement>(null)
   const contextDrawerOpenerRef = useRef<HTMLButtonElement>(null)
   const contextDrawerCloseRef = useRef<HTMLButtonElement>(null)
+  if (contextDrawer.locationSignature !== locationSignature) {
+    setContextDrawer({ locationSignature, open: false })
+  }
+  const contextDrawerOpen = isCompactLayout
+    && contextDrawer.open
+    && contextDrawer.locationSignature === locationSignature
   const now = new Date()
   const today = [
     String(now.getFullYear()).padStart(4, '0'),
@@ -94,12 +142,23 @@ export function TaskPage() {
   const metrics = taskMetrics(filteredTasks, today)
 
   const closeContextDrawer = useCallback(() => {
-    setContextDrawerOpen(false)
-    contextDrawerOpenerRef.current?.focus()
+    setContextDrawer((current) => ({ ...current, open: false }))
+    queueMicrotask(() => contextDrawerOpenerRef.current?.focus())
   }, [])
   const dismissContextDrawer = useCallback(() => {
-    setContextDrawerOpen(false)
+    setContextDrawer((current) => ({ ...current, open: false }))
   }, [])
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const media = window.matchMedia(compactTaskLayoutQuery)
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsCompactLayout(event.matches)
+      if (!event.matches) dismissContextDrawer()
+    }
+    media.addEventListener('change', handleChange)
+    return () => media.removeEventListener('change', handleChange)
+  }, [dismissContextDrawer])
 
   useEffect(() => {
     if (!contextDrawerOpen) return
@@ -138,6 +197,47 @@ export function TaskPage() {
     document.addEventListener('keydown', handleDrawerKeyDown)
     return () => document.removeEventListener('keydown', handleDrawerKeyDown)
   }, [closeContextDrawer, contextDrawerOpen, contextPanelId])
+
+  useEffect(() => {
+    if (!contextDrawerOpen) return
+    const page = taskPageRef.current
+    const drawer = document.getElementById(contextPanelId)
+    if (!page || !drawer) return
+
+    const workspace = page.querySelector<HTMLElement>(
+      '.task-multiview-workspace',
+    )
+    const stage = workspace?.querySelector<HTMLElement>('.task-view-stage')
+    const modalTargets = new Set<HTMLElement>()
+    document.querySelectorAll<HTMLElement>('.app-rail')
+      .forEach((element) => modalTargets.add(element))
+    Array.from(page.children).forEach((element) => {
+      if (!(element instanceof HTMLElement)) return
+      if (element === workspace || element === drawer) return
+      if (element.classList.contains('task-context-drawer__backdrop')) return
+      modalTargets.add(element)
+    })
+    if (stage) modalTargets.add(stage)
+
+    const preservedTargets = Array.from(modalTargets, preserveAndIsolate)
+    const main = page.closest<HTMLElement>('.app-main')
+    const previousMainOverflow = main?.style.overflow ?? null
+    if (main) main.style.overflow = 'hidden'
+
+    const keepFocusInDrawer = (event: FocusEvent) => {
+      if (!(event.target instanceof Node) || drawer.contains(event.target)) return
+      contextDrawerCloseRef.current?.focus()
+    }
+    document.addEventListener('focusin', keepFocusInDrawer)
+
+    return () => {
+      document.removeEventListener('focusin', keepFocusInDrawer)
+      preservedTargets.forEach(restoreModalTarget)
+      if (main && previousMainOverflow !== null) {
+        main.style.overflow = previousMainOverflow
+      }
+    }
+  }, [contextDrawerOpen, contextPanelId])
 
   const setSelectedTaskId = (taskId: string | null) => {
     setSearchParams((current) => {
@@ -184,7 +284,7 @@ export function TaskPage() {
   }
 
   return (
-    <section className="task-page">
+    <section className="task-page" ref={taskPageRef}>
       <RefreshState
         dataUpdatedAt={tasksQuery.dataUpdatedAt}
         error={tasksQuery.error}
@@ -241,7 +341,10 @@ export function TaskPage() {
             aria-controls={contextPanelId}
             aria-expanded={contextDrawerOpen}
             className="task-context-drawer__trigger"
-            onClick={() => setContextDrawerOpen(true)}
+            onClick={() => setContextDrawer({
+              locationSignature,
+              open: true,
+            })}
             ref={contextDrawerOpenerRef}
             type="button"
           >

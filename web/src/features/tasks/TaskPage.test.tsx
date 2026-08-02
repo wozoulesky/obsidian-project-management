@@ -9,7 +9,7 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
+import { StrictMode, type ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -88,6 +88,67 @@ function deferred<T>() {
   return { promise, reject, resolve }
 }
 
+function installTaskViewport(initialMatches = true) {
+  let matches = initialMatches
+  const listeners = new Set<(event: MediaQueryListEvent) => void>()
+  const mediaQueryList = {
+    get matches() {
+      return matches
+    },
+    media: '(max-width: 760px)',
+    onchange: null,
+    addEventListener: (_type: string, listener: EventListener) => {
+      listeners.add(listener as (event: MediaQueryListEvent) => void)
+    },
+    removeEventListener: (_type: string, listener: EventListener) => {
+      listeners.delete(listener as (event: MediaQueryListEvent) => void)
+    },
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(() => true),
+  } satisfies MediaQueryList
+  vi.stubGlobal('matchMedia', vi.fn(() => mediaQueryList))
+  return {
+    setMatches(nextMatches: boolean) {
+      matches = nextMatches
+      const event = { matches, media: mediaQueryList.media } as MediaQueryListEvent
+      listeners.forEach((listener) => listener(event))
+    },
+  }
+}
+
+function renderTaskPageInShell({ strict = false } = {}) {
+  const rail = document.createElement('aside')
+  rail.className = 'app-rail'
+  rail.dataset.taskTestShell = 'true'
+  rail.setAttribute('aria-hidden', 'false')
+  const backgroundButton = document.createElement('button')
+  backgroundButton.textContent = '背景导航'
+  rail.append(backgroundButton)
+  document.body.append(rail)
+
+  const main = document.createElement('main')
+  main.className = 'app-main'
+  main.dataset.taskTestShell = 'true'
+  main.style.overflow = 'auto'
+  document.body.append(main)
+  const view = renderApp(
+    strict ? <StrictMode><TaskPage /></StrictMode> : <TaskPage />,
+    { container: main },
+  )
+  return {
+    ...view,
+    backgroundButton,
+    main,
+    rail,
+    removeShell() {
+      view.unmount()
+      main.remove()
+      rail.remove()
+    },
+  }
+}
+
 function renderTaskPage() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -110,6 +171,9 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
+  document.querySelectorAll('[data-task-test-shell="true"]')
+    .forEach((element) => element.remove())
   window.history.pushState({}, '', '/')
 })
 
@@ -249,6 +313,7 @@ describe('TaskPage workflow', () => {
   })
 
   it('uses one persistent context as an accessible compact detail drawer', async () => {
+    installTaskViewport()
     const user = userEvent.setup()
     renderApp(<TaskPage />)
 
@@ -294,6 +359,7 @@ describe('TaskPage workflow', () => {
   })
 
   it('opens the shared drawer with the latest selection and closes from its backdrop', async () => {
+    installTaskViewport()
     const user = userEvent.setup()
     renderApp(<TaskPage />)
 
@@ -312,6 +378,96 @@ describe('TaskPage workflow', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(opener).toHaveFocus()
+  })
+
+  it('makes the shell and task background inert while preserving the modal host', async () => {
+    installTaskViewport()
+    const user = userEvent.setup()
+    const shell = renderTaskPageInShell()
+    const opener = await screen.findByRole('button', { name: '查看任务详情' })
+
+    await user.click(opener)
+
+    const drawer = screen.getByRole('dialog')
+    const close = within(drawer).getByRole('button', { name: '关闭任务详情' })
+    const stage = screen.getByTestId('task-view-stage')
+    const header = document.querySelector('.page-header')!
+    expect(shell.rail).toHaveAttribute('inert')
+    expect(shell.rail).toHaveAttribute('aria-hidden', 'true')
+    expect(stage).toHaveAttribute('inert')
+    expect(stage).toHaveAttribute('aria-hidden', 'true')
+    expect(header).toHaveAttribute('inert')
+    expect(header).toHaveAttribute('aria-hidden', 'true')
+    expect(shell.main).not.toHaveAttribute('inert')
+    expect(shell.main.style.overflow).toBe('hidden')
+
+    shell.backgroundButton.focus()
+    expect(close).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+    expect(shell.rail).not.toHaveAttribute('inert')
+    expect(shell.rail).toHaveAttribute('aria-hidden', 'false')
+    expect(stage).not.toHaveAttribute('inert')
+    expect(stage).not.toHaveAttribute('aria-hidden')
+    expect(header).not.toHaveAttribute('inert')
+    expect(header).not.toHaveAttribute('aria-hidden')
+    expect(shell.main.style.overflow).toBe('auto')
+    shell.removeShell()
+  })
+
+  it('closes and fully restores the modal when leaving compact layout', async () => {
+    const viewport = installTaskViewport()
+    const user = userEvent.setup()
+    const shell = renderTaskPageInShell()
+    const opener = await screen.findByRole('button', { name: '查看任务详情' })
+    await user.click(opener)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    await act(async () => viewport.setMatches(false))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(opener).not.toHaveFocus()
+    expect(shell.rail).not.toHaveAttribute('inert')
+    expect(shell.main.style.overflow).toBe('auto')
+
+    await act(async () => viewport.setMatches(true))
+    await user.click(opener)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    shell.removeShell()
+  })
+
+  it('closes the drawer for programmatic history and URL changes', async () => {
+    installTaskViewport()
+    const user = userEvent.setup()
+    const shell = renderTaskPageInShell()
+    await user.click(await screen.findByRole('button', { name: '查看任务详情' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    await act(async () => {
+      window.history.pushState({}, '', '/tasks?view=board&q=恢复')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    await waitFor(() => expect(screen.queryByRole('dialog'))
+      .not.toBeInTheDocument())
+    expect(shell.rail).not.toHaveAttribute('inert')
+    expect(shell.main.style.overflow).toBe('auto')
+    shell.removeShell()
+  })
+
+  it('restores pre-existing shell state after StrictMode cleanup and unmount', async () => {
+    installTaskViewport()
+    const user = userEvent.setup()
+    const shell = renderTaskPageInShell({ strict: true })
+    shell.main.style.overflow = 'scroll'
+    await user.click(await screen.findByRole('button', { name: '查看任务详情' }))
+    expect(shell.main.style.overflow).toBe('hidden')
+
+    shell.removeShell()
+
+    expect(shell.rail).not.toHaveAttribute('inert')
+    expect(shell.rail).toHaveAttribute('aria-hidden', 'false')
+    expect(shell.main.style.overflow).toBe('scroll')
   })
 
   it('uses a controlled search and preserves view while clearing selection', async () => {

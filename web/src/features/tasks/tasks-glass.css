@@ -333,6 +333,22 @@
   overflow: hidden;
 }
 
+@media (min-width: 761px) and (max-width: 900px) {
+  .task-page .page-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .task-page .page-header__actions {
+    justify-content: flex-start;
+  }
+
+  .task-multiview-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .task-list-panel,
 .task-context {
   padding: 18px;

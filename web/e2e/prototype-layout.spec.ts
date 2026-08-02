@@ -85,6 +85,33 @@ test('desktop task views keep one stage and persistent context side by side', as
   await expect(timelineScroll).toHaveAttribute('tabindex', '0')
 })
 
+test('768px task fan and context stack without clipping the readable stage', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 768, height: 1024 })
+  await openReadyPage(page, '/tasks')
+
+  const stageRegion = page.getByTestId('task-view-stage')
+  const fanRegion = page.getByRole('region', { name: '关键任务扇面' })
+  const contextRegion = page.getByRole('region', { name: '智能任务上下文' })
+  const heading = page.getByRole('heading', { level: 1, name: '任务控制台' })
+  const stage = await box(stageRegion)
+  const fan = await box(fanRegion)
+  const context = await box(contextRegion)
+  const title = await box(heading)
+
+  expect(context.y).toBeGreaterThanOrEqual(stage.y + stage.height)
+  expect(fan.width).toBeGreaterThan(180)
+  expect(title.width).toBeGreaterThan(100)
+  await expect(page.locator('.task-fan__scroll')).toBeVisible()
+  await expect.poll(() => page.locator('.task-fan__scroll').evaluate(
+    (element) => getComputedStyle(element).overflowX,
+  )).toBe('auto')
+  expect(await page.evaluate(() =>
+    document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  )).toBe(true)
+})
+
 test('desktop projects and actors keep their summary contexts alongside the stage', async ({
   page,
 }) => {

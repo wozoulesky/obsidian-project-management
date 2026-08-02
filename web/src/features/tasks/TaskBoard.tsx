@@ -253,7 +253,6 @@ export function TaskBoard({
       ariaLabel="任务看板工作区"
       className="task-board"
       data-slot={dataSlot}
-      style={{ gridColumn: '1 / span 2' }}
     >
       <DndContext
         collisionDetection={closestCenter}
