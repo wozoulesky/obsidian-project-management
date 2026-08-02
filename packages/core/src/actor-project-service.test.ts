@@ -748,6 +748,7 @@ describe('actor and project services', () => {
       id: project.id,
       name: project.name,
       deletedAt: expect.any(String),
+      deletedCounts: counts,
     })
     expect(new Date(result.deletedAt).toISOString()).toBe(result.deletedAt)
     expect(() => projects.get(project.id)).toThrowError(

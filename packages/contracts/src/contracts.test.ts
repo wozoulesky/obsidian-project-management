@@ -144,6 +144,16 @@ describe('shared contracts', () => {
 })
 
 describe('project deletion contracts', () => {
+  const deletedCounts = {
+    project_members: 1,
+    tasks: 2,
+    requirements: 3,
+    defects: 4,
+    sessions: 5,
+    handoffs: 6,
+    deliverables: 7,
+  }
+
   it('validates deletion input and result schemas strictly', () => {
     expect(deleteProjectInputSchema.parse({ version: 2 })).toEqual({
       version: 2,
@@ -160,20 +170,60 @@ describe('project deletion contracts', () => {
         id: 'project_demo',
         name: 'Demo',
         deletedAt: '2026-08-02T08:00:00.000Z',
+        deletedCounts,
       }),
     ).toEqual({
       id: 'project_demo',
       name: 'Demo',
       deletedAt: '2026-08-02T08:00:00.000Z',
+      deletedCounts,
     })
     expect(
       deleteProjectResultSchema.safeParse({
         id: 'project_demo',
         name: 'Demo',
         deletedAt: '2026-08-02T08:00:00.000Z',
+        deletedCounts,
         unexpected: true,
       }).success,
     ).toBe(false)
+  })
+
+  it('requires every project deletion count', () => {
+    const { deliverables: _deliverables, ...missingDeliverables } =
+      deletedCounts
+
+    expect(deleteProjectResultSchema.safeParse({
+      id: 'project_demo',
+      name: 'Demo',
+      deletedAt: '2026-08-02T08:00:00.000Z',
+    }).success).toBe(false)
+    expect(deleteProjectResultSchema.safeParse({
+      id: 'project_demo',
+      name: 'Demo',
+      deletedAt: '2026-08-02T08:00:00.000Z',
+      deletedCounts: missingDeliverables,
+    }).success).toBe(false)
+  })
+
+  it('requires project deletion counts to be non-negative integers', () => {
+    for (const tasks of [-1, 0.5]) {
+      expect(deleteProjectResultSchema.safeParse({
+        id: 'project_demo',
+        name: 'Demo',
+        deletedAt: '2026-08-02T08:00:00.000Z',
+        deletedCounts: { ...deletedCounts, tasks },
+      }).success).toBe(false)
+    }
+  })
+
+  it('rejects unknown project deletion count fields', () => {
+    expect(deleteProjectResultSchema.safeParse({
+      id: 'project_demo',
+      name: 'Demo',
+      deletedAt: '2026-08-02T08:00:00.000Z',
+      deletedCounts: { ...deletedCounts, unexpected: 0 },
+    }).success).toBe(false)
   })
 })
 

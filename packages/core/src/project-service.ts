@@ -511,6 +511,7 @@ export class ProjectService {
           id,
           name: current.name,
           deletedAt,
+          deletedCounts: counts,
         })
       })
     } catch (error) {
