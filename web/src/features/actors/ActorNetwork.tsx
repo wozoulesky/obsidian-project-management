@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Actor, Project, Task } from '../../data/domain'
@@ -67,17 +67,20 @@ function actorPositions(actors: Actor[]): Map<string, ActorPosition> {
 export function ActorNetwork({
   actors,
   currentActorId,
+  filters,
+  onSelectActor,
   projects,
+  selectedActorId,
   tasks,
 }: {
   actors: Actor[]
   currentActorId?: string
+  filters?: ReactNode
+  onSelectActor(actorId: string): void
   projects: Project[]
+  selectedActorId: string | null
   tasks: Task[]
 }) {
-  const [selectedActorId, setSelectedActorId] = useState(
-    currentActorId ?? actors[0]?.id ?? null,
-  )
   const positions = actorPositions(actors)
   const edges = deriveActorEdges({ actors, projects, tasks })
   const actorById = new Map(actors.map((actor) => [actor.id, actor]))
@@ -99,10 +102,17 @@ export function ActorNetwork({
           <h2>协作者关系网络</h2>
           <p>连线仅来自项目负责人和同项目任务负责人之间的共享证据。</p>
         </div>
-        <span>{actors.length} 个节点 · {edges.length} 条证据边</span>
+        <div className="actor-network-panel__controls">
+          <span>{actors.length} 个节点 · {edges.length} 条证据边</span>
+          {filters}
+        </div>
       </div>
 
-      <div className="actor-network-scroll" tabIndex={0}>
+      <div
+        aria-label="协作者关系图，可在窄屏横向滚动"
+        className="actor-network-scroll"
+        tabIndex={0}
+      >
         <div className="actor-network-canvas">
           <svg
             aria-hidden="true"
@@ -134,7 +144,7 @@ export function ActorNetwork({
                 aria-pressed={selectedActorId === actor.id}
                 className="actor-network-node"
                 key={actor.id}
-                onClick={() => setSelectedActorId(actor.id)}
+                onClick={() => onSelectActor(actor.id)}
                 style={{
                   '--actor-x': `${position.x}%`,
                   '--actor-y': `${position.y}%`,

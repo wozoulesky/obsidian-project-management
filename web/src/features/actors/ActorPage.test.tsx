@@ -85,6 +85,108 @@ function arrangeDirectory() {
 }
 
 describe('ActorPage', () => {
+  it('shows four honest workspace metrics and defaults context to the current actor', async () => {
+    arrangeDirectory()
+
+    renderApp(<ActorPage />)
+
+    const metrics = await screen.findByRole('group', {
+      name: '协作者网络关键指标',
+    })
+    expect(within(metrics).getAllByRole('article')).toHaveLength(4)
+    expect(within(metrics).getByRole('article', { name: '协作者总数' }))
+      .toHaveTextContent('2')
+    expect(within(metrics).getByRole('article', { name: '类型构成' }))
+      .toHaveTextContent('1 人 / 1 Agent')
+    expect(within(metrics).getByRole('article', { name: '活跃协作者' }))
+      .toHaveTextContent('2')
+    expect(within(metrics).getByRole('article', { name: '未完成任务' }))
+      .toHaveTextContent('1')
+
+    const context = screen.getByRole('region', { name: '协作者上下文' })
+    expect(within(context).getByRole('heading', { name: 'dev-agent' })).toBeVisible()
+    expect(within(context).getByText('Agent')).toBeVisible()
+    expect(within(context).getByText('1 项')).toBeVisible()
+    expect(within(context).getByText('Atlas')).toBeVisible()
+    expect(within(context).getByText('delivery')).toBeVisible()
+    expect(within(context).getByText(/2026年7月29日/)).toBeVisible()
+  })
+
+  it('filters both network nodes and evidence edges with accessible segmented controls', async () => {
+    arrangeDirectory()
+    vi.mocked(projectRepository.listProjects).mockResolvedValue([
+      { ...projects[0]!, ownerId: actors[0]!.id },
+    ])
+    const user = userEvent.setup()
+
+    renderApp(<ActorPage />)
+
+    const network = await screen.findByRole('region', {
+      name: '协作者关系网络',
+    })
+    const filters = screen.getByRole('group', { name: '协作者类型筛选' })
+    const allFilter = within(filters).getByRole('button', { name: '全部' })
+    const humanFilter = within(filters).getByRole('button', { name: '人类' })
+    const agentFilter = within(filters).getByRole('button', { name: 'Agent' })
+    expect(allFilter).toHaveAttribute('aria-pressed', 'true')
+    expect(within(network).getAllByRole('button', { name: /查看 .* 协作摘要/ }))
+      .toHaveLength(2)
+    expect(network.querySelectorAll('line')).toHaveLength(1)
+
+    await user.click(humanFilter)
+    expect(humanFilter).toHaveAttribute('aria-pressed', 'true')
+    expect(allFilter).toHaveAttribute('aria-pressed', 'false')
+    expect(within(network).getAllByRole('button', { name: /查看 .* 协作摘要/ }))
+      .toHaveLength(1)
+    expect(within(network).getByRole('button', { name: /查看 Lin 协作摘要/ }))
+      .toBeVisible()
+    expect(network.querySelectorAll('line')).toHaveLength(0)
+
+    await user.click(agentFilter)
+    expect(agentFilter).toHaveAttribute('aria-pressed', 'true')
+    expect(within(network).getByRole('button', { name: /查看 dev-agent 协作摘要/ }))
+      .toBeVisible()
+    expect(network.querySelectorAll('line')).toHaveLength(0)
+  })
+
+  it('synchronizes a node selection to the persistent context without opening a dialog', async () => {
+    arrangeDirectory()
+    const user = userEvent.setup()
+
+    renderApp(<ActorPage />)
+
+    const network = await screen.findByRole('region', {
+      name: '协作者关系网络',
+    })
+    const linNode = within(network).getByRole('button', {
+      name: '查看 Lin 协作摘要',
+    })
+    await user.click(linNode)
+
+    expect(linNode).toHaveAttribute('aria-pressed', 'true')
+    const context = screen.getByRole('region', { name: '协作者上下文' })
+    expect(within(context).getByRole('heading', { name: 'Lin' })).toBeVisible()
+    expect(within(context).getByText('人类')).toBeVisible()
+    expect(within(context).getByText('0 项')).toBeVisible()
+    expect(within(context).getByText('暂无主责项目')).toBeVisible()
+    expect(within(context).getByText('planning')).toBeVisible()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps the nine-column management directory in a collapsible secondary region', async () => {
+    arrangeDirectory()
+
+    renderApp(<ActorPage />)
+
+    const directory = await screen.findByRole('group', {
+      name: '协作者管理目录',
+    })
+    expect(within(directory).getByText('管理目录')).toBeVisible()
+    expect(within(directory).getByRole('table', { name: '负责人目录' }))
+      .toBeVisible()
+    expect(within(directory).getAllByRole('columnheader')).toHaveLength(9)
+  })
+
   it('draws only evidence-backed edges and marks the current actor accessibly', async () => {
     arrangeDirectory()
     vi.mocked(projectRepository.listProjects).mockResolvedValue([
