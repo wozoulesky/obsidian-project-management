@@ -23,6 +23,7 @@ export default defineConfig({
       testIgnore: [
         'failure-recovery.spec.ts',
         'projects-actors-settings.spec.ts',
+        'project-deletion-real.spec.ts',
         'quick-submit-real.spec.ts',
       ],
       use: {
@@ -35,6 +36,7 @@ export default defineConfig({
       testIgnore: [
         'failure-recovery.spec.ts',
         'projects-actors-settings.spec.ts',
+        'project-deletion-real.spec.ts',
         'quick-submit-real.spec.ts',
       ],
       use: {
@@ -47,6 +49,7 @@ export default defineConfig({
       testMatch: [
         'failure-recovery.spec.ts',
         'projects-actors-settings.spec.ts',
+        'project-deletion-real.spec.ts',
         'quick-submit-real.spec.ts',
       ],
       use: {
