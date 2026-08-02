@@ -1,8 +1,10 @@
 import { cleanup, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderApp } from '../../app/test-utils'
+import type { Project } from '../../data/domain'
+import { projectRepository } from '../../data/query-hooks'
 import baseCss from '../../styles/base.css?raw'
 import responsiveCss from '../../styles/glass-responsive.css?raw'
 import shellCss from '../../styles/glass-shell.css?raw'
@@ -61,31 +63,109 @@ function contrastRatio(
 afterEach(cleanup)
 
 describe('AppShell', () => {
-  it('starts collapsed and expands the desktop sidebar on request', async () => {
-    const user = userEvent.setup()
-
+  it('renders the approved complete desktop rail without a global header', () => {
     const { container } = renderApp(<AppShell />)
 
-    const toggle = screen.getByRole('button', { name: '展开侧边栏' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(container.querySelectorAll('.app-rail__label')).toHaveLength(0)
-    expect(screen.getByRole('link', { name: '仪表盘' })).toHaveAttribute(
-      'title',
+    expect(screen.getByText('Project OS')).toBeVisible()
+    for (const group of ['概览', '交付', '质量', '系统']) {
+      expect(screen.getByText(group)).toBeVisible()
+    }
+    for (const label of [
       '仪表盘',
+      '项目',
+      '负责人',
+      '项目详情',
+      '计划 / 任务',
+      '甘特图',
+      '需求',
+      '缺陷',
+      '设置',
+    ]) {
+      expect(screen.getByRole('link', { name: label })).toBeVisible()
+    }
+    expect(container.querySelectorAll('.app-rail__label')).toHaveLength(9)
+    expect(screen.getByRole('region', { name: '当前工作区' })).toBeVisible()
+    expect(screen.getByRole('region', { name: '当前负责人' })).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /(?:展开|收起)侧边栏/ }),
+    ).not.toBeInTheDocument()
+    expect(container.querySelector('.app-header')).not.toBeInTheDocument()
+    expect(screen.queryByText('Atlas 研发平台')).not.toBeInTheDocument()
+    expect(screen.queryByText('最后更新 10:42')).not.toBeInTheDocument()
+  })
+
+  it('switches the real workspace context and project-detail destination', async () => {
+    const user = userEvent.setup()
+    const projects = [
+      {
+        id: 'atlas',
+        code: 'PRJ-001',
+        name: 'Atlas 迁移',
+        description: '核心服务迁移',
+        ownerId: 'human-lin',
+        startDate: '2026-07-01',
+        dueDate: '2026-07-28',
+        status: 'in_progress',
+        progress: 62,
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-28T04:00:00.000Z',
+        version: 1,
+      },
+      {
+        id: 'borealis',
+        code: 'PRJ-002',
+        name: 'Borealis 发布',
+        description: '',
+        ownerId: 'human-lin',
+        startDate: null,
+        dueDate: null,
+        status: 'not_started',
+        progress: 0,
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-28T04:00:00.000Z',
+        version: 1,
+      },
+    ] satisfies Project[]
+    vi.spyOn(projectRepository, 'listProjects').mockResolvedValue(projects)
+
+    renderApp(<AppShell />)
+
+    const selector = await screen.findByRole('combobox', {
+      name: '选择当前工作区',
+    })
+    await screen.findByRole('option', { name: 'Borealis 发布' })
+    expect(selector).toHaveValue('atlas')
+    expect(screen.getByRole('link', { name: '项目详情' })).toHaveAttribute(
+      'href',
+      '/projects/atlas',
     )
 
-    await user.click(toggle)
+    await user.selectOptions(selector, 'borealis')
 
-    expect(
-      screen.getByRole('button', { name: '收起侧边栏' }),
-    ).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('仪表盘')).toBeVisible()
-    expect(screen.getByText('Project OS')).toBeVisible()
-    expect(screen.getByText('概览')).toBeVisible()
-    expect(screen.getByText('交付')).toBeVisible()
-    expect(screen.getByText('质量')).toBeVisible()
-    expect(screen.getByText('系统')).toBeVisible()
-    expect(container.querySelectorAll('.app-rail__label')).toHaveLength(8)
+    expect(selector).toHaveValue('borealis')
+    expect(screen.getByRole('link', { name: '项目详情' })).toHaveAttribute(
+      'href',
+      '/projects/borealis',
+    )
+    expect(sessionStorage.getItem('project-os:workspace-project'))
+      .toBe('borealis')
+  })
+
+  it('uses the approved fixed desktop columns and main-content placement', () => {
+    const appShellRule = cssRule(shellCss, '.app-shell')
+    const railRule = cssRule(shellCss, '.app-rail')
+    const mainRule = cssRule(shellCss, '.app-main')
+
+    expect(appShellRule).toContain(
+      'grid-template-columns: 220px minmax(0, 1fr)',
+    )
+    expect(appShellRule).not.toContain('grid-template-rows')
+    expect(railRule).toContain('position: sticky')
+    expect(railRule).toContain('height: 100dvh')
+    expect(railRule).toContain('flex-direction: column')
+    expect(mainRule).toContain('grid-column: 2')
+    expect(mainRule).toContain('min-width: 0')
+    expect(mainRule).toContain('padding: 28px 38px 40px')
   })
 
   it('keeps sticky navigation ancestors out of overflow scroll containers', () => {
@@ -103,7 +183,13 @@ describe('AppShell', () => {
     const navigationRule = cssRule(responsiveCss, '.app-rail__nav')
 
     expect(responsiveCss).toMatch(
-      /\.app-rail__brand,\s*\.app-rail__toggle\s*\{[^}]*display:\s*none/,
+      /\.app-rail__brand\s*\{[^}]*display:\s*none/,
+    )
+    expect(responsiveCss).toMatch(
+      /\.app-shell\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    )
+    expect(responsiveCss).toMatch(
+      /\.app-main\s*\{[^}]*grid-column:\s*1/,
     )
     expect(navigationRule).toContain('flex: 1 1 auto')
     expect(navigationRule).toContain('min-width: 0')
@@ -205,14 +291,6 @@ describe('AppShell', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
-  })
-
-  it('reports that the workspace is offline and project data is local', () => {
-    renderApp(<AppShell />)
-
-    expect(screen.getByText('OFFLINE / LOCAL')).toBeInTheDocument()
-    expect(screen.getByText('数据已保存到本地')).toBeInTheDocument()
-    expect(screen.getByText('最后更新 10:42')).toBeInTheDocument()
   })
 
   it('provides a skip link and stable main content target', () => {

@@ -47,7 +47,7 @@ const routeCases = [
   {
     eyebrow: 'ATLAS',
     heading: 'Atlas',
-    navLabel: '项目',
+    navLabel: '项目详情',
     route: '/projects/atlas',
   },
   {

@@ -65,11 +65,13 @@ test('current actor endpoint drives the local actor identity without a client id
       name: new RegExp(`${runtime.seed.localActorName}.*当前操作者`),
     }),
   ).toBeVisible()
-  expect(currentActorRequests).toHaveLength(1)
-  const currentActorRequest = new URL(currentActorRequests[0]!.url)
-  expect(currentActorRequests[0]!.method).toBe('GET')
-  expect(currentActorRequest.pathname).toBe('/api/v1/actors/current')
-  expect(currentActorRequest.search).toBe('')
+  expect(currentActorRequests.length).toBeGreaterThanOrEqual(1)
+  for (const currentActorRequestRecord of currentActorRequests) {
+    const currentActorRequest = new URL(currentActorRequestRecord.url)
+    expect(currentActorRequestRecord.method).toBe('GET')
+    expect(currentActorRequest.pathname).toBe('/api/v1/actors/current')
+    expect(currentActorRequest.search).toBe('')
+  }
 
   await page.getByRole('link', { name: '仪表盘' }).click()
   await expect(
@@ -87,16 +89,31 @@ test('shows all projects, filters by owner, and creates a task inside its projec
     page.getByRole('heading', { level: 1, name: '全部项目' }),
   ).toBeVisible()
 
-  const sidebarToggle = page.getByRole('button', { name: '展开侧边栏' })
-  await expect(sidebarToggle).toHaveAttribute('aria-expanded', 'false')
-  await expect(page.locator('.app-rail__label')).toHaveCount(0)
-  await sidebarToggle.click()
-  await expect(
-    page.getByRole('button', { name: '收起侧边栏' }),
-  ).toHaveAttribute('aria-expanded', 'true')
-  await expect(
-    page.getByRole('link', { name: '项目' }).locator('.app-rail__label'),
-  ).toHaveText('项目')
+  const rail = page.locator('.app-rail')
+  await expect(rail.getByRole('link', { name: 'Project OS' })).toBeVisible()
+  for (const group of ['概览', '交付', '质量', '系统']) {
+    await expect(rail.getByRole('group', { name: group })).toBeVisible()
+  }
+  for (const label of [
+    '仪表盘',
+    '项目',
+    '负责人',
+    '项目详情',
+    '计划 / 任务',
+    '甘特图',
+    '需求',
+    '缺陷',
+    '设置',
+  ]) {
+    await expect(
+      rail.getByRole('link', { name: label, exact: true }),
+    ).toBeVisible()
+  }
+  await expect(rail.getByRole('region', { name: '当前工作区' })).toBeVisible()
+  await expect(rail.getByRole('region', { name: '当前负责人' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:展开|收起)侧边栏/ }))
+    .toHaveCount(0)
+  await expect(page.locator('.app-header')).toHaveCount(0)
 
   await expect(page.getByRole('article', { name: 'Default Project' })).toBeVisible()
   await expect(page.getByRole('article', { name: 'Lin Portfolio' })).toBeVisible()

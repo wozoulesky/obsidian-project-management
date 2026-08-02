@@ -42,9 +42,7 @@
   --radius-md: 0.625rem;
   --radius-lg: 0.875rem;
   --radius-xl: 1.25rem;
-  --rail-width: 4.5rem;
-  --rail-expanded-width: 15rem;
-  --header-height: 4.25rem;
+  --rail-width: 220px;
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 35%, transparent);
   --settings-gap: var(--space-4);
 }

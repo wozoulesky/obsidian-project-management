@@ -1,22 +1,29 @@
 @media (width < 48rem) {
-  .app-shell,
-  .app-shell--rail-expanded {
-    grid-template-rows: var(--header-height) minmax(0, 1fr) auto;
+  .app-shell {
+    min-height: 100dvh;
+    grid-template-rows: minmax(0, 1fr) auto;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .app-rail,
-  .app-rail--expanded {
+  .app-rail {
+    position: sticky;
+    top: auto;
+    bottom: 0;
     width: 100%;
-    max-width: 100vw;
+    max-width: 100%;
+    height: auto;
+    grid-row: 2;
+    grid-column: 1;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     overflow: hidden;
     border-top: 1px solid var(--glass-line);
     border-right: 0;
   }
 
-  .app-rail__brand,
-  .app-rail__toggle {
+  .app-rail__brand {
     display: none;
   }
 
@@ -31,8 +38,7 @@
     overflow-y: hidden;
   }
 
-  .app-rail__group,
-  .app-rail--expanded .app-rail__group {
+  .app-rail__group {
     width: auto;
     flex: 0 0 auto;
     flex-direction: row;
@@ -43,15 +49,12 @@
     margin-top: 0;
   }
 
-  .app-rail--expanded .app-rail__group-label,
-  .app-rail--expanded .app-rail__label,
   .app-rail__group-label,
   .app-rail__label {
     display: none;
   }
 
-  .app-rail__link,
-  .app-rail--expanded .app-rail__link {
+  .app-rail__link {
     display: grid;
     width: 2.5rem;
     min-width: 2.5rem;
@@ -61,19 +64,64 @@
 
   .app-rail__link--active::before {
     inset: auto auto -0.5rem;
+    width: 1.25rem;
+    height: 0.1875rem;
+    border-radius: 2px 2px 0 0;
+    transform: none;
   }
 
-  .app-header {
-    gap: var(--space-2);
+  .app-rail__footer {
+    display: flex;
+    flex: 0 0 auto;
+    gap: var(--space-1);
+    padding: 0;
   }
 
-  .app-header__project {
-    min-width: 0;
-    flex: 0 1 auto;
+  .app-rail__footer-card {
+    padding: 0;
+    background: transparent;
+    border: 0;
   }
 
-  .app-header__project-name {
+  .app-rail__workspace-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .app-rail__workspace-card .app-rail__card-label,
+  .app-rail__owner-card {
     display: none;
+  }
+
+  .app-rail__project-select {
+    width: 6.75rem;
+    height: 2.5rem;
+    padding-inline: var(--space-2);
+    background: rgb(255 255 255 / 4%);
+    border: 1px solid color-mix(in srgb, var(--rail-text) 14%, transparent);
+  }
+
+  .app-rail__quick-submit {
+    display: grid;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    place-items: center;
+  }
+
+  .app-rail__quick-submit span,
+  .app-rail__announcement {
+    display: none;
+  }
+
+  .app-main {
+    width: 100%;
+    max-width: 100%;
+    grid-row: 1;
+    grid-column: 1;
+    padding: 0;
   }
 
   .page-header {
@@ -93,7 +141,7 @@
 }
 
 @media (width < 30rem) {
-  .app-header .badge--primary {
+  .app-rail__workspace-card .app-rail__card-copy {
     display: none;
   }
 }
