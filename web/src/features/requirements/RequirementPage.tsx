@@ -158,9 +158,10 @@ const requirementKeyboardCoordinates: KeyboardCoordinateGetter = (
 export function createRequirementAnnouncements(
   requirements: Requirement[],
 ): Announcements {
-  const getTitle = (id: UniqueIdentifier) =>
+  const getRequirement = (id: UniqueIdentifier) =>
     requirements.find((requirement) => requirement.id === String(id))
-      ?.title ?? '当前需求'
+  const getTitle = (id: UniqueIdentifier) =>
+    getRequirement(id)?.title ?? '当前需求'
   const getStatusLabel = (id: UniqueIdentifier | undefined) => {
     const status = id ? String(id) as RequirementStatus : null
     return status && boardStatusSet.has(status)
@@ -173,14 +174,16 @@ export function createRequirementAnnouncements(
     onDragOver: ({ active, over }) => {
       const label = getStatusLabel(over?.id)
       return label
-        ? `需求「${getTitle(active.id)}」已移动到${label}列。`
+        ? `需求「${getTitle(active.id)}」正在移向${label}列。`
         : `需求「${getTitle(active.id)}」未位于有效生命周期列。`
     },
     onDragEnd: ({ active, over }) => {
       const label = getStatusLabel(over?.id)
-      return label
-        ? `已将需求「${getTitle(active.id)}」放入${label}列。`
-        : `需求「${getTitle(active.id)}」未发生状态变更。`
+      const requirement = getRequirement(active.id)
+      const status = over?.id ? String(over.id) : null
+      return label && requirement?.status !== status
+        ? `已提交将需求「${getTitle(active.id)}」移动至${label}列的请求，等待状态更新结果。`
+        : `需求「${getTitle(active.id)}」未提交状态变更请求。`
     },
     onDragCancel: ({ active }) =>
       `已取消移动需求「${getTitle(active.id)}」。`,
@@ -429,14 +432,18 @@ function RequirementContext({
               <dd>{requirement.priority}</dd>
             </div>
             <div>
-              <dt>描述</dt>
-              <dd>{requirement.description?.trim() || '暂无需求描述'}</dd>
-            </div>
-            <div>
               <dt>关联任务</dt>
               <dd>{requirement.completedTaskCount} / {linkedTaskTotal} 已完成</dd>
             </div>
           </dl>
+
+          <section
+            aria-label="需求描述"
+            className="requirement-context__description"
+          >
+            <h3>描述</h3>
+            <p>{requirement.description?.trim() || '暂无需求描述'}</p>
+          </section>
 
           {canSuggestDelivery(requirement) ? (
             <p className="requirement-context__suggestion">
@@ -446,11 +453,20 @@ function RequirementContext({
 
           <section className="requirement-context__section">
             <h3>关联任务 ID</h3>
-            <p className="requirement-context__task-ids">
-              {linkedTaskTotal > 0
-                ? requirement.linkedTaskIds.join('、')
-                : '暂无关联任务'}
-            </p>
+            {linkedTaskTotal > 0 ? (
+              <ul
+                aria-label="关联任务 ID"
+                className="requirement-context__task-list"
+              >
+                {requirement.linkedTaskIds.map((taskId) => (
+                  <li key={taskId}>
+                    <code title={taskId}>{taskId}</code>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>暂无关联任务</p>
+            )}
             {linkedTaskTotal > 0 ? (
               <progress
                 aria-label="关联任务完成比例"
@@ -492,6 +508,7 @@ export function RequirementPage() {
   const [terminalFilter, setTerminalFilter] =
     useState<TerminalFilter>('board')
   const [dragError, setDragError] = useState('')
+  const [dragFeedback, setDragFeedback] = useState('')
   const [isStatusPending, setIsStatusPending] = useState(false)
   const statusPendingRef = useRef(false)
   const sensors = useSensors(
@@ -661,7 +678,11 @@ export function RequirementPage() {
                 if (statusPendingRef.current) {
                   return
                 }
+                const draggedRequirement = requirements.find(
+                  (requirement) => requirement.id === String(active.id),
+                )
                 setDragError('')
+                setDragFeedback('')
                 applyRequirementDrop(
                   requirements,
                   active.id,
@@ -674,6 +695,21 @@ export function RequirementPage() {
                         setDragError(
                           error.message ||
                             '需求状态更新失败，请稍后重试。',
+                        )
+                        setDragFeedback(
+                          `需求「${draggedRequirement?.title ?? '当前需求'}」更新失败，仍为${
+                            draggedRequirement
+                              ? statusLabels[draggedRequirement.status]
+                              : '原状态'
+                          }。`,
+                        )
+                      },
+                      onSuccess: () => {
+                        setSelectedRequirementId(input.requirementId)
+                        setDragFeedback(
+                          `需求「${draggedRequirement?.title ?? '当前需求'}」已更新为${
+                            statusLabels[input.status]
+                          }。`,
                         )
                       },
                     },
@@ -739,6 +775,14 @@ export function RequirementPage() {
             </section>
           )}
           {dragError ? <p role="alert">{dragError}</p> : null}
+          <p
+            aria-label="需求状态更新反馈"
+            aria-live="polite"
+            className="sr-only"
+            role="status"
+          >
+            {dragFeedback}
+          </p>
         </section>
         <RequirementContext requirement={selectedRequirement} />
       </div>

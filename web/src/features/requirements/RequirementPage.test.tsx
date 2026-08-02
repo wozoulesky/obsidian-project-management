@@ -148,10 +148,26 @@ describe('RequirementPage approved pipeline workspace', () => {
     expect(within(context).getByText('状态').nextElementSibling)
       .toHaveTextContent('开发中')
     expect(within(context).getByText('P0')).toBeVisible()
-    expect(within(context).getByText('保留已有状态与关联数据。'))
+    const description = within(context).getByRole('region', {
+      name: '需求描述',
+    })
+    expect(description).toHaveClass('requirement-context__description')
+    expect(within(description).getByText('保留已有状态与关联数据。'))
       .toBeVisible()
+    expect(description.closest('dl')).toBeNull()
     expect(within(context).getByText('1 / 2 已完成')).toBeVisible()
-    expect(within(context).getByText('task-a、task-b')).toBeVisible()
+    const taskList = within(context).getByRole('list', {
+      name: '关联任务 ID',
+    })
+    expect(within(taskList).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(taskList).getByText('task-a')).toHaveAttribute(
+      'title',
+      'task-a',
+    )
+    expect(within(taskList).getByText('task-b')).toHaveAttribute(
+      'title',
+      'task-b',
+    )
     expect(within(context).getByText('上下文不伪造负责人')).toBeVisible()
     expect(within(context).queryByText('负责人')).not.toBeInTheDocument()
     expect(within(context).queryByText('变更风险')).not.toBeInTheDocument()
@@ -206,6 +222,66 @@ describe('RequirementPage approved pipeline workspace', () => {
     })
     expect(within(screen.getByRole('region', { name: '已交付需求' }))
       .getByRole('button', { name: '查看 Agent 身份注册' })).toBeVisible()
+  })
+
+  it('selects a previously unselected card after its drag mutation succeeds', async () => {
+    mockBoardRects()
+    const updateStatus = vi.spyOn(projectRepository, 'updateRequirementStatus')
+    const user = userEvent.setup()
+    renderApp(<RequirementPage />)
+
+    const context = await screen.findByRole('complementary', {
+      name: '需求上下文',
+    })
+    expect(within(context).getByRole('heading', { name: 'Agent 身份注册' }))
+      .toBeVisible()
+    const handle = screen.getByRole('button', {
+      name: '拖动 项目排期可视化',
+    })
+
+    handle.focus()
+    await user.keyboard('[Space]{ArrowRight}[Space]')
+
+    await waitFor(() => {
+      expect(updateStatus).toHaveBeenCalledWith('req-017', 'developing')
+    })
+    await waitFor(() => {
+      expect(within(context).getByRole('heading', {
+        name: '项目排期可视化',
+      })).toBeVisible()
+    })
+    expect(within(context).getByText('状态').nextElementSibling)
+      .toHaveTextContent('开发中')
+    expect(screen.getByRole('status', { name: '需求状态更新反馈' }))
+      .toHaveTextContent('需求「项目排期可视化」已更新为开发中')
+  })
+
+  it('keeps the previous selection when an unselected card drag fails', async () => {
+    mockBoardRects()
+    vi.spyOn(projectRepository, 'updateRequirementStatus').mockRejectedValueOnce(
+      new Error('拖拽状态更新失败'),
+    )
+    const user = userEvent.setup()
+    renderApp(<RequirementPage />)
+
+    const context = await screen.findByRole('complementary', {
+      name: '需求上下文',
+    })
+    const handle = screen.getByRole('button', {
+      name: '拖动 项目排期可视化',
+    })
+    handle.focus()
+    await user.keyboard('[Space]{ArrowRight}[Space]')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '拖拽状态更新失败',
+    )
+    expect(within(context).getByRole('heading', { name: 'Agent 身份注册' }))
+      .toBeVisible()
+    expect(screen.getByRole('status', { name: '需求状态更新反馈' }))
+      .toHaveTextContent(
+        '需求「项目排期可视化」更新失败，仍为已评审',
+      )
   })
 
   it('reports a rejected drag and keeps the selected context unchanged', async () => {
@@ -419,9 +495,17 @@ describe('requirement DnD accessibility helpers', () => {
       announcements.onDragEnd({ active, over } as never),
       announcements.onDragCancel({ active, over: null } as never),
     ].join(' ')
+    const sameColumn = announcements.onDragEnd({
+      active,
+      over: { id: 'developing' },
+    } as never)
 
     expect(messages).toContain('中文需求标题')
     expect(messages).toContain('已交付')
+    expect(messages).toContain('等待状态更新结果')
+    expect(messages).not.toContain('已将需求')
     expect(messages).not.toContain('internal-req-id')
+    expect(sameColumn).toContain('未提交状态变更请求')
+    expect(sameColumn).not.toContain('等待状态更新结果')
   })
 })
