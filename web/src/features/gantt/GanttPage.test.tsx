@@ -14,6 +14,7 @@ import { renderApp } from '../../app/test-utils'
 import type { Task } from '../../data/domain'
 import { projectRepository } from '../../data/query-hooks'
 import { GanttPage } from './GanttPage'
+import ganttGlassCss from './gantt-glass.css?raw'
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -74,6 +75,55 @@ function tickLabels(container: HTMLElement): string[] {
 }
 
 describe('GanttPage layout', () => {
+  it('keeps the timeline stage and persistent task context in one desktop signature', async () => {
+    mockTasks()
+    renderApp(<GanttPage />, { route: '/gantt' })
+
+    const signature = await screen.findByTestId('gantt-signature')
+    expect(signature).toHaveClass('gantt-signature')
+    expect(within(signature).getByRole('region', {
+      name: '甘特排程工作区',
+    })).toHaveClass('gantt-stage')
+    const context = within(signature).getByRole('region', {
+      name: '甘特任务上下文',
+    })
+    expect(within(context).getByRole('heading', { name: 'MCP 权限校验' }))
+      .toBeVisible()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '查看 MCP 权限校验' }))
+      .toHaveAttribute('aria-expanded', 'true')
+
+    expect(ganttGlassCss).toMatch(
+      /\.gantt-signature\s*{[^}]*grid-template-columns:/s,
+    )
+    expect(ganttGlassCss).toMatch(
+      /@media \(width < 64rem\)[\s\S]*\.gantt-signature\s*{[^}]*grid-template-columns:\s*1fr/s,
+    )
+    expect(ganttGlassCss).toMatch(
+      /\.gantt-stage \.gantt-timeline\s*{[^}]*overflow-x:\s*auto/s,
+    )
+  })
+
+  it('synchronizes tree and timeline selection into context without changing route', async () => {
+    const user = userEvent.setup()
+    mockTasks()
+    renderApp(<GanttPage />, { route: '/gantt' })
+
+    const context = await screen.findByRole('region', {
+      name: '甘特任务上下文',
+    })
+    await user.click(screen.getByRole('button', { name: '查看 断线恢复测试' }))
+    expect(within(context).getByRole('heading', { name: '断线恢复测试' }))
+      .toBeVisible()
+    expect(window.location.pathname).toBe('/gantt')
+
+    await user.click(screen.getByRole('button', { name: '移动 MCP 权限校验' }))
+    expect(within(context).getByRole('heading', { name: 'MCP 权限校验' }))
+      .toBeVisible()
+    expect(window.location.pathname).toBe('/gantt')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
   it('uses the shared glass header, real metrics, legend, and local stage', async () => {
     mockTasks([
       task(),
@@ -453,6 +503,9 @@ describe('GanttPage layout', () => {
     ).toBeVisible()
     resolveTasks([])
     expect(await screen.findByText('当前项目暂无排期任务')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '甘特任务上下文' }))
+      .toHaveTextContent('当前项目暂无任务上下文')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     loading.unmount()
 
     vi.spyOn(projectRepository, 'listGanttTasks').mockRejectedValueOnce(
@@ -468,6 +521,75 @@ describe('GanttPage layout', () => {
 })
 
 describe('GanttPage scheduling workflow', () => {
+  it('validates and saves schedule dates from the persistent context', async () => {
+    const user = userEvent.setup()
+    mockTasks()
+    const update = vi.spyOn(projectRepository, 'updateTaskDates')
+      .mockResolvedValue(task({
+        startDate: '2026-07-25',
+        dueDate: '2026-07-30',
+      }))
+    renderApp(<GanttPage />)
+
+    const context = await screen.findByRole('region', {
+      name: '甘特任务上下文',
+    })
+    const start = within(context).getByLabelText('开始日期')
+    const due = within(context).getByLabelText('截止日期')
+    await user.clear(start)
+    await user.type(start, '2026-08-02')
+    await user.clear(due)
+    await user.type(due, '2026-08-01')
+    await user.click(within(context).getByRole('button', { name: '保存排期' }))
+
+    expect(within(context).getByRole('alert')).toHaveTextContent(
+      '开始日期不能晚于截止日期',
+    )
+    expect(update).not.toHaveBeenCalled()
+
+    await user.clear(start)
+    await user.type(start, '2026-07-25')
+    await user.clear(due)
+    await user.type(due, '2026-07-30')
+    await user.click(within(context).getByRole('button', { name: '保存排期' }))
+
+    await waitFor(() => expect(update).toHaveBeenCalledWith('task-051', {
+      startDate: '2026-07-25',
+      dueDate: '2026-07-30',
+    }))
+  })
+
+  it('saves progress and keeps editable values when the mutation fails', async () => {
+    const user = userEvent.setup()
+    mockTasks()
+    const update = vi.spyOn(projectRepository, 'updateTaskProgress')
+      .mockRejectedValue(new Error('保存进度失败'))
+    renderApp(<GanttPage />)
+
+    const context = await screen.findByRole('region', {
+      name: '甘特任务上下文',
+    })
+    const progress = within(context).getByLabelText('任务进度')
+    const status = within(context).getByLabelText('状态')
+    const note = within(context).getByLabelText('进度备注')
+    await user.clear(progress)
+    await user.type(progress, '75')
+    await user.selectOptions(status, 'in_progress')
+    await user.type(note, '保持当前输入')
+    await user.click(within(context).getByRole('button', { name: '提交进度' }))
+
+    expect(update).toHaveBeenCalledWith('task-051', {
+      progress: 75,
+      status: 'in_progress',
+      note: '保持当前输入',
+    })
+    expect(await within(context).findByRole('alert')).toHaveTextContent(
+      '保存进度失败',
+    )
+    expect(progress).toHaveValue(75)
+    expect(note).toHaveValue('保持当前输入')
+  })
+
   it('previews keyboard moves, cancels without writing, then confirms the API mutation', async () => {
     mockTasks()
     const update = vi
@@ -598,7 +720,7 @@ describe('GanttPage scheduling workflow', () => {
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
   })
 
-  it('opens the inspector from the latest task snapshot and restores focus', async () => {
+  it('keeps the persistent context open when the selected task is clicked again', async () => {
     mockTasks()
     const user = userEvent.setup()
     renderApp(<GanttPage />)
@@ -607,16 +729,14 @@ describe('GanttPage scheduling workflow', () => {
       name: '查看 MCP 权限校验',
     })
     await user.click(trigger)
-    expect(screen.getByRole('dialog', { name: 'MCP 权限校验' })).toBeVisible()
-    await user.click(
-      within(screen.getByRole('dialog')).getByRole('button', {
-        name: '关闭 MCP 权限校验',
-      }),
-    )
-    expect(trigger).toHaveFocus()
+    expect(screen.getByRole('region', { name: '甘特任务上下文' }))
+      .toHaveAccessibleName('甘特任务上下文')
+    await user.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('restores focus to the actual timeline entry even when the task tree collapses', async () => {
+  it('keeps timeline selection visible when the task tree collapses', async () => {
     mockTasks()
     const user = userEvent.setup()
     renderApp(<GanttPage />)
@@ -625,13 +745,11 @@ describe('GanttPage scheduling workflow', () => {
       name: '移动 MCP 权限校验',
     })
     await user.click(timelineTrigger)
-    const dialog = screen.getByRole('dialog', { name: 'MCP 权限校验' })
     await user.click(screen.getByRole('button', { name: '折叠任务树' }))
-    await user.click(
-      within(dialog).getByRole('button', { name: '关闭 MCP 权限校验' }),
-    )
-
-    expect(timelineTrigger).toHaveFocus()
+    expect(timelineTrigger.closest('.gantt-task-bar')).toHaveClass('is-selected')
+    expect(screen.getByRole('region', { name: '甘特任务上下文' }))
+      .toHaveTextContent('MCP 权限校验')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('creates one pointer proposal only on completion using the final delta', async () => {

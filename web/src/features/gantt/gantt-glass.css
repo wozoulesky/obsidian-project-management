@@ -93,6 +93,14 @@
   background: color-mix(in srgb, var(--text-primary) 72%, transparent);
 }
 
+.gantt-signature {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1.7fr) minmax(17rem, 0.55fr);
+}
+
 .gantt-stage {
   min-width: 0;
   padding: 0;
@@ -111,9 +119,31 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.gantt-stage .gantt-layout {
+  min-width: 0;
+  grid-template-columns: minmax(14rem, 34%) minmax(0, 1fr);
+}
+
+.gantt-stage .gantt-layout--task-tree-collapsed {
+  grid-template-columns: 3rem minmax(0, 1fr);
+}
+
+.gantt-stage .gantt-timeline {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: clip;
+  overscroll-behavior-inline: contain;
+}
+
+.gantt-stage .gantt-timeline__header,
+.gantt-stage .gantt-timeline__body {
+  min-width: 34rem;
 }
 
 .gantt-stage .gantt-layout,
@@ -177,6 +207,151 @@
 
 .gantt-stage .gantt-timeline__today::before {
   background: var(--primary);
+}
+
+.gantt-context {
+  display: grid;
+  min-width: 0;
+  max-height: min(70vh, 44rem);
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--space-5);
+  scrollbar-gutter: stable;
+}
+
+.gantt-context__header {
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--glass-line);
+}
+
+.gantt-context__header > span {
+  color: var(--primary);
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.gantt-context__header h2,
+.gantt-context__header p,
+.gantt-context__description,
+.gantt-context__empty p,
+.gantt-context__empty strong {
+  margin: 0;
+}
+
+.gantt-context__header h2 {
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.gantt-context__header p,
+.gantt-context__description,
+.gantt-context__empty p {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.gantt-context__body {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.gantt-context__details {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.gantt-context__details > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.gantt-context__details dt,
+.gantt-context__details dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.gantt-context__details dt {
+  color: var(--text-secondary);
+}
+
+.gantt-context__details dd {
+  overflow-wrap: anywhere;
+}
+
+.gantt-context__form,
+.gantt-context__progress {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--glass-line);
+}
+
+.gantt-context__form-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.gantt-context__form-heading h3,
+.gantt-context__progress > h3 {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.gantt-context__form-heading span {
+  color: var(--text-secondary);
+  font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gantt-context__form label,
+.gantt-context .task-inspector__form label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+}
+
+.gantt-context__form input,
+.gantt-context .task-inspector__form input,
+.gantt-context .task-inspector__form select,
+.gantt-context .task-inspector__form textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.gantt-context__form [role="alert"],
+.gantt-context .task-inspector__form [role="alert"] {
+  margin: 0;
+  color: var(--critical);
+  font-size: 0.6875rem;
+}
+
+.gantt-context__empty {
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-6);
+}
+
+@media (width < 64rem) {
+  .gantt-signature {
+    grid-template-columns: 1fr;
+  }
+
+  .gantt-context {
+    max-height: none;
+  }
 }
 
 @media (width < 48rem) {
