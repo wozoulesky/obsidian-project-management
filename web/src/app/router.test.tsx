@@ -52,7 +52,7 @@ const routeCases = [
   },
   {
     eyebrow: 'ACTOR NETWORK',
-    heading: '负责人目录',
+    heading: '协作者网络',
     navLabel: '负责人',
     route: '/actors',
   },
