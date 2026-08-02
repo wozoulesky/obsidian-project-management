@@ -10,19 +10,16 @@ import {
   RuntimeControl,
   RuntimeStoppingError,
 } from './runtime-control.mjs'
+import { resolveNpmCommand } from './npm-command.mjs'
 
 const execFileAsync = promisify(execFile)
-const npmCli = process.env.npm_execpath
-  ?? (process.platform === 'win32' ? 'npm.cmd' : 'npm')
-const npmCommand = npmCli === process.env.npm_execpath
-  ? [process.execPath, [npmCli]]
-  : [npmCli, []]
+const npmCommand = resolveNpmCommand()
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'project-os-e2e-'))
 const shutdownAfterReady = process.argv.includes('--shutdown-after-ready')
 
 function spawnNpm(args, environment = {}) {
-  return spawn(npmCommand[0], [...npmCommand[1], ...args], {
+  return spawn(npmCommand.command, [...npmCommand.prefixArgs, ...args], {
     cwd: repositoryRoot,
     detached: process.platform !== 'win32',
     env: { ...process.env, ...environment },
@@ -120,8 +117,8 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 
 try {
   await execFileAsync(
-    npmCommand[0],
-    [...npmCommand[1], 'run', 'build'],
+    npmCommand.command,
+    [...npmCommand.prefixArgs, 'run', 'build'],
     {
       cwd: repositoryRoot,
       timeout: 120_000,
@@ -129,9 +126,9 @@ try {
   )
   control.checkpoint()
   await execFileAsync(
-    npmCommand[0],
+    npmCommand.command,
     [
-      ...npmCommand[1],
+      ...npmCommand.prefixArgs,
       'run',
       'build',
       '--workspace',
