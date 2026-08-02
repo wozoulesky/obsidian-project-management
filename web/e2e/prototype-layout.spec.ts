@@ -44,27 +44,40 @@ test('desktop shell and dashboard preserve the approved first viewport', async (
   expect(detail.y).toBeLessThan(900)
 })
 
-test('desktop task timeline keeps filters, context, and local scrolling in reach', async ({
+test('desktop task views keep one stage and persistent context side by side', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
-  await openReadyPage(page, '/tasks?view=timeline')
+  for (const view of ['fan', 'board', 'timeline'] as const) {
+    await openReadyPage(page, `/tasks${view === 'fan' ? '' : `?view=${view}`}`)
 
-  await expect(page.getByTestId('task-filter-toolbar')).toBeVisible()
-  const workspace = await box(page.getByTestId('task-workspace'))
-  const timelineRegion = page.getByRole('region', {
-    name: '任务时间线工作区',
-  })
-  const contextRegion = page.getByRole('region', { name: '智能任务上下文' })
-  const timeline = await box(timelineRegion)
-  const context = await box(contextRegion)
-  const timelineScroll = timelineRegion.locator('.task-timeline__scroll')
-  expect(workspace.height).toBeGreaterThanOrEqual(350)
-  expect(workspace.height).toBeLessThanOrEqual(380)
-  expect(timeline.y).toBeLessThan(900)
-  expect(context.x).toBeGreaterThanOrEqual(timeline.x + timeline.width)
-  expect(context.y).toBeCloseTo(timeline.y, 0)
-  expect(context.y).toBeLessThan(900)
+    await expect(page.getByTestId('task-filter-toolbar')).toBeVisible()
+    const workspace = page.getByTestId('task-workspace')
+    const stageRegion = page.getByTestId('task-view-stage')
+    const contextRegion = page.getByRole('region', { name: '智能任务上下文' })
+    const workspaceBox = await box(workspace)
+    const stage = await box(stageRegion)
+    const context = await box(contextRegion)
+    await expect(workspace.locator(':scope > .task-view-stage')).toHaveCount(1)
+    await expect(workspace.locator(':scope > .task-context')).toHaveCount(1)
+    expect(await stageRegion.evaluate(
+      (element) => element.nextElementSibling?.classList.contains('task-context'),
+    )).toBe(true)
+    expect(workspaceBox.height).toBeGreaterThanOrEqual(350)
+    expect(stage.y).toBeLessThan(900)
+    expect(context.x).toBeGreaterThanOrEqual(stage.x + stage.width)
+    expect(context.y).toBeCloseTo(stage.y, 0)
+    expect(context.y).toBeLessThan(900)
+  }
+
+  await openReadyPage(page, '/tasks?view=board')
+  await expect(page.locator('.task-board__scroll')).toBeVisible()
+  await expect.poll(() => page.locator('.task-board__scroll').evaluate(
+    (element) => getComputedStyle(element).overflowX,
+  )).toBe('auto')
+
+  await openReadyPage(page, '/tasks?view=timeline')
+  const timelineScroll = page.locator('.task-timeline__scroll')
   await expect(timelineScroll).toBeVisible()
   await expect.poll(() => timelineScroll.evaluate(
     (element) => getComputedStyle(element).overflowX,

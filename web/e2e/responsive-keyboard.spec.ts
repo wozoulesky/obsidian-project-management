@@ -126,6 +126,9 @@ test('390px complex workspaces keep wide content inside local scroll regions', a
   await openReadyPage(page, '/tasks')
   await expectLocalHorizontalScroll(page.locator('.task-fan__scroll'))
 
+  await openReadyPage(page, '/tasks?view=board')
+  await expectLocalHorizontalScroll(page.locator('.task-board__scroll'))
+
   await openReadyPage(page, '/tasks?view=timeline')
   const taskTimeline = page.locator('.task-timeline__scroll')
   await expectLocalHorizontalScroll(taskTimeline)
@@ -152,7 +155,7 @@ test('390px complex workspaces keep wide content inside local scroll regions', a
   await expectLocalHorizontalScroll(page.locator('.actor-network-scroll'))
 })
 
-test('390px task selections synchronize the persistent context', async ({
+test('390px task selections open one keyboard-operable detail drawer', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -161,11 +164,40 @@ test('390px task selections synchronize the persistent context', async ({
   const trigger = page.locator('button[id^="task-list-trigger-"]').nth(1)
   await trigger.focus()
   await trigger.press('Enter')
-  const context = page.getByRole('region', { name: '智能任务上下文' })
-  await expect(context).toBeVisible()
   await expect(trigger).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(trigger).toBeFocused()
+
+  const opener = page.getByRole('button', { name: '查看任务详情' })
+  await expect(opener).toBeVisible()
+  await expect(opener).toHaveAttribute('aria-expanded', 'false')
+  await opener.focus()
+  await opener.press('Enter')
+
+  const drawer = page.getByRole('dialog')
+  await expect(drawer).toBeVisible()
+  await expect(opener).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('.task-context')).toHaveCount(1)
+  await expect(drawer.getByRole('button', { name: '关闭任务详情' }))
+    .toBeFocused()
+  const drawerBox = await drawer.boundingBox()
+  expect(drawerBox).not.toBeNull()
+  expect(drawerBox!.x).toBeGreaterThanOrEqual(0)
+  expect(drawerBox!.x + drawerBox!.width).toBeLessThanOrEqual(390)
+  expect(drawerBox!.y).toBeGreaterThanOrEqual(0)
+  expect(drawerBox!.y + drawerBox!.height).toBeLessThanOrEqual(844)
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(opener).toHaveAttribute('aria-expanded', 'false')
+  await expect(opener).toBeFocused()
+
+  const overflow = await page.evaluate(() => ({
+    body: document.body.scrollWidth - document.body.clientWidth,
+    root:
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  }))
+  expect(overflow).toEqual({ body: 0, root: 0 })
 })
 
 test('390px Gantt keeps local timeline scrolling and its selected scale', async ({

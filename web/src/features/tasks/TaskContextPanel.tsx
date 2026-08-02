@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useState, type RefObject } from 'react'
 
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Task } from '../../data/domain'
@@ -51,35 +51,64 @@ function TaskDependencies({
 }
 
 export interface TaskContextPanelProps {
+  closeButtonRef?: RefObject<HTMLButtonElement | null>
   dataSlot?: string
+  drawerOpen?: boolean
+  onClose?: () => void
+  panelId?: string
   projectName: string
   task: Task | null
   today: string
 }
 
 export function TaskContextPanel({
+  closeButtonRef,
   dataSlot,
+  drawerOpen = false,
+  onClose,
+  panelId,
   projectName,
   task,
   today,
 }: TaskContextPanelProps) {
   const insights = task ? taskInsights(task, today) : []
   const insightsHeadingId = useId()
+  const taskHeadingId = useId()
 
   return (
     <GlassPanel
+      aria-labelledby={drawerOpen ? taskHeadingId : undefined}
+      aria-modal={drawerOpen ? 'true' : undefined}
       ariaLabel="智能任务上下文"
-      className="task-context"
+      className={[
+        'task-context',
+        drawerOpen ? 'task-context-drawer' : '',
+      ].filter(Boolean).join(' ')}
       data-slot={dataSlot}
+      id={panelId}
+      role={drawerOpen ? 'dialog' : undefined}
     >
       <header className="task-context__header">
         <div>
           <p>SMART CONTEXT</p>
-          <h2>{task?.title ?? '智能任务上下文'}</h2>
+          <h2 id={taskHeadingId}>{task?.title ?? '智能任务上下文'}</h2>
         </div>
-        <span data-status={task?.status ?? 'empty'}>
-          {task ? taskStatusLabels[task.status] : '无选择'}
-        </span>
+        <div className="task-context__header-actions">
+          <span data-status={task?.status ?? 'empty'}>
+            {task ? taskStatusLabels[task.status] : '无选择'}
+          </span>
+          {drawerOpen ? (
+            <button
+              aria-label="关闭任务详情"
+              className="task-context-drawer__close"
+              onClick={onClose}
+              ref={closeButtonRef}
+              type="button"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          ) : null}
+        </div>
       </header>
       {task ? (
         <div className="task-context__scroll">

@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import {
@@ -66,6 +67,10 @@ export function TaskPage() {
   const moveStatus = useMoveTaskStatus()
   const { projectId: workspaceProjectId } = useProjectRepository()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [contextDrawerOpen, setContextDrawerOpen] = useState(false)
+  const contextPanelId = useId()
+  const contextDrawerOpenerRef = useRef<HTMLButtonElement>(null)
+  const contextDrawerCloseRef = useRef<HTMLButtonElement>(null)
   const now = new Date()
   const today = [
     String(now.getFullYear()).padStart(4, '0'),
@@ -88,6 +93,52 @@ export function TaskPage() {
   )?.name ?? projectFallbackName(selectedProjectId)
   const metrics = taskMetrics(filteredTasks, today)
 
+  const closeContextDrawer = useCallback(() => {
+    setContextDrawerOpen(false)
+    contextDrawerOpenerRef.current?.focus()
+  }, [])
+  const dismissContextDrawer = useCallback(() => {
+    setContextDrawerOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (!contextDrawerOpen) return
+    contextDrawerCloseRef.current?.focus()
+  }, [contextDrawerOpen])
+
+  useEffect(() => {
+    if (!contextDrawerOpen) return
+    const handleDrawerKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeContextDrawer()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const drawer = document.getElementById(contextPanelId)
+      const focusable = Array.from(drawer?.querySelectorAll<HTMLElement>([
+        'button:not([disabled])',
+        'input:not([disabled])',
+        'select:not([disabled])',
+        'textarea:not([disabled])',
+        '[href]',
+        '[tabindex]:not([tabindex="-1"])',
+      ].join(',')) ?? [])
+      const first = focusable[0]
+      const last = focusable.at(-1)
+      if (!first || !last) return
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', handleDrawerKeyDown)
+    return () => document.removeEventListener('keydown', handleDrawerKeyDown)
+  }, [closeContextDrawer, contextDrawerOpen, contextPanelId])
+
   const setSelectedTaskId = (taskId: string | null) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current)
@@ -101,6 +152,7 @@ export function TaskPage() {
   }
 
   const selectTask = (taskId: string) => {
+    dismissContextDrawer()
     setSelectedTaskId(taskId)
   }
 
@@ -142,7 +194,9 @@ export function TaskPage() {
       <PageHeader
         actions={(
           <>
-            <TaskViewSwitch value={view} />
+            <span onClickCapture={dismissContextDrawer}>
+              <TaskViewSwitch value={view} />
+            </span>
             <span className="task-page__count">
               {filteredTasks.length} / {tasks.length} 项
             </span>
@@ -173,47 +227,79 @@ export function TaskPage() {
       <div className="task-filter-toolbar" data-testid="task-filter-toolbar">
         <TaskFilters tasks={tasks} />
       </div>
-      <div className="task-workspace" data-testid="task-workspace">
-        {view === 'fan' ? (
-          <>
-            <TaskCompactList
-              allTasks={tasks}
-              dataSlot="list"
+      <div
+        className="task-multiview-workspace"
+        data-testid="task-workspace"
+      >
+        <div
+          className="task-view-stage"
+          data-slot="stage"
+          data-testid="task-view-stage"
+          data-view={view}
+        >
+          <button
+            aria-controls={contextPanelId}
+            aria-expanded={contextDrawerOpen}
+            className="task-context-drawer__trigger"
+            onClick={() => setContextDrawerOpen(true)}
+            ref={contextDrawerOpenerRef}
+            type="button"
+          >
+            查看任务详情
+          </button>
+          {view === 'fan' ? (
+            <>
+              <TaskCompactList
+                allTasks={tasks}
+                dataSlot="list"
+                onSelect={selectTask}
+                selectedTaskId={selectedTaskId}
+                tasks={filteredTasks}
+              />
+              <TaskFan
+                dataSlot="fan"
+                onSelect={selectTask}
+                selectedTaskId={selectedTaskId}
+                tasks={filteredTasks}
+              />
+            </>
+          ) : view === 'board' ? (
+            <TaskBoard
+              dataSlot="board"
+              onMoveTask={moveTask}
               onSelect={selectTask}
               selectedTaskId={selectedTaskId}
               tasks={filteredTasks}
             />
-            <TaskFan
-              dataSlot="fan"
+          ) : (
+            <TaskTimeline
+              dataSlot="timeline"
               onSelect={selectTask}
               selectedTaskId={selectedTaskId}
               tasks={filteredTasks}
+              today={today}
             />
-          </>
-        ) : view === 'board' ? (
-          <TaskBoard
-            dataSlot="board"
-            onMoveTask={moveTask}
-            onSelect={selectTask}
-            selectedTaskId={selectedTaskId}
-            tasks={filteredTasks}
-          />
-        ) : (
-          <TaskTimeline
-            dataSlot="timeline"
-            onSelect={selectTask}
-            selectedTaskId={selectedTaskId}
-            tasks={filteredTasks}
-            today={today}
-          />
-        )}
+          )}
+        </div>
         <TaskContextPanel
+          closeButtonRef={contextDrawerCloseRef}
           dataSlot="context"
+          drawerOpen={contextDrawerOpen}
+          onClose={closeContextDrawer}
+          panelId={contextPanelId}
           projectName={selectedProjectName}
           task={selectedTask}
           today={today}
         />
       </div>
+      {contextDrawerOpen ? (
+        <button
+          aria-label="关闭任务详情遮罩"
+          className="task-context-drawer__backdrop"
+          onClick={closeContextDrawer}
+          type="button"
+        />
+      ) : null}
     </section>
   )
 }

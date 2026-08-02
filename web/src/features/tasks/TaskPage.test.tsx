@@ -209,17 +209,23 @@ describe('TaskPage workflow', () => {
     expect(
       within(filterToolbar).getByRole('region', { name: '任务筛选' }),
     ).toBeVisible()
+    expect(workspace).toHaveClass('task-multiview-workspace')
     expect(
       Array.from(workspace.children).map((node) =>
         node.getAttribute('data-slot'),
       ),
-    ).toEqual(['list', 'fan', 'context'])
-    const list = within(workspace).getByRole('region', { name: '任务列表' })
+    ).toEqual(['stage', 'context'])
+    const stage = within(workspace).getByTestId('task-view-stage')
+    expect(stage).toHaveAttribute('data-view', 'fan')
+    expect(stage.nextElementSibling).toBe(
+      within(workspace).getByRole('region', { name: '智能任务上下文' }),
+    )
+    const list = within(stage).getByRole('region', { name: '任务列表' })
     expect(list).toBeVisible()
     expect(within(list).queryByRole('region', { name: '任务筛选' }))
       .not.toBeInTheDocument()
     expect(
-      within(workspace).getByRole('region', { name: '关键任务扇面' }),
+      within(stage).getByRole('region', { name: '关键任务扇面' }),
     ).toBeVisible()
     const context = within(workspace).getByRole('region', {
       name: '智能任务上下文',
@@ -240,6 +246,72 @@ describe('TaskPage workflow', () => {
     expect(screen.queryByRole('region', { name: '独立交付时间线' }))
       .not.toBeInTheDocument()
     expect(filterToolbar.nextElementSibling).toBe(workspace)
+  })
+
+  it('uses one persistent context as an accessible compact detail drawer', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />)
+
+    const opener = await screen.findByRole('button', {
+      name: '查看任务详情',
+    })
+    const context = screen.getByRole('region', { name: '智能任务上下文' })
+    const contextId = opener.getAttribute('aria-controls')
+    expect(contextId).toBeTruthy()
+    expect(context).toHaveAttribute('id', contextId)
+    expect(opener).toHaveAttribute('aria-expanded', 'false')
+    expect(document.querySelectorAll('.task-context')).toHaveLength(1)
+    expect(document.querySelectorAll('.task-inspector__form')).toHaveLength(1)
+
+    await user.click(opener)
+
+    expect(opener).toHaveAttribute('aria-expanded', 'true')
+    const drawer = screen.getByRole('dialog', { name: '断线恢复测试' })
+    expect(drawer).toBe(context)
+    expect(drawer).toHaveClass('task-context-drawer')
+    expect(drawer).toHaveAttribute('aria-modal', 'true')
+    const close = within(drawer).getByRole('button', {
+      name: '关闭任务详情',
+    })
+    expect(close).toHaveFocus()
+
+    const drawerButtons = within(drawer).getAllByRole('button')
+    const lastDrawerButton = drawerButtons.at(-1)!
+    await user.tab({ shift: true })
+    expect(lastDrawerButton).toHaveFocus()
+    await user.tab()
+    expect(close).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(opener).toHaveAttribute('aria-expanded', 'false')
+    expect(opener).toHaveFocus()
+    expect(screen.getByRole('region', { name: '智能任务上下文' }))
+      .toBeInTheDocument()
+    expect(document.querySelectorAll('.task-context')).toHaveLength(1)
+    expect(document.querySelectorAll('.task-inspector__form')).toHaveLength(1)
+  })
+
+  it('opens the shared drawer with the latest selection and closes from its backdrop', async () => {
+    const user = userEvent.setup()
+    renderApp(<TaskPage />)
+
+    await user.click(await screen.findByRole('button', {
+      name: '查看 MCP 权限校验',
+    }))
+    const opener = screen.getByRole('button', { name: '查看任务详情' })
+    await user.click(opener)
+
+    const drawer = screen.getByRole('dialog', { name: 'MCP 权限校验' })
+    expect(drawer).toHaveTextContent('MCP 权限校验')
+    expect(document.querySelectorAll('.task-context')).toHaveLength(1)
+    expect(document.querySelectorAll('.task-inspector__form')).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: '关闭任务详情遮罩' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(opener).toHaveFocus()
   })
 
   it('uses a controlled search and preserves view while clearing selection', async () => {
@@ -751,13 +823,25 @@ describe('TaskPage workflow', () => {
       /\.task-timeline__today\s*{[^}]*position:\s*absolute/s,
     )
     expect(tasksGlassCss).toMatch(
+      /\.task-multiview-workspace\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(17rem,\s*0\.34fr\)/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /\.task-view-stage[^}]*\.task-context\s*{[^}]*min-width:\s*0/s,
+    )
+    expect(tasksGlassCss).not.toMatch(
       /\.task-workspace\s*{[^}]*height:\s*clamp\(350px,\s*42vh,\s*380px\)/s,
     )
     expect(tasksGlassCss).toMatch(
       /\.task-context__scroll\s*{[^}]*min-height:\s*0[^}]*overflow-y:\s*auto/s,
     )
     expect(tasksGlassCss).toMatch(
-      /\.task-filter-toolbar\s+\.task-filters\s*{[^}]*grid-template-columns:[^}]*overflow:\s*visible/s,
+      /\.task-filter-toolbar\s+\.task-filters\s*{[^}]*grid-template-columns:[^}]*overflow-x:\s*auto/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)[\s\S]*\.task-context-drawer\s*{[^}]*position:\s*fixed/s,
+    )
+    expect(tasksGlassCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.task-context-drawer[^}]*transition:\s*none/s,
     )
   })
 
