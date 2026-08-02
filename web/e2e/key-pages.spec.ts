@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
   await freezeVisualTime(page)
 })
 
-test('defect conversion opens the generated repair task inspector', async ({
+test('defect conversion links the persistent defect and task contexts', async ({
   page,
 }) => {
   await page.goto('/defects')
@@ -28,21 +28,28 @@ test('defect conversion opens the generated repair task inspector', async ({
   ).toBeVisible()
 
   await page.getByRole('button', { name: '查看 离线恢复失败' }).click()
-  const defectInspector = page.getByRole('dialog', { name: '离线恢复失败' })
-  await defectInspector
+  const defectContext = page.getByRole('complementary', {
+    name: '缺陷上下文',
+  })
+  await expect(
+    defectContext.getByRole('heading', { name: '离线恢复失败' }),
+  ).toBeVisible()
+  await defectContext
     .getByRole('button', { name: '转为修复任务' })
     .click()
 
-  const repairTask = defectInspector.getByRole('link', {
+  const repairTask = defectContext.getByRole('link', {
     name: 'FIX-D-104 修复：离线恢复失败',
   })
   await expect(repairTask).toBeVisible()
   await repairTask.click()
 
   await expect(page).toHaveURL(/\/tasks\?selected=task-fix-defect-104$/)
-  await expect(
-    page.getByRole('dialog', { name: '修复：离线恢复失败' }),
-  ).toBeVisible()
+  const taskContext = page.getByRole('region', { name: '智能任务上下文' })
+  await expect(taskContext.getByRole('heading', {
+    name: '修复：离线恢复失败',
+  })).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 })
 
 for (const keyPage of keyPages) {
@@ -65,8 +72,6 @@ test('desktop comparison captures representative 1280px and 768px layouts', asyn
 
   await page.setViewportSize({ width: 1280, height: 800 })
   await openReadyDashboard(page)
-  // One of 10 Windows Chromium repeats produced a stable 182px diff limited
-  // to Risk Queue heading antialiasing; both ECharts regions were identical.
   await expect(page).toHaveScreenshot(
     'comparison-dashboard-1280.png',
     { ...screenshotOptions, maxDiffPixels: 200 },
@@ -74,8 +79,6 @@ test('desktop comparison captures representative 1280px and 768px layouts', asyn
 
   await page.setViewportSize({ width: 768, height: 1024 })
   await openReadyDashboard(page)
-  // One of 20 Windows Chromium repeats produced a stable 439px diff limited
-  // to Recent Activity text antialiasing; both ECharts regions were identical.
   await expect(page).toHaveScreenshot(
     'comparison-dashboard-768.png',
     { ...screenshotOptions, maxDiffPixels: 500 },

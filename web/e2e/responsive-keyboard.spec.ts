@@ -60,19 +60,17 @@ test('all routes avoid document overflow at the supported responsive widths', as
   }
 })
 
-test('390px shell reserves separate rows for header, content, and mobile navigation', async ({
+test('390px shell reserves separate rows for content and bottom navigation', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await openReadyPage(page, '/dashboard')
 
   const layout = await page.evaluate(() => {
-    const header = document.querySelector('.app-header')!
     const main = document.querySelector('.app-main')!
     const rail = document.querySelector('.app-rail')!
     const navigation = document.querySelector('.app-rail__nav')!
     return {
-      headerRow: getComputedStyle(header).gridRowStart,
       mainRow: getComputedStyle(main).gridRowStart,
       navigationScrollable: navigation.scrollWidth >= navigation.clientWidth,
       railRight: rail.getBoundingClientRect().right,
@@ -82,15 +80,15 @@ test('390px shell reserves separate rows for header, content, and mobile navigat
   })
 
   expect(layout).toMatchObject({
-    headerRow: '1',
-    mainRow: '2',
+    mainRow: '1',
     navigationScrollable: true,
-    railRow: '3',
+    railRow: '2',
   })
+  await expect(page.locator('.app-header')).toHaveCount(0)
   expect(layout.railRight).toBeLessThanOrEqual(layout.viewportWidth)
 })
 
-test('600px dashboard stacks its signature stage and retains two metric columns', async ({
+test('600px dashboard stacks its health body and retains two metric columns', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 600, height: 900 })
@@ -98,7 +96,7 @@ test('600px dashboard stacks its signature stage and retains two metric columns'
 
   const layout = await page.evaluate(() => {
     const cards = Array.from(
-      document.querySelectorAll('.portfolio-health-stage__visuals > *'),
+      document.querySelectorAll('.portfolio-health-stage__body > *'),
       (element) => element.getBoundingClientRect(),
     )
     const metrics = getComputedStyle(
@@ -112,8 +110,12 @@ test('600px dashboard stacks its signature stage and retains two metric columns'
 
   expect(layout.metricColumns).toBe(2)
   expect(layout.stageRows[1]).toBeGreaterThan(layout.stageRows[0]!)
-  await expect(page.getByRole('img', { name: /趋势图/ })).toBeVisible()
-  await expect(page.getByRole('img', { name: /任务状态分布/ })).toBeVisible()
+  await expect(
+    page.getByRole('img', { name: /最近七期实际交付柱状图/ }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('region', { name: '真实项目进度' }),
+  ).toBeVisible()
 })
 
 test('390px complex workspaces keep wide content inside local scroll regions', async ({
@@ -122,10 +124,11 @@ test('390px complex workspaces keep wide content inside local scroll regions', a
   await page.setViewportSize({ width: 390, height: 844 })
 
   await openReadyPage(page, '/tasks')
-  await expectLocalHorizontalScroll(page.locator('.task-table'))
+  await expectLocalHorizontalScroll(page.locator('.task-fan__scroll'))
+  await expectLocalHorizontalScroll(page.locator('.delivery-timeline__scroll'))
 
   await openReadyPage(page, '/gantt')
-  await expectLocalHorizontalScroll(page.locator('.gantt-scroll-region'))
+  await expectLocalHorizontalScroll(page.locator('.gantt-timeline'))
 
   await openReadyPage(page, '/requirements')
   await expectLocalHorizontalScroll(page.locator('.requirement-page__board-scroll'))
@@ -137,32 +140,23 @@ test('390px complex workspaces keep wide content inside local scroll regions', a
   await expectLocalHorizontalScroll(page.locator('.actor-network-scroll'))
 })
 
-test('390px inspectors follow their data surface and Escape restores the trigger', async ({
+test('390px task selections synchronize the persistent context', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await openReadyPage(page, '/tasks')
 
-  const trigger = page.locator('button[id^="task-trigger-"]').first()
+  const trigger = page.locator('button[id^="task-list-trigger-"]').nth(1)
   await trigger.focus()
   await trigger.press('Enter')
-  const dialog = page.getByRole('dialog')
-  await expect(dialog).toBeVisible()
-  await expect(dialog).not.toHaveAttribute('aria-modal')
-
-  const positions = await page.evaluate(() => ({
-    dialogTop: document.querySelector('[role="dialog"]')!.getBoundingClientRect()
-      .top,
-    tableTop: document.querySelector('.task-table')!.getBoundingClientRect().top,
-  }))
-  expect(positions.dialogTop).toBeGreaterThan(positions.tableTop)
-
-  await page.keyboard.press('Escape')
-  await expect(dialog).toHaveCount(0)
+  const context = page.getByRole('region', { name: '智能任务上下文' })
+  await expect(context).toBeVisible()
+  await expect(trigger).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(trigger).toBeFocused()
 })
 
-test('390px Gantt keeps the timescale when its task tree is collapsed', async ({
+test('390px Gantt keeps local timeline scrolling and its selected scale', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -175,20 +169,15 @@ test('390px Gantt keeps the timescale when its task tree is collapsed', async ({
   await expect(scale.getByRole('button')).toHaveCount(3)
   const selectedScale = scale.locator('button[aria-pressed="true"]')
   await expect(selectedScale).toHaveCount(1)
-  const scrollRegion = page.locator('.gantt-scroll-region')
-  const timelineHeader = page.locator('.gantt-timeline__header')
-
-  await scrollRegion.evaluate((element) => {
-    element.scrollTop = 360
+  const timeline = page.locator('.gantt-timeline')
+  await expectLocalHorizontalScroll(timeline)
+  await timeline.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth
     element.dispatchEvent(new Event('scroll'))
   })
   await expect
-    .poll(async () => {
-      const regionBox = await scrollRegion.boundingBox()
-      const headerBox = await timelineHeader.boundingBox()
-      return Math.abs((headerBox?.y ?? 0) - (regionBox?.y ?? 0))
-    })
-    .toBeLessThanOrEqual(2)
+    .poll(async () => timeline.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0)
 
   await toggle.click()
   await expect(page.locator('.gantt-layout')).toHaveClass(

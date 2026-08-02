@@ -7,8 +7,8 @@ const routeCases = [
   ['/requirements', '需求管线', '计划 / 需求', '需求'],
   ['/defects', '缺陷矩阵', 'QUALITY / RISK', '缺陷'],
   ['/projects', '全部项目', 'PROJECT MATRIX', '项目'],
-  ['/projects/atlas', 'Atlas', 'ATLAS', '项目'],
-  ['/actors', '负责人目录', 'ACTOR NETWORK', '负责人'],
+  ['/projects/atlas', 'Atlas', 'ATLAS', '项目详情'],
+  ['/actors', '协作者网络', 'ACTOR NETWORK', '负责人'],
   ['/settings', '设置中心', 'SETTINGS', '设置'],
 ] as const
 
@@ -34,7 +34,7 @@ async function expectRouteSignature(
 
   const navigation = page.getByRole('navigation', { name: '主导航' })
   await expect(
-    navigation.getByRole('link', { name: navLabel }),
+    navigation.getByRole('link', { name: navLabel, exact: true }),
   ).toHaveAttribute('aria-current', 'page')
   await expect(navigation.locator('a[aria-current="page"]')).toHaveCount(1)
 }

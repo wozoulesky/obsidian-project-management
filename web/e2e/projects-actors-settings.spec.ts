@@ -181,7 +181,7 @@ test('creates, edits, and deactivates a human while exposing the Agent ID', asyn
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto(new URL('/actors', runtime.baseURL).href)
   await expect(
-    page.getByRole('heading', { level: 1, name: '负责人目录' }),
+    page.getByRole('heading', { level: 1, name: '协作者网络' }),
   ).toBeVisible()
 
   const agentRow = page.getByRole('row', { name: new RegExp(runtime.seed.agentName) })

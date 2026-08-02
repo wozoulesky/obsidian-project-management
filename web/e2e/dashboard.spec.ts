@@ -11,21 +11,20 @@ test.beforeEach(async ({ page }) => {
   await freezeVisualTime(page)
 })
 
-test('dashboard exposes project health and the selected 90-day delivery total', async ({
+test('dashboard exposes honest portfolio health and the selected 90-day total', async ({
   page,
 }) => {
   await openReadyDashboard(page)
 
-  await expect(
-    page.getByLabel('项目指标').getByText('68%', { exact: true }),
-  ).toBeVisible()
-  await expect(page.getByText('最高风险', { exact: true })).toBeVisible()
+  const metrics = page.getByLabel('项目指标')
+  await expect(metrics.getByText('项目总数', { exact: true })).toBeVisible()
+  await expect(metrics.getByText('组合开放风险', { exact: true }))
+    .toBeVisible()
+  await expect(page.getByRole('heading', { name: '风险队列' })).toBeVisible()
   await expect(page.getByText('dev-agent', { exact: true }).first()).toBeVisible()
 
   await page.getByRole('button', { name: '90 天' }).click()
   await expect(page.getByText('118 项已完成', { exact: true })).toBeVisible()
-  // Windows Chromium produces a stable 179px text-antialiasing diff in both
-  // desktop and compact; visual review confirmed no layout or color-block changes.
   await expect(page).toHaveScreenshot(
     'dashboard-90-day.png',
     { ...screenshotOptions, maxDiffPixels: 200 },
@@ -43,15 +42,17 @@ test('task update persists through SPA navigation into dashboard activity', asyn
   await page.getByRole('button', { name: '查看 MCP 权限校验' }).click()
   await expect(page).toHaveURL(/\/tasks\?selected=task-051$/)
 
-  const inspector = page.getByRole('dialog', { name: 'MCP 权限校验' })
-  await inspector.getByRole('spinbutton', { name: '任务进度' }).fill('80')
-  await inspector
+  const context = page.getByRole('region', { name: '智能任务上下文' })
+  await expect(context.getByRole('heading', { name: 'MCP 权限校验' }))
+    .toBeVisible()
+  await context.getByRole('spinbutton', { name: '任务进度' }).fill('80')
+  await context
     .getByRole('textbox', { name: '进度备注' })
     .fill('E2E 权限边界复核完成')
-  await inspector.getByRole('button', { name: '提交进度' }).click()
+  await context.getByRole('button', { name: '提交进度' }).click()
   await expect(
-    page.getByRole('progressbar', { name: 'MCP 权限校验进度 80%' }),
-  ).toHaveAttribute('aria-valuenow', '80')
+    context.getByRole('spinbutton', { name: '任务进度' }),
+  ).toHaveValue('80')
   await expect(page).toHaveURL(/\/tasks\?selected=task-051$/)
 
   await page.getByRole('link', { name: '仪表盘' }).click()
