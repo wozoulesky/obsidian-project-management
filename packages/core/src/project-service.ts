@@ -26,6 +26,7 @@ import {
 } from './activity-service.js'
 import { DomainError } from './errors.js'
 import { generateProjectId } from './ids.js'
+import { assertPermission } from './permissions.js'
 
 type ProjectRow = {
   id: string
@@ -453,6 +454,7 @@ export class ProjectService {
         }
 
         const actor = this.assertActiveActor(actorId)
+        assertPermission(actor.role, 'project.delete')
         this.assertCanDeleteProject(current, actorId, actor)
         if (current.version !== expectedVersion) {
           throw new DomainError(

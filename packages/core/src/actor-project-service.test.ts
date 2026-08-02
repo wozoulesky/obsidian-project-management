@@ -878,6 +878,54 @@ describe('actor and project services', () => {
     )
   })
 
+  it('forbids an agent from deleting a project it owns', () => {
+    const systemOwner = actors.createHuman({ name: 'Lin', role: 'owner' })
+    const agent = actors.registerAgent(
+      { name: 'project-owner', role: 'pm-agent', client: 'codex' },
+      systemOwner.id,
+      'mcp',
+    )
+    const project = projects.create(
+      { name: 'Atlas', ownerId: agent.id, description: '' },
+      agent.id,
+      'mcp',
+    )
+    const counts = insertProjectOwnedFixtures(
+      database,
+      project.id,
+      agent.id,
+    )
+    const activityCount = database.prepare(`
+      SELECT COUNT(*) AS count FROM activities
+    `).get()
+
+    expect(() => {
+      projects.delete(project.id, project.version, agent.id, 'mcp')
+    }).toThrowError(expect.objectContaining({
+      code: 'PERMISSION_DENIED',
+      details: {
+        role: 'pm-agent',
+        operation: 'project.delete',
+      },
+    }))
+    expect(projects.get(project.id)).toEqual(project)
+    projectChildTables.forEach((table) => {
+      expect(database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM ${table}
+        WHERE project_id = ?
+      `).get(project.id)).toEqual({ count: counts[table] })
+    })
+    expect(database.prepare(`
+      SELECT COUNT(*) AS count FROM activities
+    `).get()).toEqual(activityCount)
+    expect(database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM activities
+      WHERE operation = 'project.delete' AND entity_id = ?
+    `).get(project.id)).toEqual({ count: 0 })
+  })
+
   it('rejects stale deletion without changing the project or audit log', () => {
     const owner = actors.createHuman({ name: 'Lin', role: 'owner' })
     const project = projects.create(

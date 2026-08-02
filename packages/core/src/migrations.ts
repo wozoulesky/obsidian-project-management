@@ -626,7 +626,35 @@ const migrations: readonly Migration[] = [
         FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
       ) STRICT;
 
-      INSERT INTO activities_v3 SELECT * FROM activities;
+      INSERT INTO activities_v3 (
+        rowid,
+        id,
+        actor_id,
+        project_id,
+        source,
+        operation,
+        entity_type,
+        entity_id,
+        action,
+        note,
+        details_json,
+        created_at
+      )
+      SELECT
+        rowid,
+        id,
+        actor_id,
+        project_id,
+        source,
+        operation,
+        entity_type,
+        entity_id,
+        action,
+        note,
+        details_json,
+        created_at
+      FROM activities
+      ORDER BY rowid;
       DROP TABLE activities;
       ALTER TABLE activities_v3 RENAME TO activities;
 

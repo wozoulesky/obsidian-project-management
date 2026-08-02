@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { persistedActorSchema } from '@project-os/contracts'
 import { afterEach, describe, expect, it } from 'vitest'
+import { ActivityService } from './activity-service.js'
 import { createTestDatabase, openDatabase } from './database.js'
 import { DomainError } from './errors.js'
 import {
@@ -1342,6 +1343,58 @@ describe('migration 003 project deletion activity', () => {
       { id: 'activity-project-delete', project_id: null },
       { id: 'activity-v1', project_id: null },
     ])
+  })
+
+  it('preserves activity rowids and cursor order across a v2 upgrade', () => {
+    const database = createV2DeletionFixture()
+    opened.push(database)
+    const insertActivity = database.prepare(`
+      INSERT INTO activities (
+        rowid, id, actor_id, project_id, source, operation, entity_type,
+        entity_id, action, note, details_json, created_at
+      ) VALUES (?, ?, 'actor-v1', 'project-v1', 'mcp', 'task.update',
+        'task', ?, ?, NULL, '{}', ?)
+    `)
+    insertActivity.run(
+      20,
+      'activity-v2-latest',
+      'task-v2-latest',
+      'latest insertion',
+      '2026-07-29T08:07:00.000Z',
+    )
+    insertActivity.run(
+      5,
+      'activity-v2-middle',
+      'task-v2-middle',
+      'middle insertion',
+      '2026-07-29T08:06:00.000Z',
+    )
+    const rowidsBefore = database.prepare(`
+      SELECT rowid, id FROM activities ORDER BY rowid
+    `).all()
+    const activitiesBefore = new ActivityService(database)
+    const latestCursorBefore = activitiesBefore.latestCursor()
+    const newerBefore = activitiesBefore.listNewer({
+      after: 'activity-v1',
+      limit: 10,
+    }).map(({ id }) => id)
+    expect(latestCursorBefore).toBe('activity-v2-latest')
+    expect(newerBefore).toEqual([
+      'activity-v2-middle',
+      'activity-v2-latest',
+    ])
+
+    runMigrations(database)
+
+    expect(database.prepare(`
+      SELECT rowid, id FROM activities ORDER BY rowid
+    `).all()).toEqual(rowidsBefore)
+    const activitiesAfter = new ActivityService(database)
+    expect(activitiesAfter.latestCursor()).toBe(latestCursorBefore)
+    expect(activitiesAfter.listNewer({
+      after: 'activity-v1',
+      limit: 10,
+    }).map(({ id }) => id)).toEqual(newerBefore)
   })
 })
 
