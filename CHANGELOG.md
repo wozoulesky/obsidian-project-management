@@ -1,5 +1,52 @@
 # Changelog
 
+## v1.2.0 — 2026-08-02
+
+Project OS v1.2.0 rebuilds the Web application around the approved dark glass
+task-console design while preserving the existing local-first project and
+Agent collaboration workflows.
+
+### Highlights
+
+- Added a unified responsive application shell with a persistent project
+  selector, workspace owner context, and quick submission entry point.
+- Rebuilt the portfolio dashboard with workspace-level health, delivery,
+  risk, collaborator, session, handoff, and deliverable summaries.
+- Reworked tasks into a compact list, priority fan, persistent task context,
+  and delivery timeline that remain usable in the first desktop viewport.
+- Redesigned projects, project detail, actors, requirements, Gantt, defects,
+  and settings as consistent stage-plus-context workspaces.
+- Preserved create, edit, filter, drag, project-selection, and cross-page
+  activity flows instead of replacing operational screens with static mockups.
+
+### Platform and data
+
+- Added a workspace dashboard snapshot and reliable current-project recovery
+  so portfolio metrics and project-scoped data are not mixed accidentally.
+- Expanded cache invalidation for collaboration activity, sessions, handoffs,
+  deliverables, and project/workspace dashboard summaries.
+- Added Windows and Node.js 24 compatible npm process resolution for the
+  development and Playwright service launchers, removing `spawn EINVAL` when
+  `npm_execpath` is unavailable.
+
+### Quality
+
+- Expanded Web unit and integration coverage to 320 passing tests.
+- Added desktop geometry contracts for the approved shell and all major
+  stage-plus-context layouts, refreshed visual baselines, and retained
+  responsive and accessibility coverage.
+- Verified the production build, documentation gate, direct E2E service
+  startup, and desktop/compact Playwright suites before release.
+
+### Known limitations
+
+- The existing real-client acceptance boundary remains unchanged: this
+  release is not described as fully accepted by Codex, Claude Code, and Kimi
+  Code until every field in the release checklist is backed by fresh evidence.
+- Project OS remains intended for a local machine or trusted-network,
+  single-instance deployment; it does not add user login, tenant isolation, or
+  TLS termination.
+
 ## v1.1.0 — 2026-07-30
 
 Project OS v1.1.0 adds a durable Agent-to-Agent relay loop while preserving the
