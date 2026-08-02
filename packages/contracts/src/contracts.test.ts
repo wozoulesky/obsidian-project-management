@@ -144,13 +144,17 @@ describe('shared contracts', () => {
 })
 
 describe('project deletion contracts', () => {
-  it('validates deletion input, result, and activity operation', () => {
+  it('validates deletion input and result schemas strictly', () => {
     expect(deleteProjectInputSchema.parse({ version: 2 })).toEqual({
       version: 2,
     })
     expect(deleteProjectInputSchema.safeParse({ version: 0 }).success).toBe(
       false,
     )
+    expect(
+      deleteProjectInputSchema.safeParse({ version: 2, unexpected: true })
+        .success,
+    ).toBe(false)
     expect(
       deleteProjectResultSchema.parse({
         id: 'project_demo',
@@ -162,9 +166,14 @@ describe('project deletion contracts', () => {
       name: 'Demo',
       deletedAt: '2026-08-02T08:00:00.000Z',
     })
-    expect(activityOperationSchema.parse('project.delete')).toBe(
-      'project.delete',
-    )
+    expect(
+      deleteProjectResultSchema.safeParse({
+        id: 'project_demo',
+        name: 'Demo',
+        deletedAt: '2026-08-02T08:00:00.000Z',
+        unexpected: true,
+      }).success,
+    ).toBe(false)
   })
 })
 
@@ -181,6 +190,7 @@ describe('activity operations', () => {
       'actor.register',
       'project.create',
       'project.update',
+      'project.delete',
       'project.member.add',
       'task.create',
       'task.progress',
@@ -202,7 +212,7 @@ describe('activity operations', () => {
 
     for (const operation of stableOperations) {
       expect(
-        contracts.activityOperationSchema.safeParse(operation).success,
+        activityOperationSchema.safeParse(operation).success,
         operation,
       ).toBe(true)
     }
@@ -210,7 +220,7 @@ describe('activity operations', () => {
 
   it('rejects unknown operations', () => {
     expect(
-      contracts.activityOperationSchema.safeParse('task.destroy').success,
+      activityOperationSchema.safeParse('task.destroy').success,
     ).toBe(false)
   })
 })
