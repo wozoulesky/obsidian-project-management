@@ -103,7 +103,7 @@ function DeliveryHandoffPanel({
               <h3>交付物</h3>
               {deliverables?.length ? (
                 <ul>
-                  {deliverables.map((deliverable) => (
+                  {deliverables.slice(0, 2).map((deliverable) => (
                     <li key={deliverable.id}>
                       <strong>{deliverable.title}</strong>
                       <code>{deliverable.ref}</code>
@@ -191,7 +191,10 @@ export function ProjectDetailPage() {
     openerRef.current?.focus()
   }
   const milestoneCount = deriveMilestones(tasks).length
-  const openTaskCount = tasks.filter(({ status }) => status !== 'done').length
+  const openTasks = tasks
+    .filter(({ status }) => status !== 'done')
+    .sort((left, right) => left.dueDate.localeCompare(right.dueDate))
+  const openTaskCount = openTasks.length
   const deliverableMetric = deliverablesQuery.data === undefined
     ? [
         '交付物',
@@ -275,9 +278,15 @@ export function ProjectDetailPage() {
 
           <MilestoneTrack tasks={tasks} />
 
-          <div className="project-detail__overview">
-            <GlassPanel ariaLabel="项目概览" className="project-detail__overview-panel">
-              <h2>项目概览</h2>
+          <div className="project-brief-grid" data-testid="project-brief-grid">
+            <GlassPanel ariaLabel="项目简报" className="project-detail__brief-panel">
+              <div className="project-detail-panel-heading">
+                <div>
+                  <p className="project-page__eyebrow">PROJECT BRIEF</p>
+                  <h2>项目简报</h2>
+                </div>
+                <span>当前事实</span>
+              </div>
               <p>{project.description || '暂无项目描述'}</p>
               <dl className="project-detail__facts">
                 <div><dt>主要负责人</dt><dd>{owner?.name ?? '未分配'}</dd></div>
@@ -294,36 +303,37 @@ export function ProjectDetailPage() {
                 <div><dt>开始日期</dt><dd>{project.startDate ?? '未排期'}</dd></div>
                 <div><dt>截止日期</dt><dd>{project.dueDate ?? '未排期'}</dd></div>
                 <div><dt>风险</dt><dd>{projectRisk(project)}</dd></div>
+                <div>
+                  <dt>项目成员</dt>
+                  <dd>
+                    {members.length ? (
+                      <span className="project-detail__member-names">
+                        {members.map((member) => (
+                          <span key={member.id}>
+                            <span>{member.name}</span>
+                            {member.status === 'active'
+                              ? null
+                              : <small>已停用</small>}
+                          </span>
+                        ))}
+                      </span>
+                    ) : '暂无项目成员'}
+                  </dd>
+                </div>
               </dl>
             </GlassPanel>
 
-            <GlassPanel ariaLabel="项目成员" className="project-detail__members-panel">
-              <h2>项目成员</h2>
-              {members.length > 0 ? (
-                <ul className="project-detail__members">
-                  {members.map((member) => (
-                    <li key={member.id}>
-                      <span>{member.name}</span>
-                      <small>
-                        {member.id === project.ownerId ? '负责人' : '成员'}
-                        {member.status !== 'active' ? ' · 已停用' : ''}
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              ) : <p>暂无项目成员</p>}
-            </GlassPanel>
-          </div>
-
-          <div className="project-detail__evidence-grid">
-            <GlassPanel ariaLabel="项目任务" className="project-detail__tasks">
+            <GlassPanel ariaLabel="开放任务" className="project-detail__tasks">
               <div className="project-detail-panel-heading">
-                <h2>项目任务</h2>
-                <span>{tasks.length} 项</span>
+                <div>
+                  <p className="project-page__eyebrow">OPEN TASKS</p>
+                  <h2>开放任务</h2>
+                </div>
+                <span>{openTaskCount} 项</span>
               </div>
-              {tasks.length > 0 ? (
+              {openTasks.length > 0 ? (
                 <ul>
-                  {tasks.map((task) => (
+                  {openTasks.slice(0, 4).map((task) => (
                     <li key={task.id}>
                       <div><strong>{task.title}</strong><small>{task.code}</small></div>
                       <span>{actorById.get(task.assigneeId ?? '')?.name ?? task.assignee.name}</span>
@@ -333,7 +343,7 @@ export function ProjectDetailPage() {
                     </li>
                   ))}
                 </ul>
-              ) : <EmptyState title="当前项目还没有任务" />}
+              ) : <EmptyState title="当前项目没有开放任务" />}
             </GlassPanel>
             <DeliveryHandoffPanel
               deliverablesQuery={deliverablesQuery}

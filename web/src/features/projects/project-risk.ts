@@ -1,4 +1,6 @@
-import type { Project } from '../../data/domain'
+import type { Project, Task } from '../../data/domain'
+
+export type ProjectHealth = '正常' | '关注' | '高风险'
 
 export function projectRisk(project: Project): string {
   if (
@@ -16,4 +18,15 @@ export function projectRisk(project: Project): string {
       / 86_400_000,
   )
   return days <= 7 ? '7 天内到期' : '排期正常'
+}
+
+export function projectHealth(
+  project: Project,
+  tasks: Task[],
+): ProjectHealth {
+  if (tasks.some((task) => task.status === 'overdue')) return '高风险'
+  const risk = projectRisk(project)
+  if (risk === '已逾期') return '高风险'
+  if (risk === '7 天内到期') return '关注'
+  return '正常'
 }

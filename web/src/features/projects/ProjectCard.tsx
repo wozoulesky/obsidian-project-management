@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import type { Actor, Project, ProjectStatus } from '../../data/domain'
-import { projectRisk } from './project-risk'
+import { projectRisk, type ProjectHealth } from './project-risk'
 
 const statusLabels: Record<ProjectStatus, string> = {
   not_started: '未开始',
@@ -12,12 +12,14 @@ const statusLabels: Record<ProjectStatus, string> = {
 }
 
 export function ProjectCard({
+  health,
   owner,
   onSelect,
   project,
   selected,
   taskCount,
 }: {
+  health: ProjectHealth
   owner?: Actor
   onSelect: () => void
   project: Project
@@ -32,8 +34,8 @@ export function ProjectCard({
           <small>{project.code}</small>
           <h2>{project.name}</h2>
         </div>
-        <span className={`project-card__status project-card__status--${project.status}`}>
-          {statusLabels[project.status]}
+        <span className={`project-card__health project-card__health--${health}`}>
+          {health}
         </span>
       </div>
       {project.description ? (
@@ -43,6 +45,10 @@ export function ProjectCard({
         <div>
           <dt>主要负责人</dt>
           <dd>{owner?.name ?? project.ownerId}</dd>
+        </div>
+        <div>
+          <dt>状态</dt>
+          <dd>{statusLabels[project.status]}</dd>
         </div>
         <div>
           <dt>任务数</dt>

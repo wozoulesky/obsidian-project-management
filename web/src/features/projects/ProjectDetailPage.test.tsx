@@ -152,6 +152,78 @@ function getDeliverableMetric() {
 }
 
 describe('ProjectDetailPage', () => {
+  it('selects milestones in a continuous track and updates persistent context without routing', async () => {
+    const user = userEvent.setup()
+    mockDetail()
+    vi.mocked(projectRepository.listTasks).mockResolvedValue([
+      {
+        ...createdTask,
+        id: 'milestone-alpha',
+        title: 'Alpha 实现',
+        milestoneId: 'M-Alpha',
+        dueDate: '2026-08-05',
+        progress: 45,
+        status: 'in_progress',
+      },
+      {
+        ...createdTask,
+        id: 'milestone-beta',
+        title: 'Beta 验收',
+        milestoneId: 'M-Beta',
+        dueDate: '2026-08-12',
+        progress: 0,
+        status: 'not_started',
+      },
+    ])
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    const track = await screen.findByRole('region', {
+      name: '项目里程碑轨迹',
+    })
+    const alpha = within(track).getByRole('button', {
+      name: '查看里程碑 M-Alpha',
+    })
+    const beta = within(track).getByRole('button', {
+      name: '查看里程碑 M-Beta',
+    })
+    expect(alpha).toHaveAttribute('aria-pressed', 'true')
+    expect(beta).toHaveAttribute('aria-pressed', 'false')
+
+    const context = screen.getByRole('region', { name: '里程碑上下文' })
+    expect(within(context).getByRole('heading', { name: 'M-Alpha' }))
+      .toBeVisible()
+    expect(within(context).getByText('2026-08-05')).toBeVisible()
+    expect(within(context).getByText('1 项任务')).toBeVisible()
+    expect(within(context).getByText(owner.name)).toBeVisible()
+
+    await user.click(beta)
+
+    expect(beta).toHaveAttribute('aria-pressed', 'true')
+    expect(within(context).getByRole('heading', { name: 'M-Beta' }))
+      .toBeVisible()
+    expect(within(context).getByText('2026-08-12')).toBeVisible()
+    expect(window.location.pathname).toBe('/projects/atlas')
+  })
+
+  it('keeps project brief, open tasks, and delivery evidence in one compact row', async () => {
+    mockDetail()
+    vi.mocked(projectRepository.listTasks).mockResolvedValue([createdTask])
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    const briefGrid = await screen.findByTestId('project-brief-grid')
+    expect(within(briefGrid).getByRole('heading', { name: '项目简报' }))
+      .toBeVisible()
+    expect(within(briefGrid).getByRole('heading', { name: '开放任务' }))
+      .toBeVisible()
+    expect(within(briefGrid).getByRole('heading', { name: '交付与交接' }))
+      .toBeVisible()
+    expect(within(briefGrid).getByText(createdTask.title)).toBeVisible()
+    expect(within(briefGrid).getByText(deliverable.title)).toBeVisible()
+    expect(within(briefGrid).getByText(handoff.summary)).toBeVisible()
+  })
+
   it('navigates with the real project selector instead of swapping local data', async () => {
     const user = userEvent.setup()
     mockDetail()

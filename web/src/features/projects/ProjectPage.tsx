@@ -8,6 +8,7 @@ import {
   RefreshState,
 } from '../../components/data/DataState'
 import { PageHeader } from '../../components/layout/PageHeader'
+import { MetricGrid } from '../../components/layout/MetricGrid'
 import { Button } from '../../components/ui/Button'
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import {
@@ -19,7 +20,11 @@ import type { Task } from '../../data/domain'
 import { CreateProjectDialog } from './CreateProjectDialog'
 import { ProjectCard } from './ProjectCard'
 import { ProjectSummaryPanel } from './ProjectSummaryPanel'
-import { projectRisk } from './project-risk'
+import {
+  projectHealth,
+  projectRisk,
+  type ProjectHealth,
+} from './project-risk'
 import './projects-glass.css'
 
 export function ProjectPage() {
@@ -28,6 +33,7 @@ export function ProjectPage() {
   const tasksQuery = useAllTasks()
   const [searchParams, setSearchParams] = useSearchParams()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [healthFilter, setHealthFilter] = useState<'all' | ProjectHealth>('all')
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   )
@@ -68,6 +74,13 @@ export function ProjectPage() {
     return grouped
   }, [tasksQuery.data])
 
+  const healthByProject = useMemo(() => new Map(
+    (projectsQuery.data ?? []).map((project) => [
+      project.id,
+      projectHealth(project, tasksByProject.get(project.id) ?? []),
+    ]),
+  ), [projectsQuery.data, tasksByProject])
+
   const filteredProjects = (projectsQuery.data ?? [])
     .filter((project) => {
       const haystack = [
@@ -75,8 +88,11 @@ export function ProjectPage() {
         project.code,
         actorById.get(project.ownerId)?.name ?? '',
       ].join(' ').toLocaleLowerCase()
+      const matchesHealth = healthFilter === 'all'
+        || healthByProject.get(project.id) === healthFilter
       return (
-        (!ownerId || project.ownerId === ownerId)
+        matchesHealth
+        && (!ownerId || project.ownerId === ownerId)
         && (!search || haystack.includes(search.trim().toLocaleLowerCase()))
       )
     })
@@ -114,7 +130,28 @@ export function ProjectPage() {
   }
   const selectedProject = filteredProjects.find(
     ({ id }) => id === selectedProjectId,
-  ) ?? null
+  ) ?? filteredProjects[0] ?? null
+  const portfolioMetrics = useMemo(() => {
+    const projects = projectsQuery.data ?? []
+    return [
+      ['项目总数', projects.length, '组合范围'],
+      [
+        '正常',
+        projects.filter(({ id }) => healthByProject.get(id) === '正常').length,
+        '节奏稳定',
+      ],
+      [
+        '需关注',
+        projects.filter(({ id }) => healthByProject.get(id) === '关注').length,
+        '主动跟进',
+      ],
+      [
+        '高风险',
+        projects.filter(({ id }) => healthByProject.get(id) === '高风险').length,
+        '立即介入',
+      ],
+    ] as const
+  }, [healthByProject, projectsQuery.data])
 
   return (
     <section aria-labelledby="project-page-title" className="project-page">
@@ -135,38 +172,6 @@ export function ProjectPage() {
         title={<span id="project-page-title">全部项目</span>}
       />
 
-      <div className="project-page__filters">
-        <div aria-label="按负责人筛选" className="project-page__owners" role="group">
-          <button
-            aria-pressed={!ownerId}
-            onClick={() => updateFilter('owner', '')}
-            type="button"
-          >
-            全部负责人
-          </button>
-          {activeActors.map((actor) => (
-            <button
-              aria-pressed={ownerId === actor.id}
-              key={actor.id}
-              onClick={() => updateFilter('owner', actor.id)}
-              type="button"
-            >
-              {actor.name}
-            </button>
-          ))}
-        </div>
-        <label>
-          <span className="visually-hidden">搜索项目</span>
-          <input
-            aria-label="搜索项目"
-            onChange={(event) => updateFilter('q', event.target.value)}
-            placeholder="搜索名称、编号或负责人"
-            type="search"
-            value={search}
-          />
-        </label>
-      </div>
-
       {isPending ? <LoadingState label="正在加载项目" /> : null}
       {!isPending && initialErrorQuery ? (
         <ErrorState error={error} onRetry={retry} />
@@ -183,6 +188,46 @@ export function ProjectPage() {
             isError={queries.some((query) => query.isError)}
             isFetching={queries.some((query) => query.isFetching)}
           />
+          <MetricGrid ariaLabel="项目组合关键指标">
+            {portfolioMetrics.map(([label, value, detail]) => (
+              <article className="metric-card dashboard-metric" key={label}>
+                <span className="metric-card__label">{label}</span>
+                <strong className="metric-value">{value}</strong>
+                <span className="metric-card__detail">{detail}</span>
+              </article>
+            ))}
+          </MetricGrid>
+          <div className="project-page__filters">
+            <div aria-label="按负责人筛选" className="project-page__owners" role="group">
+              <button
+                aria-pressed={!ownerId}
+                onClick={() => updateFilter('owner', '')}
+                type="button"
+              >
+                全部负责人
+              </button>
+              {activeActors.map((actor) => (
+                <button
+                  aria-pressed={ownerId === actor.id}
+                  key={actor.id}
+                  onClick={() => updateFilter('owner', actor.id)}
+                  type="button"
+                >
+                  {actor.name}
+                </button>
+              ))}
+            </div>
+            <label>
+              <span className="visually-hidden">搜索项目</span>
+              <input
+                aria-label="搜索项目"
+                onChange={(event) => updateFilter('q', event.target.value)}
+                placeholder="搜索名称、编号或负责人"
+                type="search"
+                value={search}
+              />
+            </label>
+          </div>
           {filteredProjects.length > 0 ? (
             <div className="project-portfolio-layout">
               <GlassPanel ariaLabel="玻璃项目矩阵" className="project-matrix-panel">
@@ -191,16 +236,34 @@ export function ProjectPage() {
                     <h2>玻璃项目矩阵</h2>
                     <span>{filteredProjects.length} / {projectsQuery.data?.length ?? 0} 个项目</span>
                   </div>
+                  <div aria-label="项目健康筛选" className="project-health-filters" role="group">
+                    {([
+                      ['all', '全部'],
+                      ['正常', '正常'],
+                      ['关注', '关注'],
+                      ['高风险', '高风险'],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        aria-pressed={healthFilter === value}
+                        key={value}
+                        onClick={() => setHealthFilter(value)}
+                        type="button"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="project-matrix-scroll" tabIndex={0}>
                   <div className="project-grid">
                     {filteredProjects.map((project) => (
                       <ProjectCard
+                        health={healthByProject.get(project.id) ?? '正常'}
                         key={project.id}
                         onSelect={() => setSelectedProjectId(project.id)}
                         owner={actorById.get(project.ownerId)}
                         project={project}
-                        selected={selectedProjectId === project.id}
+                        selected={selectedProject.id === project.id}
                         taskCount={taskCounts.get(project.id) ?? 0}
                       />
                     ))}

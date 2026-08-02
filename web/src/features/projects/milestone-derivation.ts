@@ -3,6 +3,7 @@ import type { Task } from '../../data/domain'
 type MilestoneStatus = '已完成' | '已逾期' | '进行中' | '未开始'
 
 export type DerivedMilestone = {
+  assignees: string[]
   id: string
   progress: number
   status: MilestoneStatus
@@ -31,6 +32,9 @@ export function deriveMilestones(tasks: Task[]): DerivedMilestone[] {
 
   return [...groups.entries()]
     .map(([id, groupedTasks]) => ({
+      assignees: [...new Set(groupedTasks.map((task) =>
+        task.assignee?.name || task.assigneeId || '未分配',
+      ))],
       id,
       progress: Math.round(
         groupedTasks.reduce((total, task) => total + task.progress, 0)

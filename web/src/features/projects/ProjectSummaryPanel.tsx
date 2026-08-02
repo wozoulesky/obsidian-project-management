@@ -6,7 +6,7 @@ import type {
   ProjectStatus,
   Task,
 } from '../../data/domain'
-import { projectRisk } from './project-risk'
+import { projectHealth, projectRisk } from './project-risk'
 
 const statusLabels: Record<ProjectStatus, string> = {
   not_started: '未开始',
@@ -36,7 +36,11 @@ export function ProjectSummaryPanel({
 
   const unfinishedTasks = tasks
     .filter((task) => task.status !== 'done')
-    .sort((left, right) => left.dueDate.localeCompare(right.dueDate))
+    .sort((left, right) =>
+      (left.dueDate ?? '9999-12-31').localeCompare(
+        right.dueDate ?? '9999-12-31',
+      ),
+    )
   const overdueCount = unfinishedTasks.filter(
     (task) => task.status === 'overdue',
   ).length
@@ -44,6 +48,7 @@ export function ProjectSummaryPanel({
   const risk = overdueCount > 0
     ? `${overdueCount} 项逾期`
     : projectRisk(project)
+  const health = projectHealth(project, tasks)
 
   return (
     <GlassPanel
@@ -73,12 +78,16 @@ export function ProjectSummaryPanel({
           <dd>{statusLabels[project.status]}</dd>
         </div>
         <div>
+          <dt>健康状态</dt>
+          <dd>{health}</dd>
+        </div>
+        <div>
           <dt>任务风险</dt>
           <dd>{risk}</dd>
         </div>
         <div>
           <dt>下一截止日期</dt>
-          <dd>{nextTask?.dueDate ?? '暂无未完成任务'}</dd>
+          <dd>{nextTask?.dueDate ?? '暂无截止日期'}</dd>
         </div>
       </dl>
       {nextTask ? (

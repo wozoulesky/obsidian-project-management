@@ -74,6 +74,85 @@ function mockPortfolio() {
 }
 
 describe('ProjectPage', () => {
+  it('shows honest portfolio metrics and filters the matrix by derived health', async () => {
+    const user = userEvent.setup()
+    const today = new Date()
+    today.setUTCDate(today.getUTCDate() + 3)
+    const attentionProject: Project = {
+      ...projects[0]!,
+      id: 'calypso',
+      code: 'PRJ-003',
+      name: 'Calypso 验收',
+      dueDate: today.toISOString().slice(0, 10),
+      progress: 35,
+    }
+    vi.spyOn(projectRepository, 'listActors').mockResolvedValue(actors)
+    vi.spyOn(projectRepository, 'listProjects').mockResolvedValue([
+      projects[0]!,
+      attentionProject,
+      projects[1]!,
+    ])
+    vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue([])
+
+    renderApp(<ProjectPage />, { route: '/projects' })
+
+    const metrics = await screen.findByRole('group', {
+      name: '项目组合关键指标',
+    })
+    expect(within(within(metrics).getByText('项目总数').closest('article')!)
+      .getByText('3')).toBeVisible()
+    expect(within(within(metrics).getByText('正常').closest('article')!)
+      .getByText('1')).toBeVisible()
+    expect(within(within(metrics).getByText('需关注').closest('article')!)
+      .getByText('1')).toBeVisible()
+    expect(within(within(metrics).getByText('高风险').closest('article')!)
+      .getByText('1')).toBeVisible()
+
+    const healthFilters = screen.getByRole('group', {
+      name: '项目健康筛选',
+    })
+    const riskFilter = within(healthFilters).getByRole('button', {
+      name: '高风险',
+    })
+    expect(within(healthFilters).getByRole('button', { name: '全部' }))
+      .toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(riskFilter)
+
+    expect(riskFilter).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('article', { name: 'Atlas 迁移' })).toBeVisible()
+    expect(screen.queryByRole('article', { name: 'Calypso 验收' }))
+      .not.toBeInTheDocument()
+    expect(screen.queryByRole('article', { name: 'Borealis 发布' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('selects the first visible project by default and falls back after filtering', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    renderApp(<ProjectPage />, { route: '/projects' })
+
+    const atlas = await screen.findByRole('article', { name: 'Atlas 迁移' })
+    expect(within(atlas).getByRole('button', {
+      name: '查看 Atlas 迁移 摘要',
+    })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('region', { name: 'Atlas 迁移项目摘要' }))
+      .toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: '正常' }))
+
+    const borealis = screen.getByRole('article', { name: 'Borealis 发布' })
+    expect(within(borealis).getByRole('button', {
+      name: '查看 Borealis 发布 摘要',
+    })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('region', { name: 'Borealis 发布项目摘要' }))
+      .toBeVisible()
+    expect(within(borealis).getByRole('link', {
+      name: '进入 Borealis 发布 详情',
+    })).toHaveAttribute('href', '/projects/borealis')
+    expect(window.location.pathname).toBe('/projects')
+  })
+
   it('selects an evidence-based summary without navigating and keeps a real detail link', async () => {
     const user = userEvent.setup()
     mockPortfolio()
@@ -187,8 +266,9 @@ describe('ProjectPage', () => {
     ])
     renderApp(<ProjectPage />)
 
+    const matrix = await screen.findByRole('region', { name: '玻璃项目矩阵' })
     expect(
-      (await screen.findAllByRole('article')).map(
+      within(matrix).getAllByRole('article').map(
         (article) => article.getAttribute('aria-label'),
       ),
     ).toEqual(['Atlas 迁移', 'Near', 'Normal', 'Borealis 发布'])
