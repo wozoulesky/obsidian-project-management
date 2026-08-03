@@ -14,6 +14,7 @@ import type {
 import { projectRepository } from '../../data/query-hooks'
 import { ProjectDetailPage } from './ProjectDetailPage'
 import projectDetailSource from './ProjectDetailPage.tsx?raw'
+import projectsGlassSource from './projects-glass.css?raw'
 
 const owner: Actor = {
   id: 'owner-active',
@@ -42,6 +43,21 @@ const project: Project = {
   updatedAt: '2026-07-28T04:00:00.000Z',
   version: 1,
 }
+
+const deletionResult = {
+  id: project.id,
+  name: project.name,
+  deletedAt: '2026-08-02T00:00:00.000Z',
+  deletedCounts: {
+    project_members: 2,
+    tasks: 3,
+    requirements: 1,
+    defects: 1,
+    sessions: 1,
+    handoffs: 1,
+    deliverables: 1,
+  },
+} satisfies Awaited<ReturnType<typeof projectRepository.deleteProject>>
 
 const secondProject: Project = {
   ...project,
@@ -141,6 +157,7 @@ function mockDetail() {
   vi.spyOn(projectRepository, 'listProjectDeliverables').mockResolvedValue([
     deliverable,
   ])
+  vi.spyOn(projectRepository, 'getCurrentActor').mockResolvedValue(owner)
 }
 
 function getDeliverableMetric() {
@@ -155,6 +172,240 @@ function getDeliverableMetric() {
 describe('ProjectDetailPage', () => {
   it('loads shared project surface styles from its independent lazy route', () => {
     expect(projectDetailSource).toContain("import './projects-glass.css'")
+  })
+
+  it('keeps a 100vh fallback before the mobile dynamic viewport height', () => {
+    const fallback = 'max-height: calc(100vh - var(--space-4));'
+    const dynamicViewport = 'max-height: calc(100dvh - var(--space-4));'
+    expect(projectsGlassSource.indexOf(fallback)).toBeGreaterThan(-1)
+    expect(projectsGlassSource.indexOf(dynamicViewport)).toBeGreaterThan(
+      projectsGlassSource.indexOf(fallback),
+    )
+  })
+
+  it('renders readable project detail while current actor identity is pending', async () => {
+    mockDetail()
+    vi.mocked(projectRepository.getCurrentActor).mockImplementation(
+      () => new Promise<Actor>(() => undefined),
+    )
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    expect(await screen.findByRole('heading', {
+      level: 1,
+      name: project.name,
+    })).toBeVisible()
+    expect(screen.getByText(project.description)).toBeVisible()
+    expect(screen.queryByRole('button', { name: '更多操作' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('renders readable project detail when current actor identity fails', async () => {
+    mockDetail()
+    vi.mocked(projectRepository.getCurrentActor).mockRejectedValue(
+      new Error('当前身份不可用'),
+    )
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    expect(await screen.findByRole('heading', {
+      level: 1,
+      name: project.name,
+    })).toBeVisible()
+    expect(screen.getByText(project.description)).toBeVisible()
+    expect(screen.queryByRole('button', { name: '更多操作' }))
+      .not.toBeInTheDocument()
+  })
+
+  it.each([
+    {
+      label: 'system owner',
+      actor: { ...owner, id: 'system-owner' } satisfies Actor,
+      projectOwnerId: owner.id,
+      visible: true,
+    },
+    {
+      label: 'project primary owner with member role',
+      actor: { ...owner, role: 'member' } satisfies Actor,
+      projectOwnerId: owner.id,
+      visible: true,
+    },
+    {
+      label: 'unrelated human member',
+      actor: {
+        ...owner,
+        id: 'unrelated-member',
+        role: 'member',
+      } satisfies Actor,
+      projectOwnerId: owner.id,
+      visible: false,
+    },
+    {
+      label: 'agent project owner',
+      actor: {
+        ...owner,
+        id: 'dev-agent-owner',
+        kind: 'agent',
+        role: 'dev-agent',
+        client: 'Codex',
+      } satisfies Actor,
+      projectOwnerId: 'dev-agent-owner',
+      visible: false,
+    },
+    {
+      label: 'inactive system owner',
+      actor: {
+        ...owner,
+        id: 'inactive-system-owner',
+        status: 'inactive',
+      } satisfies Actor,
+      projectOwnerId: owner.id,
+      visible: false,
+    },
+    {
+      label: 'inactive project primary owner',
+      actor: {
+        ...owner,
+        role: 'member',
+        status: 'inactive',
+      } satisfies Actor,
+      projectOwnerId: owner.id,
+      visible: false,
+    },
+  ])('shows delete access correctly for $label', async ({
+    actor,
+    projectOwnerId,
+    visible,
+  }) => {
+    const user = userEvent.setup()
+    mockDetail()
+    vi.mocked(projectRepository.getCurrentActor).mockResolvedValue(actor)
+    vi.mocked(projectRepository.getProject).mockResolvedValue({
+      ...project,
+      ownerId: projectOwnerId,
+    })
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    if (!visible) {
+      await screen.findByRole('heading', { level: 1, name: project.name })
+      expect(screen.queryByRole('button', { name: '更多操作' }))
+        .not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '删除项目' }))
+        .not.toBeInTheDocument()
+      return
+    }
+
+    await user.click(await screen.findByRole('button', { name: '更多操作' }))
+    expect(screen.getByRole('menu')).toBeVisible()
+    expect(screen.getByRole('menuitem', { name: '删除项目' })).toBeVisible()
+  })
+
+  it('closes the actions menu with Escape or an outside click', async () => {
+    const user = userEvent.setup()
+    mockDetail()
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+    const trigger = await screen.findByRole('button', { name: '更多操作' })
+
+    await user.click(trigger)
+    const deleteItem = screen.getByRole('menuitem', { name: '删除项目' })
+    deleteItem.focus()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+
+    await user.click(trigger)
+    expect(screen.getByRole('menu')).toBeVisible()
+    await user.click(document.body)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('opens the actions menu from the keyboard and focuses its action', async () => {
+    const user = userEvent.setup()
+    mockDetail()
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+    const trigger = await screen.findByRole('button', { name: '更多操作' })
+    trigger.focus()
+
+    await user.keyboard('{ArrowDown}')
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('menuitem', { name: '删除项目' })).toHaveFocus()
+  })
+
+  it('closes the actions menu when Tab moves focus outside it', async () => {
+    const user = userEvent.setup()
+    mockDetail()
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+    const trigger = await screen.findByRole('button', { name: '更多操作' })
+
+    await user.click(trigger)
+    expect(screen.getByRole('menuitem', { name: '删除项目' })).toHaveFocus()
+    await user.tab()
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('explains that the default project is protected without a delete action', async () => {
+    const user = userEvent.setup()
+    const defaultProject = {
+      ...project,
+      id: 'project_default',
+      code: 'DEFAULT',
+      name: '默认项目',
+    }
+    mockDetail()
+    vi.mocked(projectRepository.getProject).mockResolvedValue(defaultProject)
+    vi.mocked(projectRepository.listProjects).mockResolvedValue([
+      defaultProject,
+      secondProject,
+    ])
+
+    renderApp(<ProjectDetailPage />, { route: '/projects/project_default' })
+
+    await user.click(await screen.findByRole('button', { name: '更多操作' }))
+    const menu = screen.getByRole('menu')
+    const explanation = within(menu).getByRole('menuitem', {
+      name: '默认项目受保护，无法删除',
+    })
+    expect(explanation).toHaveAttribute('aria-disabled', 'true')
+    expect(explanation).toHaveAttribute('tabindex', '-1')
+    expect(explanation).toHaveFocus()
+    expect(explanation.tagName).toBe('P')
+    expect(within(menu).queryByRole('menuitem', { name: '删除项目' }))
+      .not.toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '更多操作' })).toHaveFocus()
+  })
+
+  it('opens permanent deletion and navigates with a one-time notice on success', async () => {
+    const user = userEvent.setup()
+    mockDetail()
+    const deleteProject = vi.spyOn(projectRepository, 'deleteProject')
+      .mockResolvedValue(deletionResult)
+    renderApp(<ProjectDetailPage />, { route: '/projects/atlas' })
+
+    await user.click(await screen.findByRole('button', { name: '更多操作' }))
+    await user.click(screen.getByRole('menuitem', { name: '删除项目' }))
+    const dialog = screen.getByRole('dialog', {
+      name: `永久删除项目 ${project.name}`,
+    })
+    await user.type(
+      within(dialog).getByLabelText(`输入 ${project.name} 以确认`),
+      project.name,
+    )
+    await user.click(within(dialog).getByRole('button', {
+      name: '永久删除项目',
+    }))
+
+    expect(deleteProject).toHaveBeenCalledWith(project.id, project.version)
+    expect(window.location.pathname).toBe('/projects')
+    expect(window.history.state.usr).toMatchObject({
+      projectNotice: `已永久删除项目 ${project.name}`,
+    })
   })
 
   it('selects milestones in a continuous track and updates persistent context without routing', async () => {

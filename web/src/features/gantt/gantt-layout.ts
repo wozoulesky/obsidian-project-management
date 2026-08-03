@@ -1,6 +1,7 @@
 import type { Task } from '../../data/domain'
 
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const ISO_DATE_PATTERN = /^(\d{4}|[+-]\d{6})-(\d{2})-(\d{2})$/
+const BUSINESS_ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const DAY_MS = 86_400_000
 const MIN_VISIBLE_BAR_PERCENT = 1.2
 
@@ -19,13 +20,18 @@ export interface DateProposal extends GanttTaskDates {
 }
 
 export function parseIsoDate(date: string): number | null {
-  if (!ISO_DATE_PATTERN.test(date)) return null
-  const [year, month, day] = date.split('-').map(Number)
-  const timestamp = Date.UTC(year!, month! - 1, day)
-  const parsed = new Date(timestamp)
+  const match = ISO_DATE_PATTERN.exec(date)
+  if (!match || match[1] === '-000000') return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const parsed = new Date(0)
+  parsed.setUTCHours(0, 0, 0, 0)
+  parsed.setUTCFullYear(year, month - 1, day)
+  const timestamp = parsed.getTime()
   if (
     parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month! - 1 ||
+    parsed.getUTCMonth() !== month - 1 ||
     parsed.getUTCDate() !== day
   ) {
     return null
@@ -91,7 +97,11 @@ export function taskBarLayout(
 export function shiftDate(date: string, days: number): string | null {
   const timestamp = parseIsoDate(date)
   if (timestamp === null || !Number.isFinite(days)) return null
-  return new Date(timestamp + Math.trunc(days) * DAY_MS).toISOString().slice(0, 10)
+  const shiftedTimestamp = timestamp + Math.trunc(days) * DAY_MS
+  if (!Number.isFinite(shiftedTimestamp)) return null
+  const shifted = new Date(shiftedTimestamp)
+  if (!Number.isFinite(shifted.getTime())) return null
+  return shifted.toISOString().split('T', 1)[0]!
 }
 
 export function dateDeltaFromPixels(
@@ -117,6 +127,12 @@ export function buildDateProposal(
   dueDate: string,
   deltaDays: number,
 ): GanttTaskDates | null {
+  if (
+    !BUSINESS_ISO_DATE_PATTERN.test(startDate)
+    || !BUSINESS_ISO_DATE_PATTERN.test(dueDate)
+  ) {
+    return null
+  }
   const start = parseIsoDate(startDate)
   const due = parseIsoDate(dueDate)
   if (start === null || due === null || due < start || !Number.isFinite(deltaDays)) {
@@ -126,12 +142,20 @@ export function buildDateProposal(
   if (kind === 'move') {
     const shiftedStart = shiftDate(startDate, delta)
     const shiftedDue = shiftDate(dueDate, delta)
-    return shiftedStart && shiftedDue
-      ? { startDate: shiftedStart, dueDate: shiftedDue }
-      : null
+    if (
+      !shiftedStart
+      || !shiftedDue
+      || !BUSINESS_ISO_DATE_PATTERN.test(shiftedStart)
+      || !BUSINESS_ISO_DATE_PATTERN.test(shiftedDue)
+    ) {
+      return null
+    }
+    return { startDate: shiftedStart, dueDate: shiftedDue }
   }
   const shiftedDue = shiftDate(dueDate, delta)
   const nextDue =
     shiftedDue && parseIsoDate(shiftedDue)! >= start ? shiftedDue : startDate
-  return { startDate, dueDate: nextDue }
+  return BUSINESS_ISO_DATE_PATTERN.test(nextDue)
+    ? { startDate, dueDate: nextDue }
+    : null
 }

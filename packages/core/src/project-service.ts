@@ -6,6 +6,7 @@ import type {
 import {
   activitySourceSchema,
   createProjectInputSchema,
+  deleteProjectResultSchema,
   persistedProjectMemberSchema,
   persistedProjectSchema,
   projectSchema,
@@ -13,6 +14,8 @@ import {
 } from '@project-os/contracts'
 import type {
   ActivitySource,
+  ActorRole,
+  DeleteProjectResult,
   PersistedProject,
   PersistedProjectMember,
   ProjectStatus,
@@ -23,6 +26,7 @@ import {
 } from './activity-service.js'
 import { DomainError } from './errors.js'
 import { generateProjectId } from './ids.js'
+import { assertPermission } from './permissions.js'
 
 type ProjectRow = {
   id: string
@@ -45,6 +49,21 @@ type ProjectMemberRow = {
   membership_role: 'owner' | 'member'
   joined_at: string
 }
+
+type ActorAccessRow = {
+  role: ActorRole
+  status: 'active' | 'inactive'
+}
+
+const PROJECT_CHILD_TABLES = [
+  'project_members',
+  'tasks',
+  'requirements',
+  'defects',
+  'sessions',
+  'handoffs',
+  'deliverables',
+] as const
 
 export type CreateProjectServiceInput = {
   name: string
@@ -416,6 +435,99 @@ export class ProjectService {
     })
   }
 
+  delete(
+    id: string,
+    expectedVersion: number,
+    actorId: string,
+    source: ActivitySource = 'web',
+  ): DeleteProjectResult {
+    try {
+      const validatedSource = activitySourceSchema.parse(source)
+      return withImmediateTransaction(this.database, () => {
+        const current = this.get(id)
+        if (id === 'project_default') {
+          throw new DomainError(
+            'DEFAULT_PROJECT_PROTECTED',
+            'The default project cannot be deleted',
+            { projectId: id },
+          )
+        }
+
+        const actor = this.assertActiveActor(actorId)
+        assertPermission(actor.role, 'project.delete')
+        this.assertCanDeleteProject(current, actorId, actor)
+        if (current.version !== expectedVersion) {
+          throw new DomainError(
+            'PROJECT_VERSION_CONFLICT',
+            'Project version is stale',
+            {
+              projectId: id,
+              expectedVersion,
+              currentVersion: current.version,
+            },
+          )
+        }
+
+        const counts = Object.fromEntries(PROJECT_CHILD_TABLES.map((table) => {
+          const row = this.database.prepare(`
+            SELECT COUNT(*) AS count
+            FROM ${table}
+            WHERE project_id = ?
+          `).get(id) as { count: number }
+          return [table, row.count]
+        }))
+        const deletedAt = new Date().toISOString()
+        recordActivity(this.database, {
+          actorId,
+          projectId: id,
+          source: validatedSource,
+          operation: 'project.delete',
+          entityType: 'project',
+          entityId: id,
+          action: `Deleted project ${current.name}`,
+          note: JSON.stringify({
+            projectId: id,
+            projectName: current.name,
+            counts,
+          }),
+          createdAt: deletedAt,
+        })
+
+        const result = this.database.prepare(`
+          DELETE FROM projects
+          WHERE id = ? AND version = ?
+        `).run(id, expectedVersion)
+        if (Number(result.changes) !== 1) {
+          throw new DomainError(
+            'PROJECT_VERSION_CONFLICT',
+            'Project version is stale',
+            {
+              projectId: id,
+              expectedVersion,
+              currentVersion: current.version,
+            },
+          )
+        }
+
+        return deleteProjectResultSchema.parse({
+          id,
+          name: current.name,
+          deletedAt,
+          deletedCounts: counts,
+        })
+      })
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw error
+      }
+      throw new DomainError(
+        'PROJECT_DELETE_FAILED',
+        'Project deletion failed',
+        { projectId: id },
+      )
+    }
+  }
+
   addMember(
     projectId: string,
     memberId: string,
@@ -470,12 +582,12 @@ export class ProjectService {
     })
   }
 
-  private assertActiveActor(actorId: string): void {
+  private assertActiveActor(actorId: string): ActorAccessRow {
     const row = this.database.prepare(`
-      SELECT status
+      SELECT role, status
       FROM actors
       WHERE id = ?
-    `).get(actorId) as { status: 'active' | 'inactive' } | undefined
+    `).get(actorId) as ActorAccessRow | undefined
 
     if (row === undefined) {
       throw new DomainError(
@@ -491,5 +603,21 @@ export class ProjectService {
         { actorId },
       )
     }
+    return row
+  }
+
+  private assertCanDeleteProject(
+    project: PersistedProject,
+    actorId: string,
+    actor: ActorAccessRow,
+  ): void {
+    if (actor.role === 'owner' || project.ownerId === actorId) {
+      return
+    }
+    throw new DomainError(
+      'PROJECT_DELETE_FORBIDDEN',
+      'Actor is not allowed to delete this project',
+      { actorId, projectId: project.id },
+    )
   }
 }

@@ -1,7 +1,10 @@
 import {
   createProjectInputSchema,
+  deleteProjectInputSchema,
+  deleteProjectResultSchema,
   persistedProjectMemberSchema,
   persistedProjectSchema,
+  projectIdParamsSchema,
   projectStatusSchema,
 } from '@project-os/contracts'
 import type { Router } from 'express'
@@ -31,10 +34,6 @@ const limitQuerySchema = z.string()
   .transform(Number)
   .pipe(z.number().int().min(1).max(200))
   .default(50)
-
-const projectIdParamsSchema = z.object({
-  id: routeIdSchema,
-}).strict()
 
 const projectListQuerySchema = z.object({
   owner_id: routeIdSchema.optional(),
@@ -191,6 +190,22 @@ export const projectRoutes: AppRouteModule = {
         ),
       )
       sendSuccess(response, project)
+    })
+
+    router.delete('/projects/:id', (request, response) => {
+      const { id } = projectIdParamsSchema.parse(request.params)
+      const input = deleteProjectInputSchema.parse(request.body)
+      const context = getContext()
+      const result = callService(
+        deleteProjectResultSchema,
+        () => context.services.projects.delete(
+          id,
+          input.version,
+          requestActorId(context),
+          'web',
+        ),
+      )
+      sendSuccess(response, result)
     })
 
     router.get('/projects/:projectId/members', (request, response) => {

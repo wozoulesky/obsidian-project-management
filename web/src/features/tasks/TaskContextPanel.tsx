@@ -1,65 +1,154 @@
+import { useId, useState, type RefObject } from 'react'
+
 import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Task } from '../../data/domain'
-import { useProjectRepository } from '../../data/query-hooks'
 import { TaskProgressForm } from './TaskInspector'
+import { taskInsights, taskStatusLabels } from './task-workspace-model'
 
-const statusLabels: Record<Task['status'], string> = {
-  not_started: '未开始',
-  in_progress: '进行中',
-  done: '已完成',
-  overdue: '已延期',
+const DEPENDENCY_PREVIEW_LIMIT = 5
+
+function TaskDependencies({
+  dependencyIds,
+}: {
+  dependencyIds: readonly string[]
+}) {
+  const dependencyListId = useId()
+  const [expanded, setExpanded] = useState(false)
+  const visibleDependencyIds = expanded
+    ? dependencyIds
+    : dependencyIds.slice(0, DEPENDENCY_PREVIEW_LIMIT)
+  const hiddenDependencyCount = dependencyIds.length - visibleDependencyIds.length
+
+  return (
+    <dd>
+      {dependencyIds.length} 项
+      {visibleDependencyIds.length > 0 ? (
+        <ul
+          aria-label="依赖任务"
+          className="task-context__dependencies"
+          id={dependencyListId}
+        >
+          {visibleDependencyIds.map((dependencyId, index) => (
+            <li key={`${dependencyId}-${index}`}>{dependencyId}</li>
+          ))}
+        </ul>
+      ) : null}
+      {hiddenDependencyCount > 0 ? (
+        <span>另 {hiddenDependencyCount} 项</span>
+      ) : null}
+      {dependencyIds.length > DEPENDENCY_PREVIEW_LIMIT ? (
+        <button
+          aria-controls={dependencyListId}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
+        >
+          {expanded ? '收起依赖' : '展开全部依赖'}
+        </button>
+      ) : null}
+    </dd>
+  )
 }
 
 export interface TaskContextPanelProps {
+  closeButtonRef?: RefObject<HTMLButtonElement | null>
   dataSlot?: string
+  drawerOpen?: boolean
+  onClose?: () => void
+  panelId?: string
+  projectName: string
   task: Task | null
-}
-
-function projectLabel(projectId: string): string {
-  const readableId = projectId.length > 24
-    ? `${projectId.slice(0, 8)}…${projectId.slice(-4)}`
-    : projectId
-  return `项目 ${readableId}`
+  today: string
 }
 
 export function TaskContextPanel({
+  closeButtonRef,
   dataSlot,
+  drawerOpen = false,
+  onClose,
+  panelId,
+  projectName,
   task,
+  today,
 }: TaskContextPanelProps) {
-  const { projectId } = useProjectRepository()
+  const insights = task ? taskInsights(task, today) : []
+  const insightsHeadingId = useId()
+  const taskHeadingId = useId()
 
   return (
     <GlassPanel
+      aria-labelledby={drawerOpen ? taskHeadingId : undefined}
+      aria-modal={drawerOpen ? 'true' : undefined}
       ariaLabel="智能任务上下文"
-      className="task-context"
+      className={[
+        'task-context',
+        drawerOpen ? 'task-context-drawer' : '',
+      ].filter(Boolean).join(' ')}
       data-slot={dataSlot}
+      id={panelId}
+      role={drawerOpen ? 'dialog' : undefined}
     >
       <header className="task-context__header">
         <div>
           <p>SMART CONTEXT</p>
-          <h2>{task?.title ?? '智能任务上下文'}</h2>
+          <h2 id={taskHeadingId}>{task?.title ?? '智能任务上下文'}</h2>
         </div>
-        <span data-status={task?.status ?? 'empty'}>
-          {task ? statusLabels[task.status] : '无选择'}
-        </span>
+        <div className="task-context__header-actions">
+          <span data-status={task?.status ?? 'empty'}>
+            {task ? taskStatusLabels[task.status] : '无选择'}
+          </span>
+          {drawerOpen ? (
+            <button
+              aria-label="关闭任务详情"
+              className="task-context-drawer__close"
+              onClick={onClose}
+              ref={closeButtonRef}
+              type="button"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          ) : null}
+        </div>
       </header>
       {task ? (
         <div className="task-context__scroll">
           <dl className="task-context__details">
             <div><dt>编号</dt><dd>{task.code}</dd></div>
-            <div><dt>负责人</dt><dd>{task.assignee.name}</dd></div>
-            <div>
-              <dt>所属项目</dt>
-              <dd>{projectLabel(task.projectId ?? projectId)}</dd>
-            </div>
+            <div><dt>负责人</dt><dd>{task.assignee?.name || '未分配'}</dd></div>
+            <div><dt>所属项目</dt><dd>{projectName}</dd></div>
             <div><dt>优先级</dt><dd>{task.priority}</dd></div>
+            <div><dt>状态</dt><dd>{taskStatusLabels[task.status]}</dd></div>
+            <div><dt>开始日期</dt><dd>{task.startDate}</dd></div>
             <div><dt>截止日期</dt><dd>{task.dueDate}</dd></div>
+            <div><dt>当前进度</dt><dd>{task.progress}%</dd></div>
             <div>
               <dt>依赖</dt>
-              <dd>{task.dependencyIds.join('、') || '无'}</dd>
+              <TaskDependencies
+                dependencyIds={task.dependencyIds}
+                key={task.id}
+              />
+            </div>
+            <div>
+              <dt>标签</dt>
+              <dd>{task.milestoneId.trim() || '暂无标签'}</dd>
             </div>
           </dl>
           <p className="task-context__description">{task.description}</p>
+          <section
+            aria-labelledby={insightsHeadingId}
+            className="task-context__insights"
+          >
+            <h3 id={insightsHeadingId}>任务建议</h3>
+            {insights.length > 0 ? (
+              <ul>
+                {insights.map((insight) => (
+                  <li key={insight}>{insight}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>暂无任务建议</p>
+            )}
+          </section>
           <TaskProgressForm key={task.id} task={task} />
         </div>
       ) : (

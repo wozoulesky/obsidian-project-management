@@ -1,5 +1,7 @@
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderApp } from '../../app/test-utils'
@@ -73,7 +75,131 @@ function mockPortfolio() {
   vi.spyOn(projectRepository, 'listAllTasks').mockResolvedValue([])
 }
 
+function ProjectPageWithNavigationState({ state }: { state: unknown }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (location.pathname === '/notice-setup') {
+      navigate('/projects?owner=owner-active', { replace: true, state })
+    }
+  }, [location.pathname, navigate, state])
+
+  return location.pathname === '/projects' ? <ProjectPage /> : null
+}
+
+function RemountableProjectPageWithNavigationState({
+  state,
+}: {
+  state: unknown
+}) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [mounted, setMounted] = useState(true)
+  const [generation, setGeneration] = useState(0)
+
+  useEffect(() => {
+    if (location.pathname === '/notice-setup') {
+      navigate('/projects?owner=owner-active', { replace: true, state })
+    }
+  }, [location.pathname, navigate, state])
+
+  if (location.pathname !== '/projects') return null
+  return (
+    <>
+      <button onClick={() => setMounted(false)} type="button">
+        卸载项目页
+      </button>
+      <button
+        onClick={() => {
+          setGeneration((current) => current + 1)
+          setMounted(true)
+        }}
+        type="button"
+      >
+        重新进入项目页
+      </button>
+      {mounted ? <ProjectPage key={generation} /> : null}
+    </>
+  )
+}
+
 describe('ProjectPage', () => {
+  it('consumes a valid deletion notice once while preserving the current render', async () => {
+    const user = userEvent.setup()
+    mockPortfolio()
+    const notice = `已永久删除项目 ${projects[0]!.name}`
+
+    renderApp(
+      <RemountableProjectPageWithNavigationState
+        state={{ projectNotice: notice }}
+      />,
+      { route: '/notice-setup' },
+    )
+
+    const renderedNotice = await screen.findByText(notice)
+    expect(renderedNotice).toHaveAttribute('role', 'status')
+    expect(window.location.pathname).toBe('/projects')
+    expect(window.location.search).toBe('?owner=owner-active')
+    expect(window.history.state.usr).toBeNull()
+    expect(renderedNotice).toHaveTextContent(notice)
+
+    await user.click(screen.getByRole('button', { name: '卸载项目页' }))
+    expect(screen.queryByText(notice)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '重新进入项目页' }))
+    await screen.findByRole('article', { name: projects[0]!.name })
+
+    expect(window.location.pathname).toBe('/projects')
+    expect(window.history.state.usr).toBeNull()
+    expect(screen.queryByText(notice)).not.toBeInTheDocument()
+  })
+
+  it('consumes only a valid deletion notice and preserves unrelated route state', async () => {
+    mockPortfolio()
+    const notice = `已永久删除项目 ${projects[0]!.name}`
+    const state = { projectNotice: notice, returnTo: '/x' }
+
+    renderApp(<ProjectPageWithNavigationState state={state} />, {
+      route: '/notice-setup',
+    })
+
+    expect(await screen.findByText(notice)).toHaveAttribute('role', 'status')
+    await vi.waitFor(() => {
+      expect(window.history.state.usr).toEqual({ returnTo: '/x' })
+    })
+    expect(state).toEqual({ projectNotice: notice, returnTo: '/x' })
+  })
+
+  it.each([
+    ['non-string', { projectNotice: { text: '伪造消息' } }],
+    ['unexpected message', { projectNotice: '<script>alert(1)</script>' }],
+    ['blank project name', { projectNotice: '已永久删除项目   ' }],
+    ['line-break-only project name', { projectNotice: '已永久删除项目 \n' }],
+    ['non-breaking whitespace project name', { projectNotice: '已永久删除项目 \u00a0' }],
+    ['zero-width project name', { projectNotice: '已永久删除项目 \u200b' }],
+    ['word-joiner project name', { projectNotice: '已永久删除项目 \u2060' }],
+    ['soft-hyphen project name', { projectNotice: '已永久删除项目 \u00ad' }],
+    ['left-to-right isolate project name', { projectNotice: '已永久删除项目 \u2066' }],
+    [
+      'prefixed markup',
+      { projectNotice: '已永久删除项目 <img src=x onerror=alert(1)>' },
+    ],
+    [
+      'embedded control character',
+      { projectNotice: '已永久删除项目 Atlas\u0007' },
+    ],
+    ['unrelated state', { anotherKey: '已永久删除项目 Atlas' }],
+  ])('does not render a %s project notice', async (_, state) => {
+    mockPortfolio()
+    renderApp(<ProjectPageWithNavigationState state={state} />, {
+      route: '/notice-setup',
+    })
+
+    await screen.findByRole('article', { name: projects[0]!.name })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(window.history.state.usr).toEqual(state)
+  })
+
   it('shows honest portfolio metrics and filters the matrix by derived health', async () => {
     const user = userEvent.setup()
     const today = new Date()

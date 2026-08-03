@@ -98,3 +98,30 @@ test('desktop comparison captures representative 1280px and 768px layouts', asyn
 
   await page.setViewportSize({ width: 1440, height: 900 })
 })
+
+test('approved task multiview states match their visual baselines', async ({
+  page,
+}, testInfo) => {
+  if (testInfo.project.name === 'desktop') {
+    await openReadyPage(page, '/tasks?view=board')
+    await expect(page).toHaveScreenshot(
+      'tasks-board-desktop.png',
+      screenshotOptions,
+    )
+    await openReadyPage(page, '/tasks?view=timeline')
+    await expect(page).toHaveScreenshot(
+      'tasks-timeline-desktop.png',
+      screenshotOptions,
+    )
+    return
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openReadyPage(page, '/tasks')
+  await page.getByRole('button', { name: '查看任务详情' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page).toHaveScreenshot(
+    'tasks-drawer-open-390.png',
+    screenshotOptions,
+  )
+})

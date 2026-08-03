@@ -30,6 +30,7 @@ export function filterTasks(
   const priorityValue = searchParams.get('priority')
   const assigneeValue = searchParams.get('assignee')
   const sortValue = searchParams.get('sort')
+  const query = (searchParams.get('q') ?? '').trim().toLocaleLowerCase()
   const status = includesValue(taskStatuses, statusValue)
     ? statusValue
     : undefined
@@ -44,6 +45,13 @@ export function filterTasks(
   const sort: TaskSort = includesValue(sorts, sortValue)
     ? sortValue
     : 'due_asc'
+  const matchesQuery = (task: Task) => !query || [
+    task.code,
+    task.title,
+    task.description,
+    task.assignee.name,
+    task.projectId ?? '',
+  ].join(' ').toLocaleLowerCase().includes(query)
 
   return tasks
     .map((item, index) => ({ item, index }))
@@ -51,7 +59,8 @@ export function filterTasks(
       return (
         (!status || item.status === status) &&
         (!assignee || item.assignee.id === assignee) &&
-        (!priority || item.priority === priority)
+        (!priority || item.priority === priority) &&
+        matchesQuery(item)
       )
     })
     .sort((left, right) => {
@@ -100,9 +109,17 @@ export function TaskFilters({ tasks }: TaskFiltersProps) {
   const selectedSort = includesValue(sorts, searchParams.get('sort'))
     ? searchParams.get('sort')!
     : 'due_asc'
+  const query = searchParams.get('q') ?? ''
 
   return (
     <section aria-label="任务筛选" className="task-filters">
+      <input
+        aria-label="搜索任务"
+        onChange={(event) => setParam('q', event.target.value)}
+        placeholder="搜索任务"
+        type="search"
+        value={query}
+      />
       <button
         aria-pressed={selectedStatus === 'overdue'}
         className="task-filters__overdue"

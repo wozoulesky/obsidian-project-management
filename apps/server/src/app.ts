@@ -95,6 +95,7 @@ const publicDomainStatuses: Readonly<Record<string, number>> = {
   HOST_FORBIDDEN: 403,
   ORIGIN_FORBIDDEN: 403,
   PERMISSION_DENIED: 403,
+  PROJECT_DELETE_FORBIDDEN: 403,
   ACTOR_NOT_FOUND: 404,
   DEFECT_NOT_FOUND: 404,
   PROJECT_NOT_FOUND: 404,
@@ -105,6 +106,7 @@ const publicDomainStatuses: Readonly<Record<string, number>> = {
   ACTOR_NAME_CONFLICT: 409,
   ACTOR_VERSION_CONFLICT: 409,
   DEFECT_VERSION_CONFLICT: 409,
+  DEFAULT_PROJECT_PROTECTED: 409,
   PROJECT_VERSION_CONFLICT: 409,
   REQUIREMENT_VERSION_CONFLICT: 409,
   SETTINGS_VERSION_CONFLICT: 409,
@@ -119,6 +121,11 @@ const internalDomainPolicies: Readonly<Record<string, {
   message: string
 }>> = {
   BACKUP_CREATE_FAILED: {
+    status: 500,
+    code: 'INTERNAL_ERROR',
+    message: 'Internal server error',
+  },
+  PROJECT_DELETE_FAILED: {
     status: 500,
     code: 'INTERNAL_ERROR',
     message: 'Internal server error',

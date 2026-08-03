@@ -2,7 +2,10 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type Query,
   type QueryClient,
+  type QueryFilters,
+  type QueryState,
 } from '@tanstack/react-query'
 import type { PersistedAppSettings } from '@project-os/contracts'
 import {
@@ -11,14 +14,18 @@ import {
   useCallback,
   useContext,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
 
 import type {
   CreateProjectInput,
+  Project,
   RequirementStatus,
+  Task,
   TaskDateInput,
   TaskProgressInput,
+  TaskStatus,
 } from './domain'
 import type {
   CreateHumanActorInput,
@@ -32,6 +39,7 @@ import {
   projectRepository,
   resetProjectRepositoryForTests,
 } from '#repository-default'
+import { progressForStatus } from './task-status'
 
 export {
   projectId,
@@ -43,29 +51,62 @@ type ProjectRepositoryContextValue = {
   repository: ProjectRepository
   projectId: string
   selectProject: (projectId: string) => void
+  selectProjectAfterDeletion: (
+    deletedProjectId: string,
+    nextProjectId: string,
+  ) => void
 }
 
 export const workspaceProjectStorageKey = 'project-os:workspace-project'
+type DeletedProjectRegistry = {
+  ids: Set<string>
+  listeners: Set<() => void>
+}
+const deletedProjectsByClient = new WeakMap<
+  QueryClient,
+  DeletedProjectRegistry
+>()
 
 const ProjectRepositoryContext =
   createContext<ProjectRepositoryContextValue | null>(null)
+
+function persistWorkspaceProject(projectId: string) {
+  try {
+    if (projectId === '') {
+      sessionStorage.removeItem(workspaceProjectStorageKey)
+    } else {
+      sessionStorage.setItem(workspaceProjectStorageKey, projectId)
+    }
+  } catch {
+    // Some browser privacy modes deny storage access; selection still works.
+  }
+}
 
 export function ProjectRepositoryProvider({
   children,
   repository,
   projectId,
-}: Omit<ProjectRepositoryContextValue, 'selectProject'> & {
+}: Omit<
+  ProjectRepositoryContextValue,
+  'selectProject' | 'selectProjectAfterDeletion'
+> & {
   children: ReactNode
 }) {
   const parent = useContext(ProjectRepositoryContext)
   const [selectedProjectId, setSelectedProjectId] = useState(projectId)
   const selectProject = useCallback((nextProjectId: string) => {
     setSelectedProjectId(nextProjectId)
-    try {
-      sessionStorage.setItem(workspaceProjectStorageKey, nextProjectId)
-    } catch {
-      // Some browser privacy modes deny storage access; selection still works.
-    }
+    persistWorkspaceProject(nextProjectId)
+  }, [])
+  const selectProjectAfterDeletion = useCallback((
+    deletedProjectId: string,
+    nextProjectId: string,
+  ) => {
+    setSelectedProjectId((currentProjectId) => {
+      if (currentProjectId !== deletedProjectId) return currentProjectId
+      persistWorkspaceProject(nextProjectId)
+      return nextProjectId
+    })
   }, [])
   if (parent !== null) return children
   return createElement(
@@ -75,6 +116,7 @@ export function ProjectRepositoryProvider({
         repository,
         projectId: selectedProjectId,
         selectProject,
+        selectProjectAfterDeletion,
       },
     },
     children,
@@ -86,14 +128,17 @@ export function useProjectRepository() {
     repository: projectRepository,
     projectId,
     selectProject: () => undefined,
+    selectProjectAfterDeletion: () => undefined,
   }
 }
+
+const projectTaskListQueryMarker = { scope: 'project-task-list' } as const
 
 export const projectQueryKeys = {
   actors: ['actors'] as const,
   currentActor: ['actors', 'current'] as const,
   activities: ['activities'] as const,
-  allTasks: ['tasks', 'all'] as const,
+  allTasks: ['tasks', { scope: 'all' }] as const,
   projects: ['projects'] as const,
   projectFor: (selectedProjectId: string) =>
     ['projects', selectedProjectId] as const,
@@ -114,6 +159,15 @@ export const projectQueryKeys = {
     ['dashboard', { scope: 'workspace' }, days] as const,
   tasksFor: (selectedProjectId: string) =>
     ['tasks', selectedProjectId] as const,
+  taskListFor: <Parameters extends Readonly<Record<string, unknown>>>(
+    selectedProjectId: string,
+    parameters: Parameters,
+  ) => [
+    'tasks',
+    selectedProjectId,
+    projectTaskListQueryMarker,
+    parameters,
+  ] as const,
   requirementsFor: (selectedProjectId: string) =>
     ['requirements', selectedProjectId] as const,
   defectsFor: (selectedProjectId: string) =>
@@ -135,9 +189,128 @@ export const projectQueryKeys = {
   gantt: ['gantt', projectId] as const,
 }
 
+function useProjectQueryEnabled(selectedProjectId: string): boolean {
+  const queryClient = useQueryClient()
+  const subscribe = useCallback((listener: () => void) => {
+    const registry = getDeletedProjectRegistry(queryClient)
+    registry.listeners.add(listener)
+    return () => {
+      registry.listeners.delete(listener)
+    }
+  }, [queryClient])
+  const getSnapshot = useCallback(
+    () => deletedProjectsByClient
+      .get(queryClient)
+      ?.ids.has(selectedProjectId) ?? false,
+    [queryClient, selectedProjectId],
+  )
+  const isDeleted = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    () => false,
+  )
+  return (
+    selectedProjectId !== ''
+    && !isDeleted
+  )
+}
+
+function getDeletedProjectRegistry(
+  queryClient: QueryClient,
+): DeletedProjectRegistry {
+  const current = deletedProjectsByClient.get(queryClient)
+  if (current !== undefined) return current
+  const created: DeletedProjectRegistry = {
+    ids: new Set(),
+    listeners: new Set(),
+  }
+  deletedProjectsByClient.set(queryClient, created)
+  return created
+}
+
+function notifyDeletedProjectListeners(registry: DeletedProjectRegistry) {
+  for (const listener of registry.listeners) listener()
+}
+
+function markProjectDeleted(
+  queryClient: QueryClient,
+  selectedProjectId: string,
+) {
+  const registry = getDeletedProjectRegistry(queryClient)
+  if (!registry.ids.has(selectedProjectId)) {
+    registry.ids.add(selectedProjectId)
+    notifyDeletedProjectListeners(registry)
+  }
+}
+
+function clearDeletedProjects(queryClient: QueryClient) {
+  const registry = deletedProjectsByClient.get(queryClient)
+  if (registry === undefined || registry.ids.size === 0) return
+  registry.ids.clear()
+  notifyDeletedProjectListeners(registry)
+}
+
+function clearDeletedProject(
+  queryClient: QueryClient,
+  selectedProjectId: string,
+) {
+  const registry = deletedProjectsByClient.get(queryClient)
+  if (registry?.ids.delete(selectedProjectId)) {
+    notifyDeletedProjectListeners(registry)
+  }
+}
+
+export function projectOwnedQueryKeys(
+  selectedProjectId: string,
+): readonly QueryFilters[] {
+  return [
+    {
+      queryKey: projectQueryKeys.projectFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.projectMembersFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.requirementsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.defectsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.ganttFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.dashboardPrefixFor(selectedProjectId),
+      exact: false,
+    },
+    {
+      queryKey: projectQueryKeys.sessionsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.handoffsFor(selectedProjectId),
+      exact: true,
+    },
+    {
+      queryKey: projectQueryKeys.deliverablesFor(selectedProjectId),
+      exact: true,
+    },
+  ] as const
+}
+
 const createTaskQueryOptions = (
   repository: ProjectRepository,
   selectedProjectId: string,
+  enabled: boolean,
 ) =>
   import.meta.env.DEV
   || (
@@ -157,6 +330,8 @@ const createTaskQueryOptions = (
 
         return {
           queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+          meta: projectTaskListQueryMarker,
+          enabled,
           queryFn: shouldFail
             ? () => {
                 throw new Error('任务数据加载失败，请重试。')
@@ -167,6 +342,8 @@ const createTaskQueryOptions = (
       }
     : () => ({
         queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+        meta: projectTaskListQueryMarker,
+        enabled,
         queryFn: () => repository.listTasks(selectedProjectId),
       })
 
@@ -225,9 +402,11 @@ function invalidateKeys(
 
 export function useDashboard(days: 7 | 30 | 90 = 30) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery({
     queryKey: projectQueryKeys.dashboardFor(context.projectId, days),
     queryFn: () => context.repository.getDashboard(context.projectId, days),
+    enabled,
   })
 }
 
@@ -241,47 +420,52 @@ export function useProjects() {
 
 export function useProject(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.projectFor(selectedProjectId),
     queryFn: () => context.repository.getProject(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
 export function useProjectMembers(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.projectMembersFor(selectedProjectId),
     queryFn: () => context.repository.listProjectMembers(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
 export function useProjectSessions(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.sessionsFor(selectedProjectId),
     queryFn: () => context.repository.listProjectSessions(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
 export function useProjectHandoffs(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.handoffsFor(selectedProjectId),
     queryFn: () => context.repository.listProjectHandoffs(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
 export function useProjectDeliverables(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery({
     queryKey: projectQueryKeys.deliverablesFor(selectedProjectId),
     queryFn: () =>
       context.repository.listProjectDeliverables(selectedProjectId),
-    enabled: selectedProjectId !== '',
+    enabled,
   })
 }
 
@@ -377,12 +561,73 @@ export function useCreateProject() {
   return useMutation({
     mutationFn: (input: CreateProjectInput) =>
       context.repository.createProject(input),
-    onSuccess: async () => {
+    onSuccess: async (createdProject) => {
+      clearDeletedProject(queryClient, createdProject.id)
       await invalidateKeys(queryClient, [
         projectQueryKeys.projects,
         projectQueryKeys.actors,
         ['dashboard'],
         projectQueryKeys.activities,
+      ])
+    },
+  })
+}
+
+export function useDeleteProject() {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: ({ projectId: selectedProjectId, version }: {
+      projectId: string
+      version: number
+    }) => context.repository.deleteProject(selectedProjectId, version),
+    onSuccess: async (_, { projectId: deletedProjectId }) => {
+      const cachedProjects = queryClient.getQueryData<Project[]>(
+        projectQueryKeys.projects,
+      )
+      const remainingProjects = cachedProjects?.filter(
+        ({ id }) => id !== deletedProjectId,
+      )
+      if (remainingProjects !== undefined) {
+        queryClient.setQueryData(projectQueryKeys.projects, remainingProjects)
+      }
+
+      const cachedTasks = queryClient.getQueryData<Task[]>(
+        projectQueryKeys.allTasks,
+      )
+      if (cachedTasks !== undefined) {
+        queryClient.setQueryData(
+          projectQueryKeys.allTasks,
+          cachedTasks.filter(({ projectId }) => projectId !== deletedProjectId),
+        )
+      }
+
+      markProjectDeleted(queryClient, deletedProjectId)
+
+      for (const filters of projectOwnedQueryKeys(deletedProjectId)) {
+        queryClient.removeQueries(filters)
+      }
+
+      const nextProjectId = remainingProjects?.find(
+        ({ id }) => id === 'project_default',
+      )?.id ?? remainingProjects?.[0]?.id ?? ''
+      context.selectProjectAfterDeletion(deletedProjectId, nextProjectId)
+
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.projects,
+          exact: true,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.allTasks,
+          exact: true,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.workspaceDashboardPrefix,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.activities,
+        }),
       ])
     },
   })
@@ -417,15 +662,17 @@ export function useCreateTask(selectedProjectId: string) {
 
 export function useProjectTasks(selectedProjectId: string) {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(selectedProjectId)
   return useQuery(
-    createTaskQueryOptions(context.repository, selectedProjectId)(),
+    createTaskQueryOptions(context.repository, selectedProjectId, enabled)(),
   )
 }
 
 export function useTasks() {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery(
-    createTaskQueryOptions(context.repository, context.projectId)(),
+    createTaskQueryOptions(context.repository, context.projectId, enabled)(),
   )
 }
 
@@ -461,6 +708,486 @@ export function useUpdateTaskProgress() {
   })
 }
 
+type MoveTaskStatusVariables = {
+  projectId: string
+  status: TaskStatus
+  task: Task
+}
+
+type TaskMoveSnapshot = {
+  query: Query
+  originalState: QueryState
+  originalItem: Task
+  optimisticData: unknown
+  optimisticDataUpdateCount: number
+  optimisticError: unknown
+  optimisticEpoch: number
+  optimisticItem: Task
+  optimisticIsInvalidated: boolean
+  optimisticStatus: QueryState['status']
+}
+
+type TaskMoveQueryMarker = {
+  dataUpdateCount: number
+  epoch: number
+}
+
+type PendingTaskMoveScopes = {
+  allTasksDirty: boolean
+  dirtyProjects: Set<string>
+  projects: Map<string, number>
+  total: number
+}
+
+type TaskMoveInvalidationFlush = {
+  allTasks: boolean
+  projectIds: string[]
+}
+
+const pendingTaskMovesByClient = new WeakMap<
+  QueryClient,
+  Map<string, symbol>
+>()
+const pendingTaskMoveScopesByClient = new WeakMap<
+  QueryClient,
+  PendingTaskMoveScopes
+>()
+const taskMoveQueryMarkers = new WeakMap<Query, TaskMoveQueryMarker>()
+
+function isProjectTaskListMarker(value: unknown) {
+  return (
+    value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && Object.keys(value).length === 1
+    && Reflect.get(value, 'scope') === projectTaskListQueryMarker.scope
+  )
+}
+
+function isProjectTaskListQuery(
+  query: Query,
+  selectedProjectId: string,
+) {
+  const { queryKey } = query
+  if (queryKey[0] !== 'tasks' || queryKey[1] !== selectedProjectId) {
+    return false
+  }
+  if (queryKey.length === 2) return true
+  return (
+    isProjectTaskListMarker(query.options.meta)
+    || (
+      queryKey.length === 4
+      && isProjectTaskListMarker(queryKey[2])
+    )
+  )
+}
+
+function syncTaskMoveQueryEpoch(query: Query) {
+  const currentCount = query.state.dataUpdateCount
+  const marker = taskMoveQueryMarkers.get(query)
+  if (marker === undefined) {
+    const created = { dataUpdateCount: currentCount, epoch: 0 }
+    taskMoveQueryMarkers.set(query, created)
+    return created.epoch
+  }
+  if (marker.dataUpdateCount !== currentCount) {
+    marker.dataUpdateCount = currentCount
+    marker.epoch += 1
+  }
+  return marker.epoch
+}
+
+function recordTaskMoveQueryUpdate(query: Query) {
+  const marker = taskMoveQueryMarkers.get(query)
+  if (marker === undefined) {
+    taskMoveQueryMarkers.set(query, {
+      dataUpdateCount: query.state.dataUpdateCount,
+      epoch: 0,
+    })
+    return 0
+  }
+  marker.dataUpdateCount = query.state.dataUpdateCount
+  return marker.epoch
+}
+
+function getPendingTaskMoves(queryClient: QueryClient) {
+  const current = pendingTaskMovesByClient.get(queryClient)
+  if (current !== undefined) return current
+  const created = new Map<string, symbol>()
+  pendingTaskMovesByClient.set(queryClient, created)
+  return created
+}
+
+function registerTaskMoveScope(
+  queryClient: QueryClient,
+  projectId: string,
+) {
+  const current = pendingTaskMoveScopesByClient.get(queryClient) ?? {
+    allTasksDirty: false,
+    dirtyProjects: new Set<string>(),
+    projects: new Map<string, number>(),
+    total: 0,
+  }
+  current.total += 1
+  current.projects.set(projectId, (current.projects.get(projectId) ?? 0) + 1)
+  pendingTaskMoveScopesByClient.set(queryClient, current)
+}
+
+function markTaskMoveScopeDirty(
+  queryClient: QueryClient,
+  projectId: string,
+) {
+  const current = pendingTaskMoveScopesByClient.get(queryClient)
+  if (current === undefined) return
+  current.allTasksDirty = true
+  current.dirtyProjects.add(projectId)
+}
+
+function releaseTaskMoveScope(
+  queryClient: QueryClient,
+  projectId: string,
+) {
+  const current = pendingTaskMoveScopesByClient.get(queryClient)
+  if (current === undefined) {
+    return { allTasks: false, projectIds: [] }
+  }
+  current.total = Math.max(0, current.total - 1)
+  const projectCount = current.projects.get(projectId) ?? 0
+  if (projectCount <= 1) current.projects.delete(projectId)
+  else current.projects.set(projectId, projectCount - 1)
+  const projectIds = [...current.dirtyProjects].filter(
+    (dirtyProjectId) => !current.projects.has(dirtyProjectId),
+  )
+  for (const dirtyProjectId of projectIds) {
+    current.dirtyProjects.delete(dirtyProjectId)
+  }
+  const allTasks = current.total === 0 && current.allTasksDirty
+  if (allTasks) current.allTasksDirty = false
+  if (
+    current.total === 0
+    && current.dirtyProjects.size === 0
+    && !current.allTasksDirty
+  ) {
+    pendingTaskMoveScopesByClient.delete(queryClient)
+  }
+  return { allTasks, projectIds }
+}
+
+function releaseTaskMove(
+  queryClient: QueryClient,
+  taskId: string,
+  token: symbol,
+) {
+  const pendingMoves = pendingTaskMovesByClient.get(queryClient)
+  if (pendingMoves?.get(taskId) === token) pendingMoves.delete(taskId)
+}
+
+function rollbackTaskMoveSnapshots(snapshots: readonly TaskMoveSnapshot[]) {
+  for (const snapshot of snapshots) {
+    if (syncTaskMoveQueryEpoch(snapshot.query) !== snapshot.optimisticEpoch) {
+      continue
+    }
+    const currentState = snapshot.query.state
+    if (!Array.isArray(currentState.data)) continue
+    const currentTasks = currentState.data as Task[]
+    const currentItem = currentTasks.find(
+      (candidate) => candidate.id === snapshot.originalItem.id,
+    )
+    if (currentItem !== snapshot.optimisticItem) continue
+
+    if (
+      currentState.data !== snapshot.optimisticData
+      || currentState.dataUpdateCount !== snapshot.optimisticDataUpdateCount
+    ) {
+      snapshot.query.setState({
+        data: currentTasks.map((candidate) => (
+          candidate === snapshot.optimisticItem
+            ? snapshot.originalItem
+            : candidate
+        )),
+      })
+      recordTaskMoveQueryUpdate(snapshot.query)
+      continue
+    }
+
+    const rollbackState: Partial<QueryState> = {
+      data: snapshot.originalState.data,
+      dataUpdateCount: snapshot.originalState.dataUpdateCount,
+      dataUpdatedAt: snapshot.originalState.dataUpdatedAt,
+    }
+    if (currentState.error === snapshot.optimisticError) {
+      rollbackState.error = snapshot.originalState.error
+    }
+    if (currentState.isInvalidated === snapshot.optimisticIsInvalidated) {
+      rollbackState.isInvalidated = snapshot.originalState.isInvalidated
+    }
+    if (currentState.status === snapshot.optimisticStatus) {
+      rollbackState.status = snapshot.originalState.status
+    }
+    snapshot.query.setState(rollbackState)
+    recordTaskMoveQueryUpdate(snapshot.query)
+  }
+}
+
+function mergeTaskMoveServerResult(
+  snapshots: readonly TaskMoveSnapshot[],
+  serverTask: Task,
+) {
+  for (const snapshot of snapshots) {
+    if (syncTaskMoveQueryEpoch(snapshot.query) !== snapshot.optimisticEpoch) {
+      continue
+    }
+    const currentData = snapshot.query.state.data
+    if (!Array.isArray(currentData)) continue
+    const currentTasks = currentData as Task[]
+    if (!currentTasks.some(
+      (candidate) => candidate === snapshot.optimisticItem,
+    )) continue
+    snapshot.query.setState({
+      data: currentTasks.map((candidate) => (
+        candidate === snapshot.optimisticItem ? serverTask : candidate
+      )),
+    })
+    recordTaskMoveQueryUpdate(snapshot.query)
+  }
+}
+
+function taskMoveQueryCandidates(
+  queryClient: QueryClient,
+  selectedProjectId: string,
+  taskId: string,
+) {
+  const queryCache = queryClient.getQueryCache()
+  const projectTaskQueries = queryCache.findAll({
+    queryKey: projectQueryKeys.tasksFor(selectedProjectId),
+  }).filter((query) => (
+    isProjectTaskListQuery(query, selectedProjectId)
+  ))
+  const allTasksQuery = queryCache.find({
+    queryKey: projectQueryKeys.allTasks,
+    exact: true,
+  })
+  return [
+    ...projectTaskQueries,
+    ...(allTasksQuery === undefined ? [] : [allTasksQuery]),
+  ].filter(({ state }) => (
+    Array.isArray(state.data)
+    && (state.data as Task[]).some((candidate) => candidate.id === taskId)
+  ))
+}
+
+function invalidateTaskMoveQueries(
+  queryClient: QueryClient,
+  selectedProjectId: string | undefined,
+  flush: TaskMoveInvalidationFlush,
+) {
+  const taskListFilters: QueryFilters[] = flush.projectIds.flatMap(
+    (dirtyProjectId) => queryClient.getQueryCache()
+      .findAll({ queryKey: projectQueryKeys.tasksFor(dirtyProjectId) })
+      .filter((query) => (
+        isProjectTaskListQuery(query, dirtyProjectId)
+      ))
+      .map(({ queryKey }) => ({ queryKey, exact: true })),
+  )
+  const relatedFilters: QueryFilters[] = selectedProjectId === undefined
+    ? []
+    : [
+        { queryKey: projectQueryKeys.ganttFor(selectedProjectId), exact: true },
+        {
+          queryKey: projectQueryKeys.requirementsFor(selectedProjectId),
+          exact: true,
+        },
+        {
+          queryKey: projectQueryKeys.dashboardPrefixFor(selectedProjectId),
+          exact: false,
+        },
+        {
+          queryKey: projectQueryKeys.workspaceDashboardPrefix,
+          exact: false,
+        },
+        {
+          queryKey: projectQueryKeys.projectFor(selectedProjectId),
+          exact: true,
+        },
+        { queryKey: projectQueryKeys.projects, exact: true },
+        { queryKey: projectQueryKeys.activities, exact: true },
+      ]
+  const filters: readonly QueryFilters[] = [
+    ...taskListFilters,
+    ...(flush.allTasks
+      ? [{ queryKey: projectQueryKeys.allTasks, exact: true }]
+      : []),
+    ...relatedFilters,
+  ]
+  return Promise.allSettled(filters.map((filter) => (
+    Promise.resolve().then(() => queryClient.invalidateQueries(filter))
+  )))
+}
+
+export function useMoveTaskStatus() {
+  const queryClient = useQueryClient()
+  const context = useProjectRepository()
+  return useMutation({
+    mutationFn: ({ status, task }: MoveTaskStatusVariables) =>
+      context.repository.updateTaskProgress(task.id, {
+        progress: progressForStatus(status, task.progress),
+        status,
+        note: `Moved to ${status} from task board`,
+        version: task.version,
+      }),
+    onMutate: async ({
+      projectId: variableProjectId,
+      status,
+      task,
+    }: MoveTaskStatusVariables) => {
+      if (
+        task.projectId !== undefined
+        && task.projectId !== variableProjectId
+      ) {
+        throw new Error(
+          `Task ${task.id} belongs to project ${task.projectId}, not ${variableProjectId}`,
+        )
+      }
+      const canonicalProjectId = task.projectId ?? variableProjectId
+      const pendingMoves = getPendingTaskMoves(queryClient)
+      if (pendingMoves.has(task.id)) {
+        throw new Error(`Task ${task.id} already has a pending status move`)
+      }
+      const token = Symbol(task.id)
+      pendingMoves.set(task.id, token)
+      registerTaskMoveScope(queryClient, canonicalProjectId)
+      let snapshots: TaskMoveSnapshot[] = []
+
+      try {
+        const candidates = taskMoveQueryCandidates(
+          queryClient,
+          canonicalProjectId,
+          task.id,
+        )
+        await Promise.all(candidates.map(({ queryKey }) => (
+          queryClient.cancelQueries({ queryKey, exact: true })
+        )))
+        snapshots = candidates
+          .filter(({ state }) => (
+            Array.isArray(state.data)
+            && (state.data as Task[]).some(
+              (candidate) => candidate.id === task.id,
+            )
+          ))
+          .map((query) => ({
+            query,
+            originalState: query.state,
+            originalItem: (query.state.data as Task[]).find(
+              (candidate) => candidate.id === task.id,
+            )!,
+            optimisticData: undefined,
+            optimisticDataUpdateCount: -1,
+            optimisticError: undefined,
+            optimisticEpoch: -1,
+            optimisticItem: task,
+            optimisticIsInvalidated: false,
+            optimisticStatus: 'pending',
+          }))
+
+        for (const snapshot of snapshots) {
+          if (!Array.isArray(snapshot.originalState.data)) continue
+          const cachedTasks = snapshot.originalState.data as Task[]
+          let foundTask = false
+          const optimisticTasks = cachedTasks.map((candidate) => {
+            if (candidate.id !== task.id) return candidate
+            foundTask = true
+            return {
+              ...candidate,
+              status,
+              progress: progressForStatus(status, candidate.progress),
+            }
+          })
+          if (!foundTask) continue
+          syncTaskMoveQueryEpoch(snapshot.query)
+          queryClient.setQueryData(snapshot.query.queryKey, optimisticTasks)
+          const optimisticState = snapshot.query.state
+          snapshot.optimisticData = optimisticState.data
+          snapshot.optimisticDataUpdateCount = optimisticState.dataUpdateCount
+          snapshot.optimisticError = optimisticState.error
+          snapshot.optimisticEpoch = recordTaskMoveQueryUpdate(snapshot.query)
+          snapshot.optimisticItem = (optimisticState.data as Task[]).find(
+            (candidate) => candidate.id === task.id,
+          )!
+          snapshot.optimisticIsInvalidated = optimisticState.isInvalidated
+          snapshot.optimisticStatus = optimisticState.status
+        }
+
+        return {
+          canonicalProjectId,
+          snapshots,
+          taskId: task.id,
+          token,
+        }
+      } catch (error) {
+        let flush: TaskMoveInvalidationFlush
+        try {
+          rollbackTaskMoveSnapshots(snapshots)
+        } finally {
+          snapshots.length = 0
+          releaseTaskMove(queryClient, task.id, token)
+          flush = releaseTaskMoveScope(queryClient, canonicalProjectId)
+        }
+        await invalidateTaskMoveQueries(queryClient, undefined, flush)
+        throw error
+      }
+    },
+    onError: (_error, _variables, mutationContext) => {
+      if (mutationContext === undefined) return
+      const pendingMoves = pendingTaskMovesByClient.get(queryClient)
+      if (pendingMoves?.get(mutationContext.taskId) !== mutationContext.token) {
+        mutationContext.snapshots.length = 0
+        return
+      }
+      rollbackTaskMoveSnapshots(mutationContext.snapshots)
+    },
+    onSuccess: (serverTask, _variables, mutationContext) => {
+      if (mutationContext === undefined) return
+      const pendingMoves = pendingTaskMovesByClient.get(queryClient)
+      if (pendingMoves?.get(mutationContext.taskId) !== mutationContext.token) {
+        return
+      }
+      mergeTaskMoveServerResult(
+        mutationContext.snapshots,
+        serverTask,
+      )
+    },
+    onSettled: async (_data, _error, _variables, mutationContext) => {
+      if (mutationContext === undefined) return
+      const pendingMoves = pendingTaskMovesByClient.get(queryClient)
+      if (pendingMoves?.get(mutationContext.taskId) !== mutationContext.token) {
+        return
+      }
+      markTaskMoveScopeDirty(
+        queryClient,
+        mutationContext.canonicalProjectId,
+      )
+      const invalidationOptions = releaseTaskMoveScope(
+        queryClient,
+        mutationContext.canonicalProjectId,
+      )
+      try {
+        await invalidateTaskMoveQueries(
+          queryClient,
+          mutationContext.canonicalProjectId,
+          invalidationOptions,
+        )
+      } finally {
+        mutationContext.snapshots.length = 0
+        releaseTaskMove(
+          queryClient,
+          mutationContext.taskId,
+          mutationContext.token,
+        )
+      }
+    },
+  })
+}
+
 export function useUpdateTaskDates() {
   const queryClient = useQueryClient()
   const context = useProjectRepository()
@@ -486,9 +1213,11 @@ export function useUpdateTaskDates() {
 
 export function useRequirements() {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery({
     queryKey: projectQueryKeys.requirementsFor(context.projectId),
     queryFn: () => context.repository.listRequirements(context.projectId),
+    enabled,
   })
 }
 
@@ -518,9 +1247,11 @@ export function useUpdateRequirementStatus() {
 
 export function useDefects() {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery({
     queryKey: projectQueryKeys.defectsFor(context.projectId),
     queryFn: () => context.repository.listDefects(context.projectId),
+    enabled,
   })
 }
 
@@ -548,9 +1279,11 @@ export function useCreateTaskFromDefect() {
 
 export function useGanttTasks() {
   const context = useProjectRepository()
+  const enabled = useProjectQueryEnabled(context.projectId)
   return useQuery({
     queryKey: projectQueryKeys.ganttFor(context.projectId),
     queryFn: () => context.repository.listGanttTasks(context.projectId),
+    enabled,
   })
 }
 
@@ -642,6 +1375,7 @@ export function useRestoreBackup() {
   return useMutation({
     mutationFn: (filename: string) => repository.restoreBackup(filename),
     onSuccess: async () => {
+      clearDeletedProjects(queryClient)
       await queryClient.invalidateQueries()
     },
   })
@@ -653,6 +1387,7 @@ export function useImportData() {
   return useMutation({
     mutationFn: (file: File) => repository.importData(file),
     onSuccess: async () => {
+      clearDeletedProjects(queryClient)
       await queryClient.invalidateQueries()
     },
   })

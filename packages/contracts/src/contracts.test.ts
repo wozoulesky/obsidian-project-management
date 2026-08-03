@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import * as contracts from './index.js'
+import {
+  activityOperationSchema,
+  deleteProjectInputSchema,
+  deleteProjectResultSchema,
+  projectIdParamsSchema,
+} from './index.js'
 
 const persistedHuman = {
   id: 'actor-1',
@@ -138,6 +144,112 @@ describe('shared contracts', () => {
   })
 })
 
+describe('project deletion contracts', () => {
+  const deletedCounts = {
+    project_members: 1,
+    tasks: 2,
+    requirements: 3,
+    defects: 4,
+    sessions: 5,
+    handoffs: 6,
+    deliverables: 7,
+  }
+
+  it('validates shared project id route params strictly', () => {
+    expect(projectIdParamsSchema.parse({ id: 'project_demo' })).toEqual({
+      id: 'project_demo',
+    })
+    expect(projectIdParamsSchema.safeParse({ id: '' }).success).toBe(false)
+    expect(projectIdParamsSchema.safeParse({
+      id: 'project_demo',
+      unexpected: true,
+    }).success).toBe(false)
+  })
+
+  it('bounds shared project route identifiers at 256 characters', () => {
+    const maximumId = 'x'.repeat(256)
+
+    expect(projectIdParamsSchema.parse({ id: maximumId })).toEqual({
+      id: maximumId,
+    })
+    expect(projectIdParamsSchema.safeParse({
+      id: 'x'.repeat(257),
+    }).success).toBe(false)
+  })
+
+  it('validates deletion input and result schemas strictly', () => {
+    expect(deleteProjectInputSchema.parse({ version: 2 })).toEqual({
+      version: 2,
+    })
+    expect(deleteProjectInputSchema.safeParse({ version: 0 }).success).toBe(
+      false,
+    )
+    expect(
+      deleteProjectInputSchema.safeParse({ version: 2, unexpected: true })
+        .success,
+    ).toBe(false)
+    expect(
+      deleteProjectResultSchema.parse({
+        id: 'project_demo',
+        name: 'Demo',
+        deletedAt: '2026-08-02T08:00:00.000Z',
+        deletedCounts,
+      }),
+    ).toEqual({
+      id: 'project_demo',
+      name: 'Demo',
+      deletedAt: '2026-08-02T08:00:00.000Z',
+      deletedCounts,
+    })
+    expect(
+      deleteProjectResultSchema.safeParse({
+        id: 'project_demo',
+        name: 'Demo',
+        deletedAt: '2026-08-02T08:00:00.000Z',
+        deletedCounts,
+        unexpected: true,
+      }).success,
+    ).toBe(false)
+  })
+
+  it('requires every project deletion count', () => {
+    const { deliverables: _deliverables, ...missingDeliverables } =
+      deletedCounts
+
+    expect(deleteProjectResultSchema.safeParse({
+      id: 'project_demo',
+      name: 'Demo',
+      deletedAt: '2026-08-02T08:00:00.000Z',
+    }).success).toBe(false)
+    expect(deleteProjectResultSchema.safeParse({
+      id: 'project_demo',
+      name: 'Demo',
+      deletedAt: '2026-08-02T08:00:00.000Z',
+      deletedCounts: missingDeliverables,
+    }).success).toBe(false)
+  })
+
+  it('requires project deletion counts to be non-negative integers', () => {
+    for (const tasks of [-1, 0.5]) {
+      expect(deleteProjectResultSchema.safeParse({
+        id: 'project_demo',
+        name: 'Demo',
+        deletedAt: '2026-08-02T08:00:00.000Z',
+        deletedCounts: { ...deletedCounts, tasks },
+      }).success).toBe(false)
+    }
+  })
+
+  it('rejects unknown project deletion count fields', () => {
+    expect(deleteProjectResultSchema.safeParse({
+      id: 'project_demo',
+      name: 'Demo',
+      deletedAt: '2026-08-02T08:00:00.000Z',
+      deletedCounts: { ...deletedCounts, unexpected: 0 },
+    }).success).toBe(false)
+  })
+})
+
 describe('activity operations', () => {
   it('accepts every stable operation used by Web, MCP, and administration', () => {
     const stableOperations = [
@@ -151,6 +263,7 @@ describe('activity operations', () => {
       'actor.register',
       'project.create',
       'project.update',
+      'project.delete',
       'project.member.add',
       'task.create',
       'task.progress',
@@ -172,7 +285,7 @@ describe('activity operations', () => {
 
     for (const operation of stableOperations) {
       expect(
-        contracts.activityOperationSchema.safeParse(operation).success,
+        activityOperationSchema.safeParse(operation).success,
         operation,
       ).toBe(true)
     }
@@ -180,7 +293,7 @@ describe('activity operations', () => {
 
   it('rejects unknown operations', () => {
     expect(
-      contracts.activityOperationSchema.safeParse('task.destroy').success,
+      activityOperationSchema.safeParse('task.destroy').success,
     ).toBe(false)
   })
 })

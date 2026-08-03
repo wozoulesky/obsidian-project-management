@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
@@ -14,6 +14,7 @@ import { GlassPanel } from '../../components/ui/GlassPanel'
 import type { Deliverable, Handoff } from '../../data/domain'
 import {
   useActors,
+  useCurrentActor,
   useProject,
   useProjectDeliverables,
   useProjectHandoffs,
@@ -22,6 +23,7 @@ import {
   useProjectTasks,
 } from '../../data/query-hooks'
 import { CreateTaskDialog } from './CreateTaskDialog'
+import { DeleteProjectDialog } from './DeleteProjectDialog'
 import { MilestoneTrack } from './MilestoneTrack'
 import { deriveMilestones } from './milestone-derivation'
 import { projectRisk } from './project-risk'
@@ -145,13 +147,20 @@ export function ProjectDetailPage() {
     ?? ''
   const projectsQuery = useProjects()
   const projectQuery = useProject(selectedProjectId)
+  const currentActorQuery = useCurrentActor()
   const actorsQuery = useActors()
   const membersQuery = useProjectMembers(selectedProjectId)
   const tasksQuery = useProjectTasks(selectedProjectId)
   const handoffsQuery = useProjectHandoffs(selectedProjectId)
   const deliverablesQuery = useProjectDeliverables(selectedProjectId)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const openerRef = useRef<HTMLButtonElement | null>(null)
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false)
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const taskOpenerRef = useRef<HTMLButtonElement | null>(null)
+  const actionsRef = useRef<HTMLDivElement | null>(null)
+  const actionsTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const deleteOpenerRef = useRef<HTMLButtonElement | null>(null)
+  const protectedItemRef = useRef<HTMLParagraphElement | null>(null)
 
   const actorById = useMemo(
     () => new Map((actorsQuery.data ?? []).map((actor) => [actor.id, actor])),
@@ -168,6 +177,36 @@ export function ProjectDetailPage() {
     .map((actorId) => actorById.get(actorId))
     .filter((actor) => actor !== undefined)
   const activeMembers = members.filter(({ status }) => status === 'active')
+  const currentActor = currentActorQuery.data
+  const isDefaultProject = project?.id === 'project_default'
+  const canDelete = Boolean(
+    project
+    && currentActor?.kind === 'human'
+    && currentActor.status === 'active'
+    && !isDefaultProject
+    && (
+      currentActor.role === 'owner'
+      || currentActor.id === project.ownerId
+    ),
+  )
+
+  useEffect(() => {
+    if (!actionsMenuOpen || deleteDialogOpen) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!actionsRef.current?.contains(event.target as Node)) {
+        setActionsMenuOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [actionsMenuOpen, deleteDialogOpen])
+
+  useEffect(() => {
+    if (actionsMenuOpen && !deleteDialogOpen) {
+      const firstMenuItem = deleteOpenerRef.current ?? protectedItemRef.current
+      firstMenuItem?.focus()
+    }
+  }, [actionsMenuOpen, deleteDialogOpen])
 
   const coreQueries = [
     projectsQuery,
@@ -176,7 +215,12 @@ export function ProjectDetailPage() {
     membersQuery,
     tasksQuery,
   ]
-  const allQueries = [...coreQueries, handoffsQuery, deliverablesQuery]
+  const allQueries = [
+    ...coreQueries,
+    currentActorQuery,
+    handoffsQuery,
+    deliverablesQuery,
+  ]
   const initialErrorQuery = coreQueries.find(
     (query) => query.isError && query.data === undefined,
   )
@@ -187,9 +231,29 @@ export function ProjectDetailPage() {
   const retry = () => {
     for (const query of allQueries) void query.refetch()
   }
-  const closeDialog = () => {
-    setDialogOpen(false)
-    openerRef.current?.focus()
+  const closeTaskDialog = () => {
+    setTaskDialogOpen(false)
+    taskOpenerRef.current?.focus()
+  }
+  const closeActionsMenu = () => {
+    setActionsMenuOpen(false)
+    actionsTriggerRef.current?.focus()
+  }
+  const handleActionsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeActionsMenu()
+      return
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    const items = Array.from(
+      actionsRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
+    )
+    if (!items.length) return
+    event.preventDefault()
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement)
+    const direction = event.key === 'ArrowDown' ? 1 : -1
+    items[(currentIndex + direction + items.length) % items.length]?.focus()
   }
   const milestoneCount = deriveMilestones(tasks).length
   const openTasks = tasks
@@ -247,15 +311,89 @@ export function ProjectDetailPage() {
           </div>
           <PageHeader
             actions={(
-              <Button
-                onClick={(event) => {
-                  openerRef.current = event.currentTarget
-                  setDialogOpen(true)
-                }}
-                variant="primary"
-              >
-                新建任务
-              </Button>
+              <div className="project-detail__actions">
+                <Button
+                  onClick={(event) => {
+                    taskOpenerRef.current = event.currentTarget
+                    setTaskDialogOpen(true)
+                  }}
+                  variant="primary"
+                >
+                  新建任务
+                </Button>
+                {canDelete || isDefaultProject ? (
+                  <div
+                    className="project-detail__more"
+                    onBlur={(event) => {
+                      if (deleteDialogOpen) return
+                      if (
+                        !event.relatedTarget
+                        || !actionsRef.current?.contains(event.relatedTarget)
+                      ) {
+                        setActionsMenuOpen(false)
+                      }
+                    }}
+                    ref={actionsRef}
+                  >
+                    <Button
+                      aria-expanded={actionsMenuOpen}
+                      aria-haspopup="menu"
+                      onClick={(event) => {
+                        actionsTriggerRef.current = event.currentTarget
+                        setActionsMenuOpen((open) => !open)
+                      }}
+                      onKeyDown={(event) => {
+                        actionsTriggerRef.current = event.currentTarget
+                        if (event.key === 'Escape' && actionsMenuOpen) {
+                          event.preventDefault()
+                          closeActionsMenu()
+                          return
+                        }
+                        if (
+                          event.key !== 'ArrowDown'
+                          && event.key !== 'ArrowUp'
+                        ) return
+                        event.preventDefault()
+                        setActionsMenuOpen(true)
+                      }}
+                      variant="ghost"
+                    >
+                      更多操作
+                    </Button>
+                    {actionsMenuOpen ? (
+                      <div
+                        className="project-detail__more-menu"
+                        onKeyDown={handleActionsKeyDown}
+                        role="menu"
+                      >
+                        {isDefaultProject ? (
+                          <p
+                            aria-disabled="true"
+                            ref={protectedItemRef}
+                            role="menuitem"
+                            tabIndex={-1}
+                          >
+                            默认项目受保护，无法删除
+                          </p>
+                        ) : (
+                          <button
+                            className="project-detail__delete-action"
+                            onClick={(event) => {
+                              deleteOpenerRef.current = event.currentTarget
+                              setDeleteDialogOpen(true)
+                            }}
+                            ref={deleteOpenerRef}
+                            role="menuitem"
+                            type="button"
+                          >
+                            删除项目
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             )}
             eyebrow={project.code}
             subtitle="聚焦当前项目的任务、里程碑、成员与交付接力。"
@@ -352,12 +490,27 @@ export function ProjectDetailPage() {
             />
           </div>
 
-          {dialogOpen ? (
+          {taskDialogOpen ? (
             <CreateTaskDialog
               activeMembers={activeMembers}
-              onClose={closeDialog}
+              onClose={closeTaskDialog}
               projectId={project.id}
               projectName={project.name}
+            />
+          ) : null}
+          {deleteDialogOpen ? (
+            <DeleteProjectDialog
+              onClose={() => {
+                setDeleteDialogOpen(false)
+                deleteOpenerRef.current?.focus()
+              }}
+              onDeleted={() => navigate('/projects', {
+                replace: true,
+                state: {
+                  projectNotice: `已永久删除项目 ${project.name}`,
+                },
+              })}
+              project={project}
             />
           ) : null}
         </>

@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   EmptyState,
@@ -27,11 +27,34 @@ import {
 } from './project-risk'
 import './projects-glass.css'
 
+const projectNoticePrefix = '已永久删除项目 '
+const unsafeUnicodeNoticeCharacterPattern = /[\p{Cc}\p{Cf}]/u
+
 export function ProjectPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const projectsQuery = useProjects()
   const actorsQuery = useActors()
   const tasksQuery = useAllTasks()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [projectNotice] = useState(() => {
+    if (typeof location.state !== 'object' || location.state === null) return null
+    if (!('projectNotice' in location.state)) return null
+    const notice = location.state.projectNotice
+    if (
+      typeof notice !== 'string'
+      || !notice.startsWith(projectNoticePrefix)
+      || notice.length > 200
+    ) return null
+    const projectName = notice.slice(projectNoticePrefix.length)
+    if (
+      !projectName.trim()
+      || projectName.includes('<')
+      || projectName.includes('>')
+      || unsafeUnicodeNoticeCharacterPattern.test(projectName)
+    ) return null
+    return notice
+  })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [healthFilter, setHealthFilter] = useState<'all' | ProjectHealth>('all')
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
@@ -46,6 +69,22 @@ export function ProjectPage() {
     () => new Map(actors.map((actor) => [actor.id, actor])),
     [actors],
   )
+
+  useEffect(() => {
+    if (
+      !projectNotice
+      || typeof location.state !== 'object'
+      || location.state === null
+      || !('projectNotice' in location.state)
+    ) return
+    const remainingState = Object.fromEntries(
+      Object.entries(location.state).filter(([key]) => key !== 'projectNotice'),
+    )
+    void navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: Object.keys(remainingState).length > 0 ? remainingState : null,
+    })
+  }, [location.pathname, location.search, location.state, navigate, projectNotice])
 
   const updateFilter = (key: 'owner' | 'q', value: string) => {
     const next = new URLSearchParams(searchParams)
@@ -171,6 +210,10 @@ export function ProjectPage() {
         subtitle="按负责人和关键词筛选真实项目，并在不离开矩阵的情况下查看摘要。"
         title={<span id="project-page-title">全部项目</span>}
       />
+
+      {projectNotice ? (
+        <p className="project-page__notice" role="status">{projectNotice}</p>
+      ) : null}
 
       {isPending ? <LoadingState label="正在加载项目" /> : null}
       {!isPending && initialErrorQuery ? (

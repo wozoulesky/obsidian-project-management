@@ -1,6 +1,8 @@
 import {
   createProjectInputSchema,
   dashboardSnapshotSchema,
+  deleteProjectInputSchema,
+  deleteProjectResultSchema,
   deliverableSchema,
   handoffSchema,
   persistedActivitySchema,
@@ -243,6 +245,17 @@ export function createHttpProjectRepository(
         method: 'POST',
         ...jsonBody(body),
       })
+    },
+    deleteProject(projectId, version) {
+      const body = deleteProjectInputSchema.parse({ version })
+      return client.request(
+        `/projects/${encodeURIComponent(projectId)}`,
+        deleteProjectResultSchema,
+        {
+          method: 'DELETE',
+          ...jsonBody(body),
+        },
+      )
     },
     async createTask(projectId, input) {
       const body = createProjectTaskInputSchema.parse(input)
