@@ -2,22 +2,26 @@
 
 [中文](README.md) | [English](README_EN.md)
 
-## v1.1.0
+## v1.3.0
 
-Project OS v1.1.0 adds a durable Agent relay loop to the complete local project
-workspace: session check-in, project briefings, in-session notes, deliverable
-records, and structured checkout handoffs. REST, MCP, the Agent Skill, and the
-Web application continue to share SQLite data and permission rules. See the
-[CHANGELOG](CHANGELOG.md) for full release notes and known limitations.
+Project OS v1.3.0 adds protected permanent project deletion and fan, board, and
+timeline task views that share filters, selection, and context across the dark
+glass workspace. REST, MCP, the Agent Skill, and the Web application continue
+to share SQLite data and permission rules. See the [CHANGELOG](CHANGELOG.md) for
+full release notes and known limitations.
 
 Project OS is a local-first project workspace. Its React Web application, REST
 API, SQLite database, MCP server, and installable Agent Skill share the same
 data and permission rules. The current release includes:
 
-- an all-project portfolio, owner filtering, project creation, and task
-  creation inside a selected project;
-- a unified human/Agent directory, quick progress submission, requirements,
-  defects, Gantt planning, and dashboards;
+- an all-project portfolio, owner filtering, project creation, task creation,
+  and protected permanent deletion with exact-name confirmation, default-project
+  protection, and retained audit evidence;
+- fan, board, and timeline task views with URL-backed filtering, search,
+  selection, shared context, drag-and-drop, keyboard movement, and quick progress
+  submission;
+- a unified human/Agent directory, requirements, defects, Gantt planning, and
+  dashboards;
 - a relay closed loop for Agent session check-in, incremental briefings,
   in-session notes, deliverable records, and structured checkout handoffs;
 - appearance, data, MCP token, and Agent Skills settings;
@@ -157,7 +161,7 @@ a write.
 
 ## More documentation
 
-- [v1.1.0 changelog](CHANGELOG.md)
+- [v1.3.0 changelog](CHANGELOG.md)
 - [Web development](web/README.md)
 - [Agent setup](docs/agent-setup.md)
 - [Data and backups](docs/data-and-backups.md)

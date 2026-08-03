@@ -1,5 +1,46 @@
 # Changelog
 
+## v1.3.0 — 2026-08-03
+
+Project OS v1.3.0 adds safe project lifecycle controls and expands the glass
+task console into a shared multiview workspace.
+
+### Highlights
+
+- Added authorized permanent project deletion with exact-name confirmation,
+  default-project protection, optimistic version checks, atomic cascading, and
+  retained audit evidence.
+- Added fan, board, and timeline task views that preserve URL-backed filters,
+  search, selected task, and persistent context.
+- Added drag-and-drop and keyboard task-status movement with normalized progress,
+  optimistic feedback, and complete rollback on failure.
+- Replaced prototype-only smart copy with deterministic insights derived from
+  real task dates, progress, assignment, and dependencies.
+
+### Platform and data
+
+- Added schema migration v3 so project-deletion activity is retained after the
+  deleted project reference is cleared, while existing activity row order and
+  indexes remain stable.
+- Added permission-checked REST, repository, and service operations for the
+  same atomic deletion contract used by the Web application.
+
+### Quality
+
+- Added contracts, core service, REST, repository, query, component, and real
+  runtime coverage for project deletion.
+- Added model, optimistic cache, board, timeline, accessibility, responsive,
+  and real runtime coverage for task multiview workflows.
+- Verified the complete repository check plus desktop, compact, and real-runtime
+  Playwright projects before release.
+
+### Known limitations
+
+- Project deletion is permanent; v1.3.0 does not add a recycle bin or recovery
+  workflow. Operators should create a backup before deleting valuable projects.
+- Board columns continue to use the four built-in task statuses and are not
+  user-configurable in this release.
+
 ## v1.2.0 — 2026-08-02
 
 Project OS v1.2.0 rebuilds the Web application around the approved dark glass

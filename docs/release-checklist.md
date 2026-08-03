@@ -1,8 +1,9 @@
 # 发布检查清单
 
-本文件只记录实际执行的证据。修正后的隔离 harness 已完成重跑；Kimi Code
-完整通过，Codex 和 Claude Code 仍未满足全部字段，因此本候选版本**不得**
-描述为三客户端完全验收。
+本文件只记录实际执行的证据。v1.3.0 的仓库、浏览器和生产构建烟测证据记录在
+下方；真实模型客户端边界仍沿用修正后的隔离 harness 结果：Kimi Code 完整
+通过，Codex 和 Claude Code 仍未满足全部字段，因此本版本**不得**描述为
+三客户端完全验收。
 
 ## 发布判定规则
 
@@ -15,6 +16,34 @@
   `progress_written`、`activity_verified` 全为 `true`，才能声明三客户端完全
   验收。
 - 任一客户端失败时，命令返回非零是正确门禁行为；不得为了发布把它改成零。
+
+## v1.3.0 项目生命周期与任务多视图验收证据
+
+2026-08-03 09:17–09:43（Asia/Hong_Kong）在
+`E:\project_manage\.worktrees\v1.3-project-task-workspaces` 的候选提交上串行执行：
+
+| 检查 | 命令 | 当前证据 |
+|---|---|---|
+| 完整静态、单元、构建与文档门禁 | `npm run check` | PASS（exit 0）：Web 527、contracts 27、core 258（另 3 skipped）、MCP 25、server 202、Skill 6、脚本 6，共 1051 passed；lint/build/docs PASS |
+| 桌面 Playwright | `npm run test:e2e -- --project=desktop` | PASS（exit 0）：43 passed、6 个按项目规则 intentional skipped、0 failed；包含桌面视觉、布局、路由与自动无障碍检查 |
+| 紧凑布局 Playwright | `npm run test:e2e -- --project=compact` | PASS（exit 0）：38 passed、11 个按项目规则 intentional skipped、0 failed；包含 390px/600px 响应式、键盘和详情抽屉检查 |
+| 真实服务浏览器旅程 | `npm run test:e2e -- --project=real-browser-journeys` | PASS（exit 0）：20/20；覆盖项目永久删除、默认项目保护、409 恢复、任务多视图、看板持久化、快速提交、项目/负责人/设置和清理分页边界 |
+
+生产构建浏览器烟测使用隔离端口 `4174`/`4311` 和一次性 SQLite 数据库；完成后
+临时服务、数据库、日志和代理配置均已删除，未触碰用户正在运行的 `5173`/`4310`
+服务。
+
+| 烟测项 | 实际结果 |
+|---|---|
+| 默认项目无永久删除入口 | PASS：操作菜单只显示禁用的“默认项目受保护，无法删除” |
+| 一次性项目精确名称删除 | PASS：确认按钮在名称不匹配时禁用，输入 `Release Smoke v1.3` 后启用，删除后返回项目列表且项目消失 |
+| 视图切换保留筛选和选中任务 | PASS：`q=Release`、`priority=P1`、`selected=<task-id>` 在看板/时间线切换后保留，右侧上下文仍为同一任务 |
+| 看板移动刷新后持久化 | PASS：`Release board smoke` 移到“已完成”后刷新仍位于已完成列，进度规范化为 100% |
+| 紧凑布局详情抽屉 | PASS：390×844 视口下“查看任务详情”打开带遮罩和关闭按钮的对话框抽屉 |
+
+本轮最终代码审查未发现 Critical 或 Important 产品缺陷；发布元数据补齐后，审查中
+唯一的阻塞项已关闭。搜索输入历史粒度和极长/含尖括号项目名的删除成功提示被记录为
+非阻塞 Minor，均不影响删除事务、数据留存或任务状态持久化。
 
 ## v1.2.0 前端重构验收证据
 
