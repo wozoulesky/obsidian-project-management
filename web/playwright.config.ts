@@ -83,6 +83,7 @@ export default defineConfig({
         'projects-actors-settings.spec.ts',
         'project-deletion-real.spec.ts',
         'quick-submit-real.spec.ts',
+        'task-multiview-real.spec.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -96,6 +97,7 @@ export default defineConfig({
         'projects-actors-settings.spec.ts',
         'project-deletion-real.spec.ts',
         'quick-submit-real.spec.ts',
+        'task-multiview-real.spec.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -109,6 +111,7 @@ export default defineConfig({
         'projects-actors-settings.spec.ts',
         'project-deletion-real.spec.ts',
         'quick-submit-real.spec.ts',
+        'task-multiview-real.spec.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
