@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type {
   APIRequestContext,
+  APIResponse,
   Page,
   Route,
 } from '@playwright/test'
@@ -13,10 +14,10 @@ type ApiEnvelope<Data> = {
   meta: { request_id: string }
 }
 
-type CreatedActor = {
+type SeedActor = {
   id: string
   name: string
-  status: 'active' | 'inactive'
+  status: 'active'
   version: number
 }
 
@@ -39,126 +40,240 @@ type CreatedTask = {
 type Runtime = {
   apiURL: string
   baseURL: string
+  seed: {
+    ownerId: string
+  }
 }
 
 type DisposableWorkspace = {
-  actor: CreatedActor
+  actorId: string
+  cleanup: ProjectCleanupRegistry
   project: CreatedProject
+}
+
+type ProjectCleanupCandidate = {
+  id?: string
+  name: string
+}
+
+type ProjectCleanupRegistry = {
+  candidates: ProjectCleanupCandidate[]
+  register: (name: string) => ProjectCleanupCandidate
 }
 
 type WorkspaceFixtures = {
   disposableWorkspace: DisposableWorkspace
 }
 
+type CreateProjectOptions = {
+  name?: string
+  validate?: (project: CreatedProject) => void
+}
+
+type CleanupOptions = {
+  deleteRequest?: (
+    projectURL: string,
+    version: number,
+  ) => Promise<APIResponse>
+}
+
 function uniqueLabel(label: string): string {
   return `${label} ${randomUUID().slice(0, 8)}`
 }
 
-async function createActor(
+function createProjectCleanupRegistry(): ProjectCleanupRegistry {
+  const candidates: ProjectCleanupCandidate[] = []
+  return {
+    candidates,
+    register(name) {
+      const candidate = { name }
+      candidates.push(candidate)
+      return candidate
+    },
+  }
+}
+
+async function getSeedOwner(
   request: APIRequestContext,
   runtime: Runtime,
-): Promise<CreatedActor> {
-  const response = await request.post(`${runtime.apiURL}/api/v1/actors`, {
-    data: {
-      name: uniqueLabel('Task E2E owner'),
-      role: 'owner',
-      capabilities: ['planning', 'delivery'],
-    },
-  })
-  expect(response.status()).toBe(201)
-  const envelope = await response.json() as ApiEnvelope<CreatedActor>
+): Promise<SeedActor> {
+  const response = await request.get(
+    `${runtime.apiURL}/api/v1/actors/${encodeURIComponent(runtime.seed.ownerId)}`,
+  )
+  expect(response.status()).toBe(200)
+  const envelope = await response.json() as ApiEnvelope<SeedActor>
   expect(envelope.error).toBeNull()
+  expect(envelope.data).toMatchObject({
+    id: runtime.seed.ownerId,
+    status: 'active',
+  })
   return envelope.data
 }
 
 async function createProject(
   request: APIRequestContext,
   runtime: Runtime,
-  actor: CreatedActor,
+  ownerId: string,
+  cleanup: ProjectCleanupRegistry,
+  options: CreateProjectOptions = {},
 ): Promise<CreatedProject> {
+  const name = options.name ?? uniqueLabel('Task multiview')
+  const candidate = cleanup.register(name)
   const response = await request.post(`${runtime.apiURL}/api/v1/projects`, {
     data: {
-      name: uniqueLabel('Task multiview'),
+      name,
       description: 'Disposable real browser task multiview workspace',
-      ownerId: actor.id,
+      ownerId,
       startDate: '2026-08-03',
       dueDate: '2026-08-31',
     },
   })
-  expect(response.status()).toBe(201)
   const envelope = await response.json() as ApiEnvelope<CreatedProject>
+  if (typeof envelope.data?.id === 'string') {
+    candidate.id = envelope.data.id
+  }
+  expect(response.status()).toBe(201)
   expect(envelope.error).toBeNull()
+  expect(envelope.data).toMatchObject({ name, ownerId })
+  options.validate?.(envelope.data)
   return envelope.data
 }
 
-async function deactivateActor(
+async function findProjectIdsByName(
   request: APIRequestContext,
   runtime: Runtime,
-  actor: CreatedActor,
-): Promise<void> {
-  const actorURL = `${runtime.apiURL}/api/v1/actors/${encodeURIComponent(actor.id)}`
-  const current = await request.get(actorURL)
-  expect(current.status()).toBe(200)
-  const currentEnvelope = await current.json() as ApiEnvelope<CreatedActor>
-  if (currentEnvelope.data.status === 'inactive') return
-
-  const response = await request.post(`${actorURL}/deactivate`, {
-    data: { version: currentEnvelope.data.version },
-  })
-  expect(response.status()).toBe(200)
-  const envelope = await response.json() as ApiEnvelope<CreatedActor>
-  expect(envelope.data.status).toBe('inactive')
+  name: string,
+): Promise<string[]> {
+  const ids: string[] = []
+  let cursor: string | null = null
+  do {
+    const projectsURL = new URL('/api/v1/projects', runtime.apiURL)
+    projectsURL.searchParams.set('limit', '200')
+    if (cursor !== null) projectsURL.searchParams.set('cursor', cursor)
+    const response = await request.get(projectsURL.href)
+    if (response.status() !== 200) {
+      throw new Error(
+        `Project cleanup discovery failed with ${response.status()} for ${name}`,
+      )
+    }
+    const envelope = await response.json() as ApiEnvelope<{
+      items: CreatedProject[]
+      next_cursor: string | null
+    }>
+    for (const project of envelope.data.items) {
+      if (project.name === name) ids.push(project.id)
+    }
+    cursor = envelope.data.next_cursor
+  } while (cursor !== null)
+  return ids
 }
 
-async function permanentlyDeleteProject(
+async function deleteProjectWithRetry(
   request: APIRequestContext,
   runtime: Runtime,
-  project: CreatedProject,
+  projectId: string,
+  deleteRequest: NonNullable<CleanupOptions['deleteRequest']>,
 ): Promise<void> {
-  const projectURL = `${runtime.apiURL}/api/v1/projects/${encodeURIComponent(project.id)}`
-  const current = await request.get(projectURL)
-  if (current.status() === 404) return
-  expect(current.status()).toBe(200)
-  const currentEnvelope = await current.json() as ApiEnvelope<CreatedProject>
+  const projectURL = `${runtime.apiURL}/api/v1/projects/${encodeURIComponent(projectId)}`
+  let lastError: unknown
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const current = await request.get(projectURL)
+      if (current.status() === 404) return
+      if (current.status() !== 200) {
+        throw new Error(
+          `Project cleanup read failed with ${current.status()} for ${projectId}`,
+        )
+      }
+      const currentEnvelope = await current.json() as ApiEnvelope<CreatedProject>
+      const deletion = await deleteRequest(
+        projectURL,
+        currentEnvelope.data.version,
+      )
+      if (deletion.status() !== 200 && deletion.status() !== 404) {
+        throw new Error(
+          `Project cleanup delete failed with ${deletion.status()} for ${projectId}`,
+        )
+      }
+      const verification = await request.get(projectURL)
+      if (verification.status() !== 404) {
+        throw new Error(
+          `Project cleanup verification returned ${verification.status()} for ${projectId}`,
+        )
+      }
+      return
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError
+}
 
-  const deletion = await request.delete(projectURL, {
-    data: { version: currentEnvelope.data.version },
-  })
-  expect(deletion.status()).toBe(200)
-  const deletionEnvelope = await deletion.json() as ApiEnvelope<{
-    id: string
-    name: string
-  }>
-  expect(deletionEnvelope.data).toMatchObject({
-    id: project.id,
-    name: project.name,
-  })
-  expect((await request.get(projectURL)).status()).toBe(404)
+async function cleanupRegisteredProjects(
+  request: APIRequestContext,
+  runtime: Runtime,
+  registry: ProjectCleanupRegistry,
+  options: CleanupOptions = {},
+): Promise<void> {
+  const failures: unknown[] = []
+  const deleteRequest = options.deleteRequest ?? (
+    (projectURL: string, version: number) => request.delete(projectURL, {
+      data: { version },
+    })
+  )
+  for (const candidate of registry.candidates) {
+    const projectIds = new Set<string>()
+    if (candidate.id !== undefined) projectIds.add(candidate.id)
+    try {
+      for (const projectId of await findProjectIdsByName(
+        request,
+        runtime,
+        candidate.name,
+      )) {
+        projectIds.add(projectId)
+      }
+    } catch (error) {
+      failures.push(error)
+    }
+    for (const projectId of projectIds) {
+      try {
+        await deleteProjectWithRetry(
+          request,
+          runtime,
+          projectId,
+          deleteRequest,
+        )
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'Task E2E project cleanup failed')
+  }
 }
 
 const test = realTest.extend<WorkspaceFixtures>({
   disposableWorkspace: async ({ request, runtime }, provide) => {
-    const actor = await createActor(request, runtime)
-    let project: CreatedProject | undefined
+    const registry = createProjectCleanupRegistry()
     let journeyError: unknown
     let cleanupError: unknown
     try {
-      project = await createProject(request, runtime, actor)
-      await provide({ actor, project })
+      const actor = await getSeedOwner(request, runtime)
+      const project = await createProject(
+        request,
+        runtime,
+        actor.id,
+        registry,
+      )
+      await provide({ actorId: actor.id, cleanup: registry, project })
     } catch (error) {
       journeyError = error
     } finally {
-      if (project !== undefined) {
-        try {
-          await permanentlyDeleteProject(request, runtime, project)
-        } catch (error) {
-          cleanupError = error
-        }
-      }
       try {
-        await deactivateActor(request, runtime, actor)
+        await cleanupRegisteredProjects(request, runtime, registry)
       } catch (error) {
-        cleanupError ??= error
+        cleanupError = error
       }
     }
 
@@ -186,7 +301,7 @@ async function createInProgressTask(
       data: {
         title,
         description: `Real task workflow for ${title}`,
-        assigneeId: workspace.actor.id,
+        assigneeId: workspace.actorId,
         startDate: '2026-08-03',
         dueDate: '2026-08-28',
         priority: 'P1',
@@ -231,6 +346,34 @@ async function getTask(
   expect(response.status()).toBe(200)
   const envelope = await response.json() as ApiEnvelope<CreatedTask>
   expect(envelope.error).toBeNull()
+  return envelope.data
+}
+
+async function updateTaskState(
+  request: APIRequestContext,
+  runtime: Runtime,
+  task: CreatedTask,
+  status: CreatedTask['status'],
+  progress: number,
+): Promise<CreatedTask> {
+  const response = await request.patch(
+    `${runtime.apiURL}/api/v1/tasks/${encodeURIComponent(task.id)}`,
+    {
+      data: {
+        progress,
+        status,
+        version: task.version,
+      },
+    },
+  )
+  expect(response.status()).toBe(200)
+  const envelope = await response.json() as ApiEnvelope<CreatedTask>
+  expect(envelope.data).toMatchObject({
+    id: task.id,
+    progress,
+    status,
+  })
+  expect(envelope.data.version).toBeGreaterThan(task.version)
   return envelope.data
 }
 
@@ -413,6 +556,26 @@ test('preserves filters, selection, and one context across all views', async ({
     55,
   )
   const keyword = task.title.split(' ').at(-1)!
+  const queryNegative = await createInProgressTask(
+    request,
+    runtime,
+    disposableWorkspace,
+    'Different query control',
+    46,
+  )
+  const statusNegative = await updateTaskState(
+    request,
+    runtime,
+    await createInProgressTask(
+      request,
+      runtime,
+      disposableWorkspace,
+      `Status control ${keyword}`,
+      82,
+    ),
+    'done',
+    100,
+  )
   await openTaskWorkspace(page, runtime, disposableWorkspace.project)
 
   const filters = page.getByRole('region', { name: '任务筛选' })
@@ -435,6 +598,19 @@ test('preserves filters, selection, and one context across all views', async ({
       contexts.getByRole('heading', { level: 2, name: task.title }),
     ).toHaveCount(1)
   }
+  const assertFilteredStage = async () => {
+    const stage = page.getByTestId('task-view-stage')
+    await expect(
+      stage.getByText(task.title, { exact: true }).first(),
+    ).toBeVisible()
+    await expect(
+      stage.getByText(queryNegative.title, { exact: true }),
+    ).toHaveCount(0)
+    await expect(
+      stage.getByText(statusNegative.title, { exact: true }),
+    ).toHaveCount(0)
+  }
+  await assertFilteredStage()
   await assertSharedContext()
 
   const viewSwitch = page.getByRole('group', { name: '任务视图' })
@@ -445,7 +621,7 @@ test('preserves filters, selection, and one context across all views', async ({
     selected: task.id,
     view: 'board',
   })
-  await expect(page.getByTestId(`task-board-card-${task.id}`)).toBeVisible()
+  await assertFilteredStage()
   await assertSharedContext()
 
   await viewSwitch.getByRole('button', { name: '时间线' }).click()
@@ -458,6 +634,7 @@ test('preserves filters, selection, and one context across all views', async ({
   await expect(
     page.getByRole('button', { name: `选择 ${task.code} ${task.title}` }),
   ).toBeVisible()
+  await assertFilteredStage()
   await assertSharedContext()
 })
 
@@ -538,4 +715,68 @@ test('rolls an optimistic move back after a targeted version conflict', async ({
   } finally {
     await page.unroute('**/api/v1/tasks/*/progress', rejectTargetProgress)
   }
+})
+
+test('compensates when client validation fails after project creation', async ({
+  disposableWorkspace,
+  request,
+  runtime,
+}) => {
+  const projectCleanup = disposableWorkspace.cleanup
+  let createdId: string | undefined
+  const partialName = uniqueLabel('Partial project')
+  await expect(createProject(
+    request,
+    runtime,
+    disposableWorkspace.actorId,
+    projectCleanup,
+    {
+      name: partialName,
+      validate(project: CreatedProject) {
+        createdId = project.id
+        throw new Error('Injected client validation failure')
+      },
+    },
+  )).rejects.toThrow('Injected client validation failure')
+  expect(createdId).toBeDefined()
+  const partialCandidate = projectCleanup.candidates.find(
+    ({ name }) => name === partialName,
+  )
+  expect(partialCandidate?.id).toBe(createdId)
+  delete partialCandidate!.id
+  let injectedFailure = false
+  let partialDeleteAttempts = 0
+  let blockedCandidateAttempts = 0
+  await expect(cleanupRegisteredProjects(request, runtime, projectCleanup, {
+    deleteRequest: async (projectURL, version) => {
+      if (projectURL.endsWith(
+        `/${encodeURIComponent(disposableWorkspace.project.id)}`,
+      )) {
+        blockedCandidateAttempts += 1
+        throw new Error('Injected permanent cleanup transport failure')
+      }
+      if (projectURL.endsWith(`/${encodeURIComponent(createdId!)}`)) {
+        partialDeleteAttempts += 1
+        if (!injectedFailure) {
+          injectedFailure = true
+          throw new Error('Injected cleanup transport failure')
+        }
+      }
+      return request.delete(projectURL, { data: { version } })
+    },
+  })).rejects.toThrow('Task E2E project cleanup failed')
+  expect(injectedFailure).toBe(true)
+  expect(partialDeleteAttempts).toBe(2)
+  expect(blockedCandidateAttempts).toBe(2)
+  expect((await request.get(
+    `${runtime.apiURL}/api/v1/projects/${encodeURIComponent(createdId!)}`,
+  )).status()).toBe(404)
+  expect((await request.get(
+    `${runtime.apiURL}/api/v1/projects/${encodeURIComponent(disposableWorkspace.project.id)}`,
+  )).status()).toBe(200)
+
+  await cleanupRegisteredProjects(request, runtime, projectCleanup)
+  expect((await request.get(
+    `${runtime.apiURL}/api/v1/projects/${encodeURIComponent(disposableWorkspace.project.id)}`,
+  )).status()).toBe(404)
 })
