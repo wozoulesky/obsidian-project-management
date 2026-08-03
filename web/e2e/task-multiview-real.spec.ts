@@ -77,6 +77,17 @@ type CleanupOptions = {
   ) => Promise<APIResponse>
 }
 
+type ProjectDiscoveryPage = {
+  items: CreatedProject[]
+  nextCursor: string | null
+}
+
+type ProjectPageFetcher = (
+  cursor: string | null,
+) => Promise<ProjectDiscoveryPage>
+
+const MAX_PROJECT_DISCOVERY_PAGES = 100
+
 function uniqueLabel(label: string): string {
   return `${label} ${randomUUID().slice(0, 8)}`
 }
@@ -139,14 +150,41 @@ async function createProject(
   return envelope.data
 }
 
+async function discoverProjectIdsByName(
+  name: string,
+  fetchPage: ProjectPageFetcher,
+  maxPages = MAX_PROJECT_DISCOVERY_PAGES,
+): Promise<string[]> {
+  const ids: string[] = []
+  const seenCursors = new Set<string>()
+  let cursor: string | null = null
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+    if (cursor !== null) {
+      if (seenCursors.has(cursor)) {
+        throw new Error(
+          `Project cleanup discovery found 重复 cursor "${cursor}" for ${name}`,
+        )
+      }
+      seenCursors.add(cursor)
+    }
+    const page = await fetchPage(cursor)
+    for (const project of page.items) {
+      if (project.name === name) ids.push(project.id)
+    }
+    if (page.nextCursor === null) return ids
+    cursor = page.nextCursor
+  }
+  throw new Error(
+    `Project cleanup discovery 超过 ${maxPages} 页上限 for ${name}`,
+  )
+}
+
 async function findProjectIdsByName(
   request: APIRequestContext,
   runtime: Runtime,
   name: string,
 ): Promise<string[]> {
-  const ids: string[] = []
-  let cursor: string | null = null
-  do {
+  return discoverProjectIdsByName(name, async (cursor) => {
     const projectsURL = new URL('/api/v1/projects', runtime.apiURL)
     projectsURL.searchParams.set('limit', '200')
     if (cursor !== null) projectsURL.searchParams.set('cursor', cursor)
@@ -160,12 +198,11 @@ async function findProjectIdsByName(
       items: CreatedProject[]
       next_cursor: string | null
     }>
-    for (const project of envelope.data.items) {
-      if (project.name === name) ids.push(project.id)
+    return {
+      items: envelope.data.items,
+      nextCursor: envelope.data.next_cursor,
     }
-    cursor = envelope.data.next_cursor
-  } while (cursor !== null)
-  return ids
+  })
 }
 
 async function deleteProjectWithRetry(
@@ -779,4 +816,52 @@ test('compensates when client validation fails after project creation', async ({
   expect((await request.get(
     `${runtime.apiURL}/api/v1/projects/${encodeURIComponent(disposableWorkspace.project.id)}`,
   )).status()).toBe(404)
+})
+
+test('discovers an exact project name on the second cleanup page', async () => {
+  const cursors: Array<string | null> = []
+  const projectIds = await discoverProjectIdsByName(
+    'Target Project',
+    async (cursor) => {
+      cursors.push(cursor)
+      if (cursor === null) {
+        return {
+          items: [{ id: 'other', name: 'Target Project copy', version: 1 }],
+          nextCursor: 'page-2',
+        }
+      }
+      return {
+        items: [{ id: 'target', name: 'Target Project', version: 1 }],
+        nextCursor: null,
+      }
+    },
+  )
+
+  expect(projectIds).toEqual(['target'])
+  expect(cursors).toEqual([null, 'page-2'])
+})
+
+test('rejects a repeated cleanup cursor before fetching it again', async () => {
+  let calls = 0
+  await expect(discoverProjectIdsByName(
+    'Loop Project',
+    async () => {
+      calls += 1
+      return { items: [], nextCursor: 'loop-cursor' }
+    },
+  )).rejects.toThrow(/重复 cursor.*loop-cursor.*Loop Project/)
+  expect(calls).toBe(2)
+})
+
+test('rejects cleanup discovery beyond its maximum page count', async () => {
+  let calls = 0
+  await expect(discoverProjectIdsByName(
+    'Unbounded Project',
+    async () => {
+      calls += 1
+      return { items: [], nextCursor: `page-${calls}` }
+    },
+    2,
+  )).rejects.toThrow(/超过 2 页上限.*Unbounded Project/)
+  expect(calls).toBe(2)
 })
