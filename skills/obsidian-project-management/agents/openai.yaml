@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obsidian 项目管理"
+  short_description: "用 Obsidian 管理开发任务、进度和交接记录。"
+  default_prompt: "Use $obsidian-project-management to manage this development task in the local Obsidian vault."
