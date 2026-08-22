@@ -31,6 +31,10 @@
 - 修改后单独提交并推送，再同步本机安装副本（`.codex` 与 `.agents` 两处）；
 - Vault 内项目记录仍以 `E:\obsidian_warehouse` 为准，本仓库不含任何项目数据。
 
+## 关联项目
+
+- [dsh-obsidian（DSH Bridge）](https://github.com/wozoulesky/dsh-obsidian)：本机 DSH 嵌入 Obsidian 的 AI 协作者插件，其开发任务遵循本 Skill 流程（项目记录见 Obsidian「dsh-obsidian（DSH 嵌入 Obsidian 插件）」）
+
 ## 历史
 
 本仓库原为 Project OS（本地项目管理工作台：Web + REST API + SQLite + MCP），代码已从 `main` 分支移除。旧代码保留在 git 历史与标签 `v1.0.0`–`v1.3.0` 中，不再维护。
