@@ -1,9 +1,28 @@
 ---
 name: obsidian-project-management
-description: Use when starting, planning, implementing, reviewing, pausing, or handing off a software-development task that must be tracked in the local Obsidian vault, especially when scope, progress, verification, or ownership could drift between agents.
+description: |
+  MUST USE / 强制使用：本环境任何“软件开发任务”开始前必须先加载本 skill——写代码、
+  改代码、实现功能、新建/搭建项目、修复 bug、重构、测试、代码评审、提交/合并、
+  暂停、交接、复盘，以及任何涉及 SPEC.md、任务计划.md、任务/、handoff/ 或
+  E:\obsidian_warehouse 的工作。Also use when starting, planning, implementing,
+  reviewing, pausing, or handing off a software-development task whose scope,
+  progress, verification, or ownership could drift between agents. 规则：未加载
+  本 skill 不得开始开发；以 E:\obsidian_warehouse 为唯一项目记录。不适用（不要触发、
+  不要写 vault）：一次性问答、查资料、问概念、日常聊天、与仓库无关的临时脚本——
+  除非用户明确要求记录。
 ---
 
 # Obsidian Project Management
+
+## 强制触发（先于一切开发动作）
+
+当本会话出现任何软件开发任务（写代码、改代码、修 bug、重构、实现功能、新建项目、测试、代码评审、任务排期、暂停、交接）时，必须先按本流程执行：先读 `E:\obsidian_warehouse` 中对应项目的 `SPEC.md`、`任务计划.md` 与目标任务文件，再开始实现；完成、暂停或交接前更新任务进度、验证证据并写 handoff。用户未提及本 skill 时同样必须执行，不得等用户提醒，也不得跳过 vault 记录直接改代码。
+
+## 触发边界（防止题外话过度写入）
+
+仅"需要在 `E:\obsidian_warehouse` 中持续跟踪的软件开发任务"强制走本流程。一次性问答、查资料、问概念、日常聊天、与仓库无关的临时脚本等题外话**不触发**本 skill：不得创建任务记录、不得新建/修改 vault 文件，除非用户明确要求记录。拿不准时先询问用户是否需要记录，不要自作主张写盘。
+
+---
 
 Treat `E:\obsidian_warehouse` as the source of truth for local project coordination. Keep one project per folder, one task per task file, and use `SPEC.md` to prevent unapproved scope drift.
 

@@ -1,13 +1,11 @@
-.worktrees/
-PRD.md
-docs/superpowers/
-docs/v1.1-relay-plan.md
+# 本地未跟踪状态（不入库)
 node_modules/
-/data/
-web/dist/
-web/playwright-report/
-web/test-results/
-web/coverage/
+.worktrees/
+.superpowers/
+
+# 旧 Project OS 本地残留（从未入库，仅保留在本地盘）
+docs/
+web/
+data/
+PRD.md
 *.log
-artifacts/mcp-smoke/*
-!artifacts/mcp-smoke/.gitkeep

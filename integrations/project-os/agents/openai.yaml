@@ -1,4 +1,0 @@
-interface:
-  display_name: "Project OS"
-  short_description: "Coordinate 27 tools with a three-act relay"
-  default_prompt: "Use $project-os to run the three-act relay: check in, work safely, record deliverables, and check out with a handoff."
