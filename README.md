@@ -18,14 +18,24 @@
 
 ## 安装
 
-将本仓库内容复制（或软链）到目标 Agent 的 Skill 目录：
+本仓库即一个标准 **Agent Skill**（`SKILL.md` + `references/` + `agents/`），任何支持 Agent Skills 规范的 Agent 都能加载：克隆或下载后，将仓库内容放进该 Agent 的 Skills 目录，**目录名保持 `obsidian-project-management`**（Skill 按目录名发现），Agent 即自动识别。
 
-| Agent | 安装位置 |
+```bash
+# 方式一：克隆到 Skills 目录（以 Claude Code / Codex 为例）
+git clone --depth 1 https://github.com/wozoulesky/obsidian-project-management ~/.claude/skills/obsidian-project-management
+# 方式二：软链接（保留单份源码，便于跟随更新）
+ln -s /path/to/checkout ~/.codex/skills/obsidian-project-management
+```
+
+各 Agent 常见 Skills 目录（以官方文档为准）：
+
+| Agent | 常见目录 |
 | --- | --- |
-| Codex | `~/.codex/skills/obsidian-project-management/` |
-| Claude Code / OpenClaw 等 | `~/.agents/skills/obsidian-project-management/` |
+| Claude Code / Cursor 等 | `~/.claude/skills/` |
+| Codex CLI | `~/.codex/skills/` |
+| OpenClaw 等 | `~/.agents/skills/` |
 
-> 安装 = 复制 `SKILL.md`、`agents/`、`references/` 三个内容到目标目录。
+Windows 上对应 `%USERPROFILE%\.claude\skills\` 等；企业/沙箱环境可自定义 Skills 根目录，原理相同。
 
 ## 维护约定
 
