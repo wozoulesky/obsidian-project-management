@@ -1,8 +1,10 @@
 # obsidian-project-management
 
-以本机 Obsidian Vault（`E:\obsidian_warehouse`）为**唯一项目记录**的软件开发协作 Skill：强制在开始开发前读取目标项目的 `SPEC.md`、`任务计划.md` 与目标任务文件；完成、暂停或交接前更新任务进度、验证证据并创建/更新 handoff；范围变化必须先写入 `SPEC.md`，不得静默偏离。
+以 Obsidian Vault 为**唯一项目记录**的软件开发协作 Skill：在开始开发前读取目标项目的 `SPEC.md`、`任务计划.md` 与目标任务文件；完成、暂停或交接前更新任务进度、验证证据并创建/更新 handoff；范围变化必须先写入 `SPEC.md`，不得静默偏离。
 
 适用于需要跨 Agent 持续跟踪的软件开发任务（写代码、改代码、修 bug、重构、实现功能、新建项目、测试、代码评审、任务排期、暂停、交接、复盘）。一次性问答、查资料、与仓库无关的临时脚本**不触发**，不要写入 vault。
+
+> 仓库内 `SKILL.md` 中的 vault 路径（如 `E:\obsidian_warehouse`）为本机默认值；部署到其他机器时请替换为你自己的 Vault 路径。
 
 ## 仓库内容
 
@@ -20,8 +22,8 @@
 
 | Agent | 安装位置 |
 | --- | --- |
-| Codex | `C:\Users\10352\.codex\skills\obsidian-project-management\` |
-| Claude Code / OpenClaw 等 | `C:\Users\10352\.agents\skills\obsidian-project-management\` |
+| Codex | `~/.codex/skills/obsidian-project-management/` |
+| Claude Code / OpenClaw 等 | `~/.agents/skills/obsidian-project-management/` |
 
 > 安装 = 复制 `SKILL.md`、`agents/`、`references/` 三个内容到目标目录。
 
