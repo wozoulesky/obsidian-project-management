@@ -18,7 +18,7 @@
 
 | 路径 | 说明 |
 | --- | --- |
-| `SKILL.md` | Skill 定义：触发条件、触发边界、强制流程与协作规则 |
+| `SKILL.md` | Skill 定义：触发条件、触发边界、使用前提（连接自检 / 自动探索 / 写入触发对照）、强制流程与协作规则 |
 | `references/vault-templates.md` | Vault 模板路径、任务 frontmatter 字段与状态/标题规范 |
 | `agents/openai.yaml` | Agent 界面声明（Codex 等可识别的 display name 与 default prompt） |
 | `AGENTS.md` | 编辑本仓库时的入口规则（Agent 必须遵守） |
