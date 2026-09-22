@@ -1,20 +1,19 @@
 ---
 name: obsidian-project-management
-description: |
-  MUST USE / 强制使用：本环境任何“软件开发任务”开始前必须先加载本 skill——写代码、
-  改代码、开发新项目、功能变动、新增功能、修复 bug、重构、测试、代码评审、任务变更/
-  状态推进、计划与排期、提交/合并、验收、暂停、交接、复盘，以及任何涉及 records/、变更/、
-  SPEC.md、任务计划.md、handoff 的工作。Also use when starting, planning, implementing,
-  reviewing, pausing, or handing off a software-development task whose scope, progress,
-  verification, or ownership could drift between agents. 规则：未加载本 skill 不得开始开发；
-  记录跟着项目走——有 git 仓库的项目写进仓库根 records/，没有仓库的项目写进 E:\obsidian_warehouse；
-  触发后先定位记录通道并自检，通道不可用必须明确告知用户，不得静默跳过。不适用（不要触发、
-  不要写盘）：一次性问答、查资料、问概念、日常聊天、与仓库无关的临时脚本——除非用户明确要求记录。
+description: >-
+  【是什么】记录跟着项目走——有 git 仓库的项目，开发记录写在仓库根 records/（与代码同一份
+  git 历史）；没有仓库的项目写在本机 Obsidian Vault（根路径见技能目录的 config.json 或环境变量
+  OBSIDIAN_VAULT_ROOT）。管 SPEC、变更、任务计划、验证证据与 handoff，让范围、进度与归属在多个
+  Agent 之间不漂移。
+  【何时用】任何需要持续跟踪的软件开发任务开始前——新项目、新功能、改行为、修 bug、重构、
+  评审、验收、暂停、交接、复盘——都要先加载，不要等用户提醒。
+  【何时不用】一次性问答、查资料、问概念、日常聊天、与仓库无关的临时脚本——不触发、不写盘，
+  除非用户明确要求记录。
 ---
 
 # 项目记录（Project Records）
 
-一条规则：**记录跟着项目走。** 有 git 仓库的项目，记录写在仓库根的 `records/`，与代码同一份 git 历史；没有仓库的项目（数据抓取、纯策划等），记录写在 `E:\obsidian_warehouse\`。某个仓库可以在它自己的 `AGENTS.md` 里声明把记录留在 vault（写明路径）——以该声明为准。
+一条规则：**记录跟着项目走。** 有 git 仓库的项目，记录写在仓库根的 `records/`，与代码同一份 git 历史；没有仓库的项目（数据抓取、纯策划等），记录写在本机 Obsidian Vault。某个仓库可以在它自己的 `AGENTS.md` 里声明把记录留在 Vault（写明路径）——以该声明为准。
 
 ## 强制触发（先于一切开发动作）
 
@@ -40,32 +39,47 @@ description: |
 按项目形态只用其中一条通道：
 
 - **仓库通道**（有 git 仓库的项目）：`git rev-parse --show-toplevel` 确认当前在仓库内，记录目录为 `<仓库根>/records/`；这是本地文件系统读写，无连接问题；
-- **vault 通道**（没有仓库的项目，或仓库 `AGENTS.md` 声明记录留在 vault）：用可用方式各探测一次（优先 MCP）——MCP 工具列表里存在 obsidian 工具（如 `mcp__obsidian__get_server_info`）时调用一次验证连通；同时直接读 vault 根 `E:\obsidian_warehouse`（列目录或读 `README.md`）。
+- **Vault 通道**（没有仓库的项目，或仓库 `AGENTS.md` 声明记录留在 Vault）：需要 Vault 根路径，按下表解析（**不得猜路径**），再探测连通性。
+
+**Vault 根怎么来**（按序解析）：
+
+| 顺序 | 来源 | 说明 |
+| --- | --- | --- |
+| 1 | 环境变量 `OBSIDIAN_VAULT_ROOT` | 机器级设置，优先级最高 |
+| 2 | 技能目录下的 `config.json`（与 `SKILL.md` 同级） | 未入库的本机配置，字段 `vaultRoot` |
+| 3 | 都没有 | 按「通道不可用」处理：明确告知用户 skill 缺少 Vault 根配置，并给出修复办法（设环境变量，或复制 `config.example.json` 为 `config.json` 填路径） |
+
+公开仓库只提供 `config.example.json`（占位路径）；**真实路径不得写进仓库里的任何文件**。
+
+连通性探测（用可用方式各试一次，优先 MCP）：
+
+- MCP 工具列表里存在 obsidian 工具（如 `mcp__obsidian__get_server_info`）时调用一次验证连通；
+- 直接读 `<Vault 根>`（列目录或读根 `README.md`）。
 
 判定与处理：
 
 - **所需通道不可用** → 立即停止流程，并**明确通知用户**（这是 skill 故障，不是普通报错）：
 
-  > ⚠️ obsidian-project-management skill 无法读写本次记录（仓库 … / vault …），本次无法记录。
+  > ⚠️ obsidian-project-management skill 无法读写本次记录（仓库 … / Vault …），本次无法记录。
 
-  附排查清单并逐项给结论：① Obsidian 是否在运行；② MCP Connector 插件是否启用（vault 的 `.obsidian/plugins/`）；③ 端口 / token 是否变化（对照本机 MCP 客户端配置与插件 `data.json`）；④ vault 路径是否被移动；⑤ 仓库目录是否可写。然后让用户选择：修复后重试，或本次不记录继续开发（继续时必须在最终回复注明「本次未写入记录」）。**不得静默跳过、不得假装已记录**；
-- **降级** → vault 通道的两条子通道只通一条时继续，并在首次回复注明（例如「MCP 未连接，本次用文件系统直读直写」）；
+  附排查清单并逐项给结论：① Obsidian 是否在运行；② MCP Connector 插件是否启用（Vault 的 `.obsidian/plugins/`）；③ 端口 / token 是否变化（对照本机 MCP 客户端配置与插件 `data.json`）；④ Vault 根路径是否变化（对照 `config.json` / `OBSIDIAN_VAULT_ROOT`）；⑤ 仓库目录是否可写。然后让用户选择：修复后重试，或本次不记录继续开发（继续时必须在最终回复注明「本次未写入记录」）。**不得静默跳过、不得假装已记录**；
+- **降级** → Vault 通道的两条子通道只通一条时继续，并在首次回复注明（例如「MCP 未连接，本次用文件系统直读直写」）；
 - 任何写入失败都如实报告，不得声称成功。
 
 ### B. 定位记录
 
 1. **有仓库**：读 `<仓库根>/records/SPEC.md`、`任务计划.md` 与在途变更；`records/` 不存在时按 `references/records-templates.md` 建最小骨架（先经用户确认）；
-2. **没有仓库（或声明留在 vault）**：读 vault 根 `README.md` 与 `软件开发\总任务排期.md`，列出 `软件开发\` 下的项目目录，按当前工作目录、仓库名、用户提到的项目名**模糊匹配**对应项目（例：`E:\noval-agent-dev` ↔「Noval Agent（多 Agent 小说创作系统）」）；匹配不到就列出候选请用户确认；确认是新项目时按模板建目录（先经用户确认）；
-3. 读匹配到的 `SPEC.md`、`任务计划.md` 与在途变更。用 MCP 时路径为 vault 相对路径（如 `软件开发/总任务排期.md`），用文件系统时为绝对路径（`E:\obsidian_warehouse\...`）。
+2. **没有仓库（或声明留在 Vault）**：读 `<Vault 根>/README.md` 与 `软件开发/总任务排期.md`，列出 `软件开发/` 下的项目目录，按当前工作目录、仓库名、用户提到的项目名**模糊匹配**对应项目（例：`E:\noval-agent-dev` ↔「Noval Agent（多 Agent 小说创作系统）」）；匹配不到就列出候选请用户确认；确认是新项目时按模板建目录（先经用户确认）；
+3. 读匹配到的 `SPEC.md`、`任务计划.md` 与在途变更。用 MCP 时路径为 Vault 相对路径（如 `软件开发/总任务排期.md`），用文件系统时为 `<Vault 根>` 下的绝对路径。
 
 ### C. 写入触发对照（何时必须写、写什么）
 
 | 场景 | 至少写入 |
 | --- | --- |
-| 开发新项目 | 记录骨架：`SPEC.md`、`任务计划.md`、`变更\`（vault 侧另含 `README.md`） |
+| 开发新项目 | 记录骨架：`SPEC.md`、`任务计划.md`、`变更\`（Vault 侧另含 `README.md`） |
 | 新增功能 / 功能变动 | 变更记录；涉及范围时更新 `SPEC.md`（范围变更记录与相关小节） |
 | 任务开始 / 推进 / 变更 | 变更记录：状态、负责人、最后更新、进度记录；必要时 `任务计划.md` |
-| 计划 / 排期 / 依赖变化 | `任务计划.md`；跨项目优先级变化时更新 vault 的 `软件开发\总任务排期.md` |
+| 计划 / 排期 / 依赖变化 | `任务计划.md`；跨项目优先级变化时更新 Vault 的 `软件开发/总任务排期.md` |
 | 评审 / 验收结果 | 变更记录「验证」节（命令、输出、证据） |
 | 完成 / 受阻 / 暂停 / 交接 | 变更记录（状态、下一步）+ `handoff.md`（多文件形态必须），并互相链接 |
 
@@ -76,8 +90,8 @@ description: |
 | 项目形态 | 记录位置 |
 | --- | --- |
 | 有 git 仓库（默认） | `<仓库根>/records/` |
-| 没有仓库 | `E:\obsidian_warehouse\软件开发\<项目名>\` |
-| 有仓库、但在其 `AGENTS.md` 声明留在 vault | `E:\obsidian_warehouse\软件开发\<项目名>\`（以声明为准） |
+| 没有仓库 | `<Vault 根>\软件开发\<项目名>\` |
+| 有仓库、但在其 `AGENTS.md` 声明留在 Vault | `<Vault 根>\软件开发\<项目名>\`（以声明为准） |
 
 - 同一项目的记录**只能在一处**：迁移时一次性搬家，旧的一份标注「已迁移，只读」，不双写；
 - 仓库公开、且不愿公开开发过程时：把 `records/` 写进该仓库 `.gitignore`（本地保留记录与历史）；豁免与记录位置都由用户在该仓库 `AGENTS.md` 里声明；
@@ -100,10 +114,10 @@ records\
       └─ 变更.md           # 范围、子项、证据都在这一个文件里
 ```
 
-没有仓库的项目（vault 内，与旧结构并存）：
+没有仓库的项目（Vault 内，与旧结构并存）：
 
 ```text
-E:\obsidian_warehouse\软件开发\<项目名>\
+<Vault 根>\软件开发\<项目名>\
 ├─ README.md
 ├─ SPEC.md
 ├─ 任务计划.md
@@ -116,7 +130,7 @@ E:\obsidian_warehouse\软件开发\<项目名>\
 - 变更目录名 = `YYYY-MM-DD 主题`（日期取变更开始日；主题不含 `\ / : * ? " < > |`）；
 - **变更目录是稳定身份**：升级是「往里加文件」，目录名不变，既有链接不会失效；
 - 变更目录下只允许四种文件名：`变更.md`、`spec.md`、`任务.md`、`handoff.md`；
-- 每日数据抓取仍写 `E:\obsidian_warehouse\每日数据抓取\YYYY-MM-DD\`（`数据.md`、`来源.md`、`运行日志.md`）。
+- 每日数据抓取仍写 `<Vault 根>\每日数据抓取\YYYY-MM-DD\`（`数据.md`、`来源.md`、`运行日志.md`）。
 
 字段、状态与标题规范见 [records-templates.md](references/records-templates.md)；建项目、建变更前先读它。
 
@@ -167,7 +181,7 @@ E:\obsidian_warehouse\软件开发\<项目名>\
 2. 更新 `状态`、`最后更新`、`阻塞与风险`、`下一步`；
 3. 没有规格体系时，把本次 `spec.md` 并入 `SPEC.md` 对应小节；
 4. 多文件形态写 `handoff.md`：已完成、未完成、确切下一步、验证证据、风险、范围偏离（无偏离写「无」）；单文件形态写进 `变更.md`；
-5. 提交并推送：记录与代码**同一次提交**，不为记录单开提交；`git add` 只指定本次涉及的路径，禁止 `git add -A` / `-u`；push 前 `git pull --rebase`；禁止强推；禁止为通过检查而删除或覆盖他人记录；记录在 vault 时，提交与推送发生在 vault 仓库；
+5. 提交并推送：记录与代码**同一次提交**，不为记录单开提交；`git add` 只指定本次涉及的路径，禁止 `git add -A` / `-u`；push 前 `git pull --rebase`；禁止强推；禁止为通过检查而删除或覆盖他人记录；记录在 Vault 时，提交与推送发生在 Vault 仓库；
 6. 写不进去（仓库不可写、权限不足、push 失败）不算收尾完成：必须写明原因并当面告知；声称「已备份」须附 commit hash。
 
 只有带证据地满足 SPEC 验收标准，才可标 `已完成`；需要外部输入或决策时标 `受阻`。不得把未完成写成完成。
