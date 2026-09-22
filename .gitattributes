@@ -1,0 +1,4 @@
+# Shell 脚本必须 LF —— Windows 上 CRLF 会让 bash 解析出错（变量与路径带 \r）
+*.sh text eol=lf
+# PowerShell 脚本用 CRLF（文件本身是 UTF-8 with BOM，BOM 不受本文件影响）
+*.ps1 text eol=crlf

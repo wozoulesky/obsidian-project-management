@@ -6,7 +6,7 @@ node_modules/
 # 本机 Vault 根路径（公开仓库不出现本机路径；占位示例见 config.example.json）
 config.json
 
-# 兜底：本仓库记录写在 Vault（见 AGENTS.md），若误在仓库内建 records/ 也不入库
+# 本仓库记录写在仓库内 records/（见 AGENTS.md）；公开仓库不入库，故忽略
 records/
 
 # 旧 Project OS 本地残留（从未入库，仅保留在本地盘）

@@ -1,4 +1,4 @@
 interface:
   display_name: "项目记录（Project Records）"
-  short_description: "记录跟着项目走：仓库 records/ 或 Vault，管 SPEC、变更、交接与验证证据。"
-  default_prompt: "Use $obsidian-project-management to manage this development task: check the record channel (repo records/ or vault), then follow the SPEC / 变更 / handoff flow."
+  short_description: "记录跟着项目走：项目根 records/，管 SPEC、变更、交接与验证证据；/records-init 建骨架。"
+  default_prompt: "Use $project-records to manage this development task: check the record channel (repo records/ or vault), then follow the SPEC / 变更 / handoff flow; run /records-init when the project has no records/ skeleton yet."
