@@ -3,16 +3,18 @@ name: obsidian-project-management
 description: |
   MUST USE / 强制使用：本环境任何“软件开发任务”开始前必须先加载本 skill——写代码、
   改代码、开发新项目、功能变动、新增功能、修复 bug、重构、测试、代码评审、任务变更/
-  状态推进、计划与排期、提交/合并、验收、暂停、交接、复盘，以及任何涉及 SPEC.md、
-  任务计划.md、任务/、handoff/ 或 E:\obsidian_warehouse 的工作。Also use when
-  starting, planning, implementing, reviewing, pausing, or handing off a software-development
-  task whose scope, progress, verification, or ownership could drift between agents. 规则：未加载
-  本 skill 不得开始开发；触发后先自动探索 vault 并自检连接（无法连接必须通知用户 skill 失效）；
-  以 E:\obsidian_warehouse 为唯一项目记录。不适用（不要触发、不要写 vault）：一次性
-  问答、查资料、问概念、日常聊天、与仓库无关的临时脚本——除非用户明确要求记录。
+  状态推进、计划与排期、提交/合并、验收、暂停、交接、复盘，以及任何涉及 records/、变更/、
+  SPEC.md、任务计划.md、handoff 的工作。Also use when starting, planning, implementing,
+  reviewing, pausing, or handing off a software-development task whose scope, progress,
+  verification, or ownership could drift between agents. 规则：未加载本 skill 不得开始开发；
+  记录跟着项目走——有 git 仓库的项目写进仓库根 records/，没有仓库的项目写进 E:\obsidian_warehouse；
+  触发后先定位记录通道并自检，通道不可用必须明确告知用户，不得静默跳过。不适用（不要触发、
+  不要写盘）：一次性问答、查资料、问概念、日常聊天、与仓库无关的临时脚本——除非用户明确要求记录。
 ---
 
-# Obsidian Project Management
+# 项目记录（Project Records）
+
+一条规则：**记录跟着项目走。** 有 git 仓库的项目，记录写在仓库根的 `records/`，与代码同一份 git 历史；没有仓库的项目（数据抓取、纯策划等），记录写在 `E:\obsidian_warehouse\`。某个仓库可以在它自己的 `AGENTS.md` 里声明把记录留在 vault（写明路径）——以该声明为准。
 
 ## 强制触发（先于一切开发动作）
 
@@ -21,129 +23,159 @@ description: |
 - **开发新项目 / 新功能**（含写代码、测试、提交/合并）；
 - **任务变更**：状态推进、范围调整、依赖或顺序变化、重新排期；
 - **功能变动**：修改既有行为、重构、修复 bug；
-- **计划与排期**：`任务计划.md` 调整、跨项目优先级变化（`总任务排期.md`）；
+- **计划与排期**：`任务计划.md` 调整、跨项目优先级变化；
 - **评审与验收**：代码评审、验收结果、验证证据；
 - **暂停 / 交接 / 复盘**。
 
-流程：先自动探索并读取 vault 中对应项目的 `SPEC.md`、`任务计划.md` 与目标任务文件（见下节「使用前提」）；开发过程中把任务变更与功能变动写入对应记录；完成、暂停或交接前更新任务进度、验证证据并写 handoff。不得跳过 vault 记录直接改代码。
+流程：先定位记录通道并自检（见下「使用前提」）→ 读 `SPEC.md`、`任务计划.md` 与在途变更 → 认领并写进度 → 再动代码；开发过程中把任务变更与功能变动写入对应记录；完成、暂停或交接前更新进度、写验证证据与 handoff。用户未提及本 skill 时同样必须执行，不得跳过记录直接改代码。
 
 ## 触发边界（防止题外话过度写入）
 
-仅"需要在 `E:\obsidian_warehouse` 中持续跟踪的软件开发任务"强制走本流程。一次性问答、查资料、问概念、日常聊天、与仓库无关的临时脚本等题外话**不触发**本 skill：不得创建任务记录、不得新建/修改 vault 文件，除非用户明确要求记录。拿不准时先询问用户是否需要记录，不要自作主张写盘。
+仅「需要持续跟踪的软件开发任务」强制走本流程。一次性问答、查资料、问概念、日常聊天、与仓库无关的临时脚本**不触发**：不得创建记录、不得新建或修改记录文件，除非用户明确要求。拿不准时先问用户，不要自作主张写盘。
 
 ## 使用前提（每次触发先执行）
 
-### A. 连接自检（先于任何 vault 操作）
+### A. 通道自检
 
-用可用通道各探测一次（优先 MCP）：
+按项目形态只用其中一条通道：
 
-- **MCP**：若工具列表里存在 obsidian 的 MCP 工具（如 `mcp__obsidian__get_server_info`），调用一次验证连通；
-- **文件系统**：直接读 vault 根 `E:\obsidian_warehouse`（列目录或读 `README.md`）。
+- **仓库通道**（有 git 仓库的项目）：`git rev-parse --show-toplevel` 确认当前在仓库内，记录目录为 `<仓库根>/records/`；这是本地文件系统读写，无连接问题；
+- **vault 通道**（没有仓库的项目，或仓库 `AGENTS.md` 声明记录留在 vault）：用可用方式各探测一次（优先 MCP）——MCP 工具列表里存在 obsidian 工具（如 `mcp__obsidian__get_server_info`）时调用一次验证连通；同时直接读 vault 根 `E:\obsidian_warehouse`（列目录或读 `README.md`）。
 
 判定与处理：
 
-- **两个通道都失败** → 立即停止流程，并**明确通知用户**（这是 skill 故障，不是普通报错）：
+- **所需通道不可用** → 立即停止流程，并**明确通知用户**（这是 skill 故障，不是普通报错）：
 
-  > ⚠️ obsidian-project-management skill 无法连接 Obsidian vault，本次无法记录。
+  > ⚠️ obsidian-project-management skill 无法读写本次记录（仓库 … / vault …），本次无法记录。
 
-  附排查清单（逐项给出结论）：① Obsidian 是否在运行；② MCP Connector 插件是否启用（vault 的 `.obsidian/plugins/mcp-tools-istefox/`）；③ 端口 / token 是否变化（对照本机 MCP 客户端配置，如 `~/.kimi-code/mcp.json`，与插件 `data.json`）；④ vault 路径是否被移动。
-  然后让用户选择：修复后重试，或本次不记录继续开发（继续时必须在最终回复注明"本次未写入 vault"）。**不得静默跳过、不得假装已记录。**
+  附排查清单并逐项给结论：① Obsidian 是否在运行；② MCP Connector 插件是否启用（vault 的 `.obsidian/plugins/`）；③ 端口 / token 是否变化（对照本机 MCP 客户端配置与插件 `data.json`）；④ vault 路径是否被移动；⑤ 仓库目录是否可写。然后让用户选择：修复后重试，或本次不记录继续开发（继续时必须在最终回复注明「本次未写入记录」）。**不得静默跳过、不得假装已记录**；
+- **降级** → vault 通道的两条子通道只通一条时继续，并在首次回复注明（例如「MCP 未连接，本次用文件系统直读直写」）；
+- 任何写入失败都如实报告，不得声称成功。
 
-- **仅一个通道可用** → 继续流程，并在首次回复中注明降级情况（例如"MCP 未连接，本次用文件系统直读直写"）。
+### B. 定位记录
 
-- 任何 vault 写入失败都如实报告，不得声称成功。
-
-### B. 自动探索 vault（定位本次任务的记录）
-
-1. 读 vault 根 `README.md` 与 `软件开发\总任务排期.md`（项目优先级与工程目录）；
-2. 列出 `软件开发\` 下的项目目录；
-3. 按当前工作目录、仓库名、用户提到的项目名**模糊匹配**与会话任务对应的项目（例：`E:\noval-agent-dev` ↔「Noval Agent（多 Agent 小说创作系统）」）；
-4. 读取匹配项目的 `README.md`、`SPEC.md`、`任务计划.md` 与目标任务文件；
-5. 匹配不到：向用户列出候选确认；确认是新项目时，按 `软件开发\模板` 建项目目录（先经用户确认），再进入流程。
-
-用 MCP 时路径为 vault 相对路径（如 `软件开发/总任务排期.md`）；用文件系统时为 vault 绝对路径（`E:\obsidian_warehouse\...`）。
+1. **有仓库**：读 `<仓库根>/records/SPEC.md`、`任务计划.md` 与在途变更；`records/` 不存在时按 `references/records-templates.md` 建最小骨架（先经用户确认）；
+2. **没有仓库（或声明留在 vault）**：读 vault 根 `README.md` 与 `软件开发\总任务排期.md`，列出 `软件开发\` 下的项目目录，按当前工作目录、仓库名、用户提到的项目名**模糊匹配**对应项目（例：`E:\noval-agent-dev` ↔「Noval Agent（多 Agent 小说创作系统）」）；匹配不到就列出候选请用户确认；确认是新项目时按模板建目录（先经用户确认）；
+3. 读匹配到的 `SPEC.md`、`任务计划.md` 与在途变更。用 MCP 时路径为 vault 相对路径（如 `软件开发/总任务排期.md`），用文件系统时为绝对路径（`E:\obsidian_warehouse\...`）。
 
 ### C. 写入触发对照（何时必须写、写什么）
 
 | 场景 | 至少写入 |
 | --- | --- |
-| 开发新项目 | 按 `软件开发\模板` 建项目目录（README / SPEC / 任务计划 / 任务 / handoff / 决策 / 日志） |
-| 新增功能 / 功能变动 | 任务文件（进度记录）；涉及范围时更新 `SPEC.md`（范围变更记录与相关章节） |
-| 任务开始 / 推进 / 变更 | 任务文件：状态、负责人、最后更新、进度记录；必要时 `任务计划.md` |
-| 计划 / 排期 / 依赖变化 | `任务计划.md`；跨项目优先级变化时更新 `软件开发\总任务排期.md` |
-| 评审 / 验收结果 | 任务文件「验证」节（命令、输出、证据） |
-| 完成 / 受阻 / 暂停 / 交接 | 任务文件（状态、下一步）+ 新建 `handoff\` 文件（必须），并互相链接 |
+| 开发新项目 | 记录骨架：`SPEC.md`、`任务计划.md`、`变更\`（vault 侧另含 `README.md`） |
+| 新增功能 / 功能变动 | 变更记录；涉及范围时更新 `SPEC.md`（范围变更记录与相关小节） |
+| 任务开始 / 推进 / 变更 | 变更记录：状态、负责人、最后更新、进度记录；必要时 `任务计划.md` |
+| 计划 / 排期 / 依赖变化 | `任务计划.md`；跨项目优先级变化时更新 vault 的 `软件开发\总任务排期.md` |
+| 评审 / 验收结果 | 变更记录「验证」节（命令、输出、证据） |
+| 完成 / 受阻 / 暂停 / 交接 | 变更记录（状态、下一步）+ `handoff.md`（多文件形态必须），并互相链接 |
 
 以上写入属于强制流程：**不要等用户提醒，也不要只留在对话里。**
 
----
+## 记录放在哪
 
-Treat `E:\obsidian_warehouse` as the source of truth for local project coordination. Keep one project per folder, one task per task file, and use `SPEC.md` to prevent unapproved scope drift.
+| 项目形态 | 记录位置 |
+| --- | --- |
+| 有 git 仓库（默认） | `<仓库根>/records/` |
+| 没有仓库 | `E:\obsidian_warehouse\软件开发\<项目名>\` |
+| 有仓库、但在其 `AGENTS.md` 声明留在 vault | `E:\obsidian_warehouse\软件开发\<项目名>\`（以声明为准） |
 
-## Required layout
+- 同一项目的记录**只能在一处**：迁移时一次性搬家，旧的一份标注「已迁移，只读」，不双写；
+- 仓库公开、且不愿公开开发过程时：把 `records/` 写进该仓库 `.gitignore`（本地保留记录与历史）；豁免与记录位置都由用户在该仓库 `AGENTS.md` 里声明；
+- `records/` 不吸收仓库已有的工作流，只补它缺的那部分（见「SPEC 的分工」）。
+
+## 记录结构
+
+有仓库的项目：
 
 ```text
-E:\obsidian_warehouse\
-├─ 软件开发\<项目名>\
-│  ├─ README.md
-│  ├─ SPEC.md
-│  ├─ 任务计划.md
-│  ├─ 任务\<任务-ID> <任务名>.md
-│  ├─ handoff\YYYY-MM-DD <主题>.md
-│  ├─ 决策\
-│  └─ 日志\
-└─ 每日数据抓取\YYYY-MM-DD\
-   ├─ 数据.md
-   ├─ 来源.md
-   └─ 运行日志.md
+records\
+├─ SPEC.md                 # 系统总规格（粗粒度、可通读）+ 范围变更记录
+├─ 任务计划.md              # 当前在途、阶段与依赖
+└─ 变更\
+   ├─ <YYYY-MM-DD 主题>\     # 多文件形态（命中升级触发线）
+   │  ├─ spec.md           # 本次变化正文
+   │  ├─ 任务.md           # 子项清单 + frontmatter（状态/负责人/最后更新）
+   │  └─ handoff.md        # 收尾：验证证据 + 未完成 + 下一步
+   └─ <YYYY-MM-DD 主题>\     # 单文件形态（默认）
+      └─ 变更.md           # 范围、子项、证据都在这一个文件里
 ```
 
-Create a project from the Vault templates at `软件开发\模板` when it does not exist. Use `每日数据抓取\模板` only for date-based data collection; never put development progress there.
+没有仓库的项目（vault 内，与旧结构并存）：
 
-Read [vault-templates.md](references/vault-templates.md) before creating a project, task, handoff, or collection-day record.
+```text
+E:\obsidian_warehouse\软件开发\<项目名>\
+├─ README.md
+├─ SPEC.md
+├─ 任务计划.md
+├─ 变更\                    # 两种形态同上
+└─ 任务\ handoff\ 决策\ 日志\  # 冻结为历史：不新增、不改写
+```
 
-## Development lifecycle
+规则：
 
-### 1. Before work
+- 变更目录名 = `YYYY-MM-DD 主题`（日期取变更开始日；主题不含 `\ / : * ? " < > |`）；
+- **变更目录是稳定身份**：升级是「往里加文件」，目录名不变，既有链接不会失效；
+- 变更目录下只允许四种文件名：`变更.md`、`spec.md`、`任务.md`、`handoff.md`；
+- 每日数据抓取仍写 `E:\obsidian_warehouse\每日数据抓取\YYYY-MM-DD\`（`数据.md`、`来源.md`、`运行日志.md`）。
 
-1. Locate the project under `软件开发`（见「自动探索」）.
-2. Read `README.md`, `SPEC.md`, `任务计划.md`, and the target task file.
-3. Check the task frontmatter. If another agent owns a task in `进行中` state, do not overwrite it; choose another task or ask for coordination.
-4. Set the target task to `进行中`, set `负责人` to the current agent identity, update `最后更新`, and add a timestamped entry to `进度记录` explaining what was read and what will be done.
+字段、状态与标题规范见 [records-templates.md](references/records-templates.md)；建项目、建变更前先读它。
 
-Do not start implementation without a SPEC. If one is absent, create a draft and ask the user to approve it before implementing beyond exploration.
+## 变更：三档与升级触发线
 
-### 2. Keep work aligned
+| 档 | 什么时候 | 落在哪 |
+| --- | --- | --- |
+| 不记录 | 题外话、一次性问答、与仓库无关的临时脚本 | 不写盘 |
+| 单文件变更 | 默认：任何打算记一笔的活 | `变更/<日期 主题>/变更.md` |
+| 多文件变更 | 命中任一触发线 | 同目录拆成 `spec.md` + `任务.md` + `handoff.md` |
 
-Use `SPEC.md` as the test of scope:
+升级触发线（任一即拆）：子项 ≥ 3；需跨会话或跨 Agent 交接；范围或验收标准要写进 `SPEC.md`；要留完整验证证据。
 
-- Deliver only work required by `范围` and `验收标准`.
-- Treat `非目标` and `约束` as hard boundaries.
-- If the latest explicit user instruction conflicts with the SPEC, record that instruction in `范围变更记录`, revise the relevant SPEC sections, and then continue.
-- If scope is unclear or materially expands without an explicit user instruction, stop implementation, record the question under the task's `阻塞与风险`, and ask the user.
+## SPEC 的分工
 
-Update `进度记录` when a meaningful decision, blocker, verification result, or change in plan occurs. Keep task plans specific and ordered; update `任务计划.md` when dependencies, phases, or priorities change.
+`SPEC.md` 是**系统总规格**：系统是什么、由哪些能力组成、边界与非目标、当前阶段与范围、范围变更记录。粗粒度、可通读，不抄条文。
 
-### 3. Close or transfer work
+逐次变化的规格写在哪，看仓库有没有规格体系（自动检测，仓库 `AGENTS.md` 可显式声明覆盖）：
 
-Before declaring work complete or stopping for any reason:
+| 情况 | 判定 | 逐次变化写在哪 | 收尾时 |
+| --- | --- | --- | --- |
+| 有规格体系（如 openspec） | 存在 `openspec/`，或 `AGENTS.md` 声明 | `openspec/changes/<change>/`，记录侧不重复 | delta 并入 `openspec/specs/`；总规格只改受影响的小节 |
+| 没有规格体系 | 不存在，或声明「规格体系：无」 | `变更/<日期 主题>/spec.md` | 把 `spec.md` 并入总规格对应小节；合并后它转为历史、不再改 |
 
-1. Record verification commands, outputs, review evidence, or the reason verification could not run in `验收`.
-2. Update `状态`, `最后更新`, `阻塞与风险`, and `下一步` in the task file.
-3. Create a new handoff file in `handoff/`, even for a blocked task. State completed work, unfinished work, exact next step, verification evidence, risks, and any SPEC deviation.
-4. Link the handoff from the task file.
+判据：总规格回答「系统整体是什么」，能力条目回答「某个能力必须做到什么」；同一句话不得在两处各写一遍。不为没有规格体系的仓库另建 openspec。
 
-Use `已完成` only when the task's relevant SPEC acceptance criteria have evidence. Use `受阻` when external input or a decision is needed. Never silently mark incomplete work as complete.
+## 开发流程
 
-## Daily data collection
+### 1. 开始前
 
-For a data collection run, create `每日数据抓取\YYYY-MM-DD\` and copy the three templates. Record the output in `数据.md`, every source or local input in `来源.md`, and commands, times, errors, and results in `运行日志.md`.
+1. 定位记录通道并自检（见「使用前提」A、B）；
+2. 读 `SPEC.md`、`任务计划.md` 与在途变更；
+3. 在途变更被其他 Agent 认领时不得覆盖：另选一个，或先协调；
+4. 认领：把目标变更置 `进行中`，`负责人` 填自己的 Agent 身份，更新 `最后更新`，并加一条带时间的进度记录，写明读了什么、要做什么；
+5. 没有 `SPEC.md`（总规格）不得开始实现：先起草并请用户确认。
 
-## Non-negotiable rules
+### 2. 过程中
 
-- Do not store project status only in chat; write it to the Vault.
-- Do not modify another agent's active task record except to add a clearly attributed coordination note.
-- Do not rewrite or remove earlier progress and handoff records; append corrections with timestamps.
-- Do not treat a code change as task completion without SPEC-based verification.
-- Do not create a second source of truth in Project OS, a database, or a private scratch file.
-- If the Vault is unreachable or a write fails, tell the user explicitly that this skill is failing — never skip recording silently or pretend records were written.
+- `SPEC.md` 是范围尺子：只交付「当前阶段与范围」「验收标准」要求的内容；「非目标」与「约束」是硬边界；
+- 用户明确指令与本 SPEC 冲突时：写入 `范围变更记录`、修订相应小节，再继续；
+- 范围不清或明显扩大而无用户指令时：停下实现，写进 `阻塞与风险`，问用户；
+- 仓库有规格体系时，行为变更先落 delta（如 openspec change），再实现；
+- 进度记录只在有意义时写：决策、阻塞、验证结果、计划变化。
+
+### 3. 收尾与提交
+
+1. 写验证证据（命令、输出，或说明为何无法验证）到 `handoff.md`（单文件形态写进 `变更.md`）；
+2. 更新 `状态`、`最后更新`、`阻塞与风险`、`下一步`；
+3. 没有规格体系时，把本次 `spec.md` 并入 `SPEC.md` 对应小节；
+4. 多文件形态写 `handoff.md`：已完成、未完成、确切下一步、验证证据、风险、范围偏离（无偏离写「无」）；单文件形态写进 `变更.md`；
+5. 提交并推送：记录与代码**同一次提交**，不为记录单开提交；`git add` 只指定本次涉及的路径，禁止 `git add -A` / `-u`；push 前 `git pull --rebase`；禁止强推；禁止为通过检查而删除或覆盖他人记录；记录在 vault 时，提交与推送发生在 vault 仓库；
+6. 写不进去（仓库不可写、权限不足、push 失败）不算收尾完成：必须写明原因并当面告知；声称「已备份」须附 commit hash。
+
+只有带证据地满足 SPEC 验收标准，才可标 `已完成`；需要外部输入或决策时标 `受阻`。不得把未完成写成完成。
+
+## 不可协商的规则
+
+- 状态不得只留在聊天里，必须写进记录文件；
+- 不得改写或删除他人已写的进度与 handoff；纠正用带时间的追加；
+- 不得无验证就声明完成；
+- 不得双写：同一份内容不在 `records/` 与规格体系（如 `openspec/`）各写一遍，也不在两个位置各存一份项目记录；
+- 记录通道不可用、或写入失败时，必须明确告知用户这是 skill 故障——绝不静默跳过、绝不假装已记录。

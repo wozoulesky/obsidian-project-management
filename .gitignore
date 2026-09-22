@@ -3,6 +3,9 @@ node_modules/
 .worktrees/
 .superpowers/
 
+# 兜底：本仓库记录写在 Vault（见 AGENTS.md），若误在仓库内建 records/ 也不入库
+records/
+
 # 旧 Project OS 本地残留（从未入库，仅保留在本地盘）
 docs/
 web/

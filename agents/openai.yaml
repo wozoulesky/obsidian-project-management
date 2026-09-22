@@ -1,4 +1,4 @@
 interface:
-  display_name: "Obsidian 项目管理"
-  short_description: "用 Obsidian 管理开发任务、进度和交接记录。"
-  default_prompt: "Use $obsidian-project-management to manage this development task in the local Obsidian vault."
+  display_name: "项目记录（Project Records）"
+  short_description: "记录跟着项目走：仓库 records/ 或 Vault，管 SPEC、变更、交接与验证证据。"
+  default_prompt: "Use $obsidian-project-management to manage this development task: check the record channel (repo records/ or vault), then follow the SPEC / 变更 / handoff flow."
