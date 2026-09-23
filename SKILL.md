@@ -53,11 +53,11 @@ description: >-
 
 ## 初始化记录（init）
 
-触发词：`/records-init`、`records-init`、「初始化记录」——用户说出口就**直接执行**，不再二次确认。
+触发词：`/skill:records-init`（或说 `/records-init`、`records-init`、「初始化记录」）——用户说出口就**直接执行**，不再二次确认。
 
-这件事由**子 skill `records-init/`** 负责（与本文件同一技能目录下的子目录，自带 `SKILL.md`），完整说明见 `records-init/SKILL.md`。要点：
+这件事由**配套 skill `records-init`** 负责（与本体**平级**安装到同一个 skills 目录；仓库里它在 `records-init/`，与本文件同目录），完整说明见 `records-init/SKILL.md`。要点：
 
-- **跑脚本**：`bash <技能目录>/scripts/init-records.sh`（Windows PowerShell 用 `scripts/init-records.ps1`）；不带参数时项目根 = git 仓库根，没有 git 就用当前目录，也可传目录指定；脚本在**技能目录**下，用技能目录的绝对路径或相对该目录的路径调用；
+- **脚本在父 skill 的 `scripts/`**：平级安装时 `bash "${KIMI_SKILL_DIR}/../project-records/scripts/init-records.sh"`（Windows 用 `scripts/init-records.ps1`）；动手前先确认路径存在；
 - **落盘**：`records/SPEC.md`（草稿，`状态: 待确认`）、`records/任务计划.md`、`records/变更/.gitkeep`，骨架模板在 `scripts/skeleton/`；
 - **只补缺、不覆盖**：已有文件原样保留，重复运行只输出「跳过」；脚本不动 `.gitignore`、不 `git add`；
 - **只管当前项目目录**：记录根本身在 Vault 内的项目目录，由你按 `references/records-templates.md` 手工建，先经用户确认；

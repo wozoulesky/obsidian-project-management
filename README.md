@@ -18,7 +18,7 @@
 | 路径 | 说明 |
 | --- | --- |
 | `SKILL.md` | Skill 定义：触发条件、触发边界、使用前提（确定记录位置 / 写入触发对照）、初始化记录、记录位置与结构、变更单位、SPEC 分工、开发流程与收尾 |
-| `records-init/SKILL.md` | 子 skill：`/records-init` 建记录骨架（只补缺不覆盖）；脚本与骨架模板在父 skill 的 `scripts/`，只有一份 |
+| `records-init/SKILL.md` | 配套 skill：`/skill:records-init` 建记录骨架（只补缺不覆盖）；与本体**平级安装**到 skills 目录，脚本与骨架模板用本体 `scripts/` 里那一份 |
 | `references/records-templates.md` | 字段/状态/标题规范；SPEC、任务计划、变更（单/多文件）、数据抓取模板；最小骨架定义；迁移检查表 |
 | `scripts/init-records.sh` / `scripts/init-records.ps1` | 只对当前项目目录的初始化脚本（Bash / PowerShell），只补缺不覆盖 |
 | `scripts/skeleton/` | init 落盘的骨架模板（`SPEC.md`、`任务计划.md`），与 `references/records-templates.md` 同步维护 |
@@ -29,14 +29,16 @@
 
 ## 安装
 
-本仓库即一个标准 **Agent Skill**（`SKILL.md` + `references/` + `scripts/` + `agents/`），任何支持 Agent Skills 规范的 Agent 都能加载：克隆或下载后，把内容放进该 Agent 的 Skills 目录，**目录名保持 `project-records`**（Skill 按目录名发现），Agent 即自动识别。
+本仓库装出**两个平级 skill**：`project-records`（本体）与 `records-init`（`/skill:records-init` 建骨架；脚本与模板仍用本体 `scripts/` 里那一份）。把两个目录都放进 Agent 的 Skills 目录，**目录名保持不变**：
 
 ```bash
-# 方式一：克隆到 Skills 目录（以 Claude Code / Codex 为例）
-git clone --depth 1 https://github.com/wozoulesky/project-records ~/.claude/skills/project-records
-# 方式二：软链接（保留单份源码，便于跟随更新）
-ln -s /path/to/checkout ~/.codex/skills/project-records
+git clone --depth 1 https://github.com/wozoulesky/project-records /tmp/project-records
+mkdir -p ~/.agents/skills
+cp -r /tmp/project-records             ~/.agents/skills/project-records
+cp -r /tmp/project-records/records-init ~/.agents/skills/records-init   # 必须平级，不能塞进 project-records/
 ```
+
+> 为什么必须平级：Kimi Code 只扫描技能目录的**直接子项**（`skills/<name>/SKILL.md` 或 `skills/<name>.md`），**不递归**——放在 `project-records/records-init/` 里不会被发现（见 [Agent Skills 文档](https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html)）。软链接方式同理，两个目录都要链。
 
 各 Agent 常见 Skills 目录（以官方文档为准）：
 
@@ -63,7 +65,7 @@ powershell -NoProfile -File scripts\init-records.ps1 [-Path C:\path\to\project]
 ## 维护约定
 
 - 本仓库是 Skill 的版本管理与分发来源，任何修改以本仓库提交为基准；
-- 修改后单独提交并推送，**再同步本机安装副本**（如 `~/.agents/skills/project-records/`）；安装副本落后会让其他 Agent 加载到旧规则；
+- 修改后单独提交并推送，**再同步本机安装副本**——两个平级目录都要同步：`~/.agents/skills/project-records/`（＝仓库内容去掉 `records-init/`）与 `~/.agents/skills/records-init/`（＝仓库的 `records-init/`）；安装副本落后会让其他 Agent 加载到旧规则；
 - `scripts/init-records.ps1` 必须以 **UTF-8 with BOM** 保存：Windows PowerShell 5.1 靠 BOM 识别文件里的中文，丢了 BOM 会直接语法报错（改完随手确认 BOM 还在）；
 - 本仓库不含任何项目数据：本仓库自己的记录写在仓库内 `records/`（`.gitignore` 忽略，不入库），见 `AGENTS.md` 的声明。
 
