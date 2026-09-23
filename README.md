@@ -18,6 +18,7 @@
 | 路径 | 说明 |
 | --- | --- |
 | `SKILL.md` | Skill 定义：触发条件、触发边界、使用前提（确定记录位置 / 写入触发对照）、初始化记录、记录位置与结构、变更单位、SPEC 分工、开发流程与收尾 |
+| `records-init/SKILL.md` | 子 skill：`/records-init` 建记录骨架（只补缺不覆盖）；脚本与骨架模板在父 skill 的 `scripts/`，只有一份 |
 | `references/records-templates.md` | 字段/状态/标题规范；SPEC、任务计划、变更（单/多文件）、数据抓取模板；最小骨架定义；迁移检查表 |
 | `scripts/init-records.sh` / `scripts/init-records.ps1` | 只对当前项目目录的初始化脚本（Bash / PowerShell），只补缺不覆盖 |
 | `scripts/skeleton/` | init 落盘的骨架模板（`SPEC.md`、`任务计划.md`），与 `references/records-templates.md` 同步维护 |
