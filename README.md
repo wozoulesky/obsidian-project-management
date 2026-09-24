@@ -40,6 +40,8 @@ cp -r /tmp/project-records/records-init ~/.agents/skills/records-init   # 必须
 
 > 为什么必须平级：Kimi Code 只扫描技能目录的**直接子项**（`skills/<name>/SKILL.md` 或 `skills/<name>.md`），**不递归**——放在 `project-records/records-init/` 里不会被发现（见 [Agent Skills 文档](https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html)）。软链接方式同理，两个目录都要链。
 
+> **装完要重启 Kimi Code**：技能清单在**应用启动时**生成（实测：应用 22:21 启动后，23:11 新装的技能在 23:45 新建的会话/子 agent 里仍然看不到）。开新会话、`/new` 都不够，必须退出应用再打开——改技能的 `name`/`description` 后同理。
+
 各 Agent 常见 Skills 目录（以官方文档为准）：
 
 | Agent | 常见目录 |
